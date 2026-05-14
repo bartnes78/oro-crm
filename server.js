@@ -1,10 +1,12 @@
 require('dotenv').config();
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
-const fs      = require('fs');
-const crypto  = require('crypto');
-const XLSX    = require('xlsx');
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path      = require('path');
+const fs        = require('fs');
+const crypto    = require('crypto');
+const XLSX      = require('xlsx');
 const { query, pool } = require('./db');
 
 const app  = express();
@@ -127,7 +129,39 @@ async function bootstrapUsers() {
 }
 
 // ── Express-oppsett ───────────────────────────────────────────────────────────
-app.use(cors());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", 'https://cdn.tailwindcss.com', 'https://fonts.googleapis.com'],
+      styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:      ["'self'", 'data:'],
+      connectSrc:  ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || null;
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // same-origin / curl
+    if (ALLOWED_ORIGIN && origin !== ALLOWED_ORIGIN) return cb(new Error('CORS ikke tillatt'));
+    cb(null, true);
+  },
+  credentials: true,
+}));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'For mange innloggingsforsøk. Prøv igjen om 15 minutter.' },
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -143,6 +177,7 @@ app.use((req, res, next) => {
 });
 
 // ── Auth-middleware ───────────────────────────────────────────────────────────
+app.use('/api', authLimiter);
 app.use('/api', async (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Basic ')) {
