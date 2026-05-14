@@ -143,12 +143,24 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+const IS_PROD       = process.env.NODE_ENV === 'production';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || null;
+
+if (IS_PROD && !ALLOWED_ORIGIN) {
+  console.error('[sikkerhet] ALLOWED_ORIGIN er ikke satt i production — avbryter oppstart.');
+  process.exit(1);
+}
+
+const DEV_ORIGINS = /^https?:\/\/localhost(:\d+)?$/;
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // same-origin / curl
-    if (ALLOWED_ORIGIN && origin !== ALLOWED_ORIGIN) return cb(new Error('CORS ikke tillatt'));
-    cb(null, true);
+    if (!origin) return cb(null, true); // same-origin / server-til-server
+    if (IS_PROD) {
+      return origin === ALLOWED_ORIGIN ? cb(null, true) : cb(new Error('CORS ikke tillatt'));
+    }
+    // development: tillat localhost + ALLOWED_ORIGIN om satt
+    if (DEV_ORIGINS.test(origin) || (ALLOWED_ORIGIN && origin === ALLOWED_ORIGIN)) return cb(null, true);
+    cb(new Error('CORS ikke tillatt'));
   },
   credentials: true,
 }));
