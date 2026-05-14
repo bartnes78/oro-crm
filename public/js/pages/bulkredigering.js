@@ -23,7 +23,7 @@ function statusIcon(status) {
   return '';
 }
 
-function buildRow(inv, savedStatus, leads, phases, selectedSet) {
+function buildRow(inv, savedStatus, leads, phases, types, selectedSet) {
   const weighted = (inv.target_ticket && inv.probability)
     ? (inv.target_ticket * inv.probability).toFixed(1)
     : null;
@@ -55,6 +55,13 @@ function buildRow(inv, savedStatus, leads, phases, selectedSet) {
         style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:100%;min-height:36px">
         <option value="">—</option>
         ${leads.map(l => `<option value="${window.escHtml(l)}"${l === inv.lead ? ' selected' : ''}>${window.escHtml(l)}</option>`).join('')}
+      </select>
+    </td>
+    <td style="padding:6px 8px;width:160px">
+      <select class="edit-cell" data-id="${window.escHtml(inv.id)}" data-field="investor_type"
+        style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:100%;min-height:36px">
+        <option value="">—</option>
+        ${types.map(t => `<option value="${window.escHtml(t)}"${t === inv.investor_type ? ' selected' : ''}>${window.escHtml(t)}</option>`).join('')}
       </select>
     </td>
     <td style="padding:6px 8px;width:100px;text-align:right">
@@ -192,7 +199,7 @@ export async function render(el, state) {
     const weighted = (inv.target_ticket && inv.probability)
       ? (inv.target_ticket * inv.probability).toFixed(1) : null;
     const cells = row.querySelectorAll('td');
-    const wCell = cells[6]; // index of weighted column
+    const wCell = cells[7]; // index of weighted column
     if (wCell) {
       wCell.style.color = weighted ? 'var(--navy,#1A2B4A)' : '#ccc';
       wCell.textContent = weighted ? Number(weighted).toLocaleString('nb-NO') : '—';
@@ -220,8 +227,8 @@ export async function render(el, state) {
     const allChecked = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id));
 
     const rows = filtered.length === 0
-      ? `<tr><td colspan="10" class="empty-state">Ingen investorer funnet.</td></tr>`
-      : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, selectedIds)).join('');
+      ? `<tr><td colspan="11" class="empty-state">Ingen investorer funnet.</td></tr>`
+      : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds)).join('');
 
     return `
       ${buildBulkBar()}
@@ -236,6 +243,7 @@ export async function render(el, state) {
                 <th data-sort="name" style="cursor:pointer;user-select:none">Investor <span class="sort-icon" data-for="name"></span></th>
                 <th data-sort="phase" style="width:140px;cursor:pointer;user-select:none">Fase <span class="sort-icon" data-for="phase"></span></th>
                 <th data-sort="lead" style="width:160px;cursor:pointer;user-select:none">Ansvarlig <span class="sort-icon" data-for="lead"></span></th>
+                <th data-sort="investor_type" style="width:160px;cursor:pointer;user-select:none">Type <span class="sort-icon" data-for="investor_type"></span></th>
                 <th data-sort="target_ticket" style="width:100px;text-align:right;cursor:pointer;user-select:none">Ticket (M) <span class="sort-icon" data-for="target_ticket"></span></th>
                 <th data-sort="probability" style="width:90px;text-align:right;cursor:pointer;user-select:none">Sanns. % <span class="sort-icon" data-for="probability"></span></th>
                 <th data-sort="weighted" style="width:90px;text-align:right;cursor:pointer;user-select:none">Vektet <span class="sort-icon" data-for="weighted"></span></th>
@@ -262,8 +270,8 @@ export async function render(el, state) {
 
     if (tbody) {
       tbody.innerHTML = filtered.length === 0
-        ? `<tr><td colspan="10" class="empty-state">Ingen investorer funnet.</td></tr>`
-        : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, selectedIds)).join('');
+        ? `<tr><td colspan="11" class="empty-state">Ingen investorer funnet.</td></tr>`
+        : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds)).join('');
       attachRowEvents();
     }
 
