@@ -43,6 +43,7 @@ export const api = {
   deleteProduct:       (id)       => req('DELETE', `/products/${id}`),
   duplicates:          ()         => req('GET', '/duplicates'),
   duplicateContacts:   ()         => req('GET', '/duplicate-contacts'),
+  mergeContacts:       (keep_id, drop_id) => req('POST', '/contacts/merge', { keep_id, drop_id }),
   backups:             ()         => req('GET', '/backups'),
   restoreBackup:       (stamp)    => req('POST', `/backups/restore/${stamp}`),
   merge:               (keep_id, drop_id) => req('POST', '/merge', { keep_id, drop_id }),

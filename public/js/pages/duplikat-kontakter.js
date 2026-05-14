@@ -33,6 +33,69 @@ function contactRowHtml(c, idx) {
     </div>`;
 }
 
+function mergeRowHtml(c, role) {
+  const badge = role === 'keep'
+    ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(39,174,96,.15);color:#27ae60">Beholder</span>`
+    : `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(231,76,60,.12);color:#e74c3c">Slettes</span>`;
+  return `
+    <div style="padding:10px 12px;background:#f8f9fa;border-radius:6px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">${badge}
+        <span style="font-weight:600;font-size:13px">${window.escHtml(c.name || '—')}</span>
+        ${c.title ? `<span style="font-size:11px;color:var(--muted)">${window.escHtml(c.title)}</span>` : ''}
+      </div>
+      <div style="font-size:11px;color:#555;display:flex;flex-direction:column;gap:2px">
+        ${c.investor_name ? `<span>Investor: ${window.escHtml(c.investor_name)}</span>` : ''}
+        ${c.email ? `<span>✉ ${window.escHtml(c.email)}</span>` : '<span style="color:#aaa">Ingen e-post</span>'}
+        ${c.phone ? `<span>📞 ${window.escHtml(c.phone)}</span>` : ''}
+        ${c.notes ? `<span style="color:#888">Notat: ${window.escHtml(c.notes)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+function showMergeModal(g, onConfirm) {
+  const [a, b] = g.contacts;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+      <h3 style="margin:0 0 4px;font-size:16px">Slå sammen kontakter</h3>
+      <p style="font-size:12px;color:#888;margin:0 0 16px">Velg hvem som skal beholdes. Felter som mangler hos den beholdte kontakten hentes fra den andre.</p>
+      <div id="merge-a" style="cursor:pointer;border:2px solid transparent;border-radius:8px;padding:4px;transition:border-color .15s">
+        ${mergeRowHtml(a, 'keep')}
+      </div>
+      <div style="text-align:center;font-size:18px;color:#aaa;margin:4px 0">⇅</div>
+      <div id="merge-b" style="cursor:pointer;border:2px solid transparent;border-radius:8px;padding:4px;transition:border-color .15s">
+        ${mergeRowHtml(b, 'drop')}
+      </div>
+      <p style="font-size:11px;color:#aaa;margin:12px 0 16px">Klikk på en kontakt for å velge hvem som beholdes. Notater slås sammen om begge har tekst.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="merge-cancel" style="min-height:44px">Avbryt</button>
+        <button class="btn btn-primary btn-sm" id="merge-confirm" style="min-height:44px">Slå sammen</button>
+      </div>
+    </div>`;
+
+  let keepId = a._id;
+  let dropId = b._id;
+
+  function updateSelection() {
+    overlay.querySelector('#merge-a').style.borderColor = keepId === a._id ? '#27ae60' : '#e74c3c';
+    overlay.querySelector('#merge-b').style.borderColor = keepId === b._id ? '#27ae60' : '#e74c3c';
+    overlay.querySelector('#merge-a').querySelector('[style*="Beholder"]')?.parentElement?.replaceWith?.();
+    const rowA = overlay.querySelector('#merge-a');
+    const rowB = overlay.querySelector('#merge-b');
+    rowA.innerHTML = mergeRowHtml(a, keepId === a._id ? 'keep' : 'drop');
+    rowB.innerHTML = mergeRowHtml(b, keepId === b._id ? 'keep' : 'drop');
+  }
+
+  overlay.querySelector('#merge-a').addEventListener('click', () => { keepId = a._id; dropId = b._id; updateSelection(); });
+  overlay.querySelector('#merge-b').addEventListener('click', () => { keepId = b._id; dropId = a._id; updateSelection(); });
+  overlay.querySelector('#merge-cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#merge-confirm').addEventListener('click', () => { overlay.remove(); onConfirm(keepId, dropId); });
+
+  updateSelection();
+  document.body.appendChild(overlay);
+}
+
 function groupHtml(g, dismissed) {
   const key = groupKey(g);
   const isExact = g.type === 'exact';
@@ -43,6 +106,9 @@ function groupHtml(g, dismissed) {
   const contacts = (g.contacts || []).map((c, i) => contactRowHtml(c, i)).join('');
   const emailStr = g.email ? `<span style="font-size:12px;color:var(--muted)">✉ ${window.escHtml(g.email)}</span>` : '';
   const invStr   = (isExact && g.investor_name) ? `<span style="font-size:12px;color:var(--muted)">${window.escHtml(g.investor_name)}</span>` : '';
+  const mergeBtn = (isExact && (g.contacts || []).length === 2)
+    ? `<button class="btn btn-ghost btn-sm" data-merge-group="${window.escHtml(key)}" style="font-size:11px;min-height:44px;color:#27ae60">Slå sammen</button>`
+    : '';
 
   return `
     <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
@@ -51,7 +117,10 @@ function groupHtml(g, dismissed) {
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:20px;background:${labelBg};color:${labelColor}">${window.escHtml(g.label || g.type)}</span>
           ${emailStr}${invStr}
         </div>
-        <button class="btn btn-ghost btn-sm" data-dismiss-group="${window.escHtml(key)}" style="font-size:11px;min-height:44px">Avvis</button>
+        <div style="display:flex;gap:6px">
+          ${mergeBtn}
+          <button class="btn btn-ghost btn-sm" data-dismiss-group="${window.escHtml(key)}" style="font-size:11px;min-height:44px">Avvis</button>
+        </div>
       </div>
       <div style="padding:10px 12px">${contacts}</div>
     </div>`;
@@ -154,6 +223,22 @@ export async function render(el, state) {
         } catch (e) {
           alert('Feil: ' + e.message);
         }
+      });
+    });
+
+    el.querySelectorAll('[data-merge-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.mergeGroup;
+        const g = groups.find(g => groupKey(g) === key);
+        if (!g) return;
+        showMergeModal(g, async (keep_id, drop_id) => {
+          try {
+            await api.mergeContacts(keep_id, drop_id);
+            await reload();
+          } catch (e) {
+            alert('Feil ved sammenslåing: ' + e.message);
+          }
+        });
       });
     });
   }

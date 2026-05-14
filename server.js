@@ -586,6 +586,39 @@ app.delete('/api/contacts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/contacts/merge', async (req, res) => {
+  const { keep_id, drop_id } = req.body || {};
+  if (!keep_id || !drop_id || keep_id === drop_id) return res.status(400).json({ error: 'Ugyldig merge-forespørsel' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM contacts WHERE id = ANY($1)', [[parseInt(keep_id), parseInt(drop_id)]]);
+    const keep = rows.find(r => r.id === parseInt(keep_id));
+    const drop = rows.find(r => r.id === parseInt(drop_id));
+    if (!keep || !drop) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kontakt ikke funnet' }); }
+    // Merge: keep wins, fill nulls from drop
+    await client.query(`
+      UPDATE contacts SET
+        title     = COALESCE(NULLIF(title,''), $2),
+        email     = COALESCE(NULLIF(email,''), $3),
+        phone     = COALESCE(NULLIF(phone,''), $4),
+        notes     = CASE WHEN notes IS NOT NULL AND notes <> '' AND $5::TEXT IS NOT NULL AND $5::TEXT <> ''
+                         THEN notes || E'\n' || $5::TEXT
+                         ELSE COALESCE(NULLIF(notes,''), $5::TEXT) END
+      WHERE id = $1
+    `, [parseInt(keep_id), drop.title, drop.email, drop.phone, drop.notes]);
+    await client.query('DELETE FROM contacts WHERE id = $1', [parseInt(drop_id)]);
+    await client.query('COMMIT');
+    const { rows: [merged] } = await client.query('SELECT * FROM contacts WHERE id = $1', [parseInt(keep_id)]);
+    res.json(fmtRow(merged));
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Kontaktlogg ───────────────────────────────────────────────────────────────
 app.get('/api/log', async (req, res) => {
   try {

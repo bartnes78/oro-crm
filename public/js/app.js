@@ -118,9 +118,9 @@ function updateSidebarActive() {
     btn.classList.toggle('active', btn.dataset.page === cur);
   });
 
-  const footer = document.getElementById('sidebar-footer');
-  if (footer && state.currentUser) {
-    footer.textContent = state.currentUser.displayName +
+  const userSpan = document.getElementById('sidebar-user');
+  if (userSpan && state.currentUser) {
+    userSpan.textContent = state.currentUser.displayName +
       (state.currentUser.role === 'admin' ? ' · admin' : '');
   }
 }
