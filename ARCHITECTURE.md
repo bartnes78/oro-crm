@@ -114,23 +114,23 @@ Vite-konfigurasjonen (`vite.config.js`) proxyer alle `/api`-kall videre til port
 
 ## 4. Hvordan data lagres
 
-Det er ingen SQL-database. All data lagres som JSON-filer i `data/`-mappen. Dette gjør systemet enkelt å forstå, flytte og ta backup av.
+All data lagres i **PostgreSQL** (Railway-hostet). Tilkoblingen håndteres av `db.js` via `node-postgres`. Skjemaet opprettes automatisk ved oppstart fra `schema.sql`.
 
-**Tabeller (JSON-filer):**
+**Tabeller:**
 
-| Fil | Innhold |
+| Tabell | Innhold |
 |---|---|
-| `investors.json` | Alle investorer med fase, ticket, sannsynlighet m.m. |
-| `contacts.json` | Kontaktpersoner knyttet til investorer |
-| `contact_log.json` | Logg over alle møter, e-poster og telefonsamtaler |
-| `tasks.json` | Oppgaver med frist og ansvarlig |
-| `products.json` | Fundraising-prosjekter (f.eks. ORO Areal Eiendomsfond IS) |
-| `product_investors.json` | Per-prosjekt overstyrte verdier for ticket og sannsynlighet |
-| `users.json` | Brukere med hashet passord (scrypt, ikke klartekst) |
+| `investors` | Alle investorer med fase, ticket, sannsynlighet m.m. |
+| `contacts` | Kontaktpersoner knyttet til investorer (FK → investors, CASCADE) |
+| `contact_log` | Logg over møter, e-poster og telefonsamtaler |
+| `tasks` | Oppgaver med frist og ansvarlig |
+| `products` | Fundraising-prosjekter |
+| `product_investors` | Per-prosjekt overstyrte verdier (FK → products og investors, CASCADE) |
+| `users` | Brukere med hashet passord (scrypt) |
 
-**Skriv-sikkerhet:** Når en fil oppdateres skrives den først til en `.tmp`-fil, som verifiseres (JSON-parset), før den atomisk erstatter den faktiske filen. Forrige versjon beholdes som `.bak`. Dette forhindrer korrupte filer ved krasj midt i skriving.
+**Tilkobling lokalt:** Hent `DATABASE_PUBLIC_URL` fra Railway → Postgres → Variables og legg i `.env` som `DATABASE_URL`.
 
-**Samtidige brukere:** `writeAsync()` i `db.js` bruker en per-tabell Promise-kø som serialiserer skriveoperasjoner. To brukere kan ikke overskrive hverandres endringer på samme tabell samtidig.
+**Backup:** Serveren tar automatisk backup av alle tabeller til JSON-filer i `data/backups/` én gang i døgnet og beholder de siste 10. Backup-mappen er ekskludert fra git.
 
 ---
 

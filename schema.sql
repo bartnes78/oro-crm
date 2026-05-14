@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE TABLE IF NOT EXISTS product_investors (
   id             SERIAL PRIMARY KEY,
-  product_id     INTEGER NOT NULL,
-  investor_id    TEXT NOT NULL,
+  product_id     INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  investor_id    TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
   target_ticket  NUMERIC,
   probability    NUMERIC,
   decline_reason TEXT,
@@ -85,3 +85,20 @@ CREATE TABLE IF NOT EXISTS users (
   role          TEXT DEFAULT 'bruker',
   password_hash TEXT NOT NULL
 );
+
+-- Legg til FK-er på eksisterende databaser (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'product_investors_product_id_fkey' AND table_name = 'product_investors') THEN
+    ALTER TABLE product_investors ADD CONSTRAINT product_investors_product_id_fkey
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'product_investors_investor_id_fkey' AND table_name = 'product_investors') THEN
+    ALTER TABLE product_investors ADD CONSTRAINT product_investors_investor_id_fkey
+      FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE;
+  END IF;
+END $$;
