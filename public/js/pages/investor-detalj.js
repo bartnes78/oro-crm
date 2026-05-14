@@ -50,37 +50,39 @@ function buildDetailHeader(inv, products) {
   `;
 }
 
-function buildPipelineCard(inv) {
-  const weighted = inv.target_ticket && inv.probability
-    ? window.fmt(inv.target_ticket * inv.probability, 1) + ' MNOK' : '—';
-
-  const rows = [
-    ['M&aring;lticket', window.fmt(inv.target_ticket) + (inv.target_ticket != null ? ' MNOK' : '')],
-    ['Sannsynlighet', inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'],
-    ['Vektet volum', weighted],
-    ['First Close', inv.first_close ? 'Ja' : 'Nei'],
-    ['Sist kontaktet', window.escHtml(inv.last_contact || '—')],
-  ].map(([l, v]) => `
-    <div class="info-item">
-      <label>${l}</label>
-      <p>${v}</p>
-    </div>
-  `).join('');
+function buildPipelineCard(inv, lookups) {
+  const phaseOptions = (lookups.phases || []).map(p =>
+    `<option ${inv.phase === p ? 'selected' : ''}>${window.escHtml(p)}</option>`
+  ).join('');
+  const leadOptions = `<option value="">—</option>` + (lookups.leads || []).map(l =>
+    `<option ${inv.lead === l ? 'selected' : ''}>${window.escHtml(l)}</option>`
+  ).join('');
 
   return `
     <div class="card">
       <div class="card-title">Pipeline</div>
-      <div class="info-grid">${rows}</div>
-      ${inv.next_steps ? `
-        <div style="margin-top:14px;">
-          <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Hva skal til</label>
-          <p style="margin-top:4px;font-size:13px;line-height:1.5;">${window.escHtml(inv.next_steps)}</p>
-        </div>` : ''}
-      ${inv.comments ? `
-        <div style="margin-top:14px;">
-          <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Kommentar</label>
-          <p style="margin-top:4px;font-size:13px;line-height:1.5;">${window.escHtml(inv.comments)}</p>
-        </div>` : ''}
+      <div class="form-grid" style="gap:10px;">
+        <div class="form-group">
+          <label>Fase</label>
+          <select id="inline-phase" style="font-size:13px;">${phaseOptions}</select>
+        </div>
+        <div class="form-group">
+          <label>Ansvarlig</label>
+          <select id="inline-lead" style="font-size:13px;">${leadOptions}</select>
+        </div>
+        <div class="form-group full">
+          <label>Hva skal til</label>
+          <textarea id="inline-nextsteps" style="min-height:70px;font-size:13px;">${window.escHtml(inv.next_steps || '')}</textarea>
+        </div>
+        <div class="form-group full">
+          <label>Kommentar</label>
+          <textarea id="inline-comments" style="min-height:60px;font-size:13px;">${window.escHtml(inv.comments || '')}</textarea>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:16px;font-size:12px;color:var(--muted);">
+        <span>First Close: <b style="color:var(--text);">${inv.first_close ? 'Ja' : 'Nei'}</b></span>
+        ${inv.last_contact ? `<span>Sist kontaktet: <b style="color:var(--text);">${window.escHtml(inv.last_contact)}</b></span>` : ''}
+      </div>
     </div>
   `;
 }
@@ -224,6 +226,14 @@ function buildProductCard(inv, products, piData) {
   const piMap = Object.fromEntries(piData.map(pi => [pi.product_id, pi]));
   const interests = new Set(inv.product_interests || []);
 
+  let totalWeighted = 0, totalCommitted = 0;
+  for (const p of products) {
+    if (!interests.has(p._id)) continue;
+    const pi = piMap[p._id] || {};
+    if (pi.target_ticket != null && pi.probability != null) totalWeighted += pi.target_ticket * pi.probability;
+    if (pi.committed_amount != null) totalCommitted += pi.committed_amount;
+  }
+
   const rows = products.map(p => {
     const interested = interests.has(p._id);
     const pi = piMap[p._id] || {};
@@ -272,10 +282,26 @@ function buildProductCard(inv, products, piData) {
     `;
   }).join('');
 
+  const aggregateHtml = (totalWeighted > 0 || totalCommitted > 0) ? `
+    <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);display:flex;gap:24px;flex-wrap:wrap;">
+      ${totalWeighted > 0 ? `
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Vektet volum</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text);">${window.fmt(totalWeighted, 1)} MNOK</div>
+        </div>` : ''}
+      ${totalCommitted > 0 ? `
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Totalt tegnet</div>
+          <div style="font-size:18px;font-weight:700;color:#1A8A6A;">${window.fmt(totalCommitted, 1)} MNOK</div>
+        </div>` : ''}
+    </div>
+  ` : '';
+
   return `
     <div class="card">
       <div class="card-title">Produktinteresse</div>
       ${rows}
+      ${aggregateHtml}
     </div>
   `;
 }
@@ -438,28 +464,11 @@ function openEditModal(inv, lookups, products, reload) {
         <div class="form-group full"><label>Navn</label><input id="e-name" value="${window.escHtml(inv.name || '')}" /></div>
         <div class="form-group"><label>Land</label><input id="e-country" value="${window.escHtml(inv.country || '')}" /></div>
         <div class="form-group"><label>By</label><input id="e-city" value="${window.escHtml(inv.city || '')}" placeholder="Oslo, Bergen&hellip;" /></div>
-        <div class="form-group"><label>Fase</label>
-          <select id="e-phase">
-            ${(lookups.phases || []).map(p => `<option ${inv.phase === p ? 'selected' : ''}>${window.escHtml(p)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Lead</label>
-          <select id="e-lead">
-            <option value="">—</option>
-            ${(lookups.leads || []).map(l => `<option ${inv.lead === l ? 'selected' : ''}>${window.escHtml(l)}</option>`).join('')}
-          </select>
-        </div>
         <div class="form-group"><label>Type investor</label>
           <select id="e-type">
             <option value="">—</option>
             ${(lookups.types || []).map(t => `<option ${inv.investor_type === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
           </select>
-        </div>
-        <div class="form-group"><label>M&aring;lticket (MNOK)</label>
-          <input id="e-ticket" type="number" value="${inv.target_ticket != null ? inv.target_ticket : ''}" />
-        </div>
-        <div class="form-group"><label>Sannsynlighet (0&ndash;1)</label>
-          <input id="e-prob" type="number" step="0.05" min="0" max="1" value="${inv.probability != null ? inv.probability : ''}" />
         </div>
         <div class="form-group"><label>R&aring;dgiver</label>
           <select id="e-advisor">
@@ -472,12 +481,6 @@ function openEditModal(inv, lookups, products, reload) {
             <option value="0" ${!inv.first_close ? 'selected' : ''}>Nei</option>
             <option value="1" ${inv.first_close ? 'selected' : ''}>Ja</option>
           </select>
-        </div>
-        <div class="form-group full"><label>Hva skal til</label>
-          <textarea id="e-nextsteps">${window.escHtml(inv.next_steps || '')}</textarea>
-        </div>
-        <div class="form-group full"><label>Kommentar</label>
-          <textarea id="e-comments">${window.escHtml(inv.comments || '')}</textarea>
         </div>
       </div>
     </div>
@@ -497,23 +500,13 @@ function openEditModal(inv, lookups, products, reload) {
         return;
       }
 
-      const ticketVal = document.getElementById('e-ticket').value;
-      const probVal   = document.getElementById('e-prob').value;
-      const newPhase  = document.getElementById('e-phase').value;
-
       const data = {
         name,
         country:       document.getElementById('e-country').value.trim(),
         city:          document.getElementById('e-city').value.trim(),
-        phase:         newPhase,
-        lead:          document.getElementById('e-lead').value,
         investor_type: document.getElementById('e-type').value,
-        target_ticket: ticketVal !== '' ? parseFloat(ticketVal) : null,
-        probability:   probVal   !== '' ? parseFloat(probVal)   : null,
         advisor:       document.getElementById('e-advisor').value,
         first_close:   parseInt(document.getElementById('e-firstclose').value),
-        next_steps:    document.getElementById('e-nextsteps').value,
-        comments:      document.getElementById('e-comments').value,
       };
 
       const btn = document.getElementById('edit-save-btn');
@@ -522,13 +515,7 @@ function openEditModal(inv, lookups, products, reload) {
       try {
         await api.updateInvestor(inv.id, data);
         window.closeModal();
-        const wentOnHold = newPhase === 'P&aring; vent' && inv.phase !== 'P&aring; vent';
         await reload();
-        if (wentOnHold) {
-          // Re-fetch updated inv after reload to pass to PaVentModal
-          const freshInv = await api.investor(inv.id);
-          openPaVentModal(freshInv, reload);
-        }
       } catch (e) {
         const errEl = document.getElementById('edit-error');
         if (errEl) {
@@ -1139,9 +1126,11 @@ export async function render(el, state) {
       </div>
       <div class="content">
         ${buildDetailHeader(inv, products)}
-        ${buildProductCard(inv, products, piData)}
         <div class="grid-2">
-          ${buildPipelineCard(inv)}
+          ${buildPipelineCard(inv, lookups)}
+          ${buildProductCard(inv, products, piData)}
+        </div>
+        <div class="grid-2">
           ${buildDocsCard(inv, products)}
           ${buildContactsCard(inv, visInaktive)}
         </div>
@@ -1166,6 +1155,26 @@ export async function render(el, state) {
         window.navigate('investorer');
       } catch (e) { alert('Feil ved sletting: ' + e.message); }
     });
+
+    // Inline pipeline fields
+    const saveInline = async (field, value) => {
+      try {
+        await api.updateInvestor(inv.id, { [field]: value });
+        inv[field] = value;
+      } catch (e) { alert('Feil ved lagring: ' + e.message); }
+    };
+
+    const inlinePhase = el.querySelector('#inline-phase');
+    if (inlinePhase) inlinePhase.addEventListener('change', () => saveInline('phase', inlinePhase.value));
+
+    const inlineLead = el.querySelector('#inline-lead');
+    if (inlineLead) inlineLead.addEventListener('change', () => saveInline('lead', inlineLead.value));
+
+    const inlineNextsteps = el.querySelector('#inline-nextsteps');
+    if (inlineNextsteps) inlineNextsteps.addEventListener('blur', () => saveInline('next_steps', inlineNextsteps.value));
+
+    const inlineComments = el.querySelector('#inline-comments');
+    if (inlineComments) inlineComments.addEventListener('blur', () => saveInline('comments', inlineComments.value));
 
     // Produktkort — toggle interesse
     el.querySelectorAll('.pi-toggle').forEach(cb => {
