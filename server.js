@@ -168,9 +168,19 @@ const apiCors = cors({
   credentials: true,
 });
 
+// Mild general limiter — teller alle forespørsler, hindrer DoS
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'For mange forespørsler. Prøv igjen om litt.' },
+});
+
+// Streng auth-limiter — teller kun feilede forsøk, hindrer brute-force
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 10,
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
@@ -192,7 +202,7 @@ app.use((req, res, next) => {
 });
 
 // ── Auth-middleware ───────────────────────────────────────────────────────────
-app.use('/api', apiCors, authLimiter);
+app.use('/api', apiCors, apiLimiter, authLimiter);
 app.use('/api', async (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Basic ')) {

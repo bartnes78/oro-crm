@@ -101,6 +101,8 @@ export async function render(el, state) {
   let filterPhase = flt.filterPhase || '';
   let filterLead  = flt.filterLead  || '';
   let filterType  = flt.filterType  || '';
+  let sortField = '';
+  let sortDir   = 'asc';
 
   try {
     [investors, lookups] = await Promise.all([api.investors({}), api.lookups()]);
@@ -115,12 +117,31 @@ export async function render(el, state) {
 
   function getFiltered() {
     const q = search.toLowerCase();
-    return investors.filter(inv => {
+    const filtered = investors.filter(inv => {
       if (q && !inv.name.toLowerCase().includes(q)) return false;
-      if (filterPhase && inv.phase !== filterPhase)               return false;
-      if (filterLead  && inv.lead  !== filterLead)                return false;
-      if (filterType  && inv.investor_type !== filterType)        return false;
+      if (filterPhase && inv.phase !== filterPhase) return false;
+      if (filterLead  && inv.lead  !== filterLead)  return false;
+      if (filterType) {
+        if (filterType === '__ukjent__') { if (inv.investor_type) return false; }
+        else if (inv.investor_type !== filterType)  return false;
+      }
       return true;
+    });
+    if (!sortField) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av = sortField === 'weighted'
+        ? (a.target_ticket && a.probability ? a.target_ticket * a.probability : null)
+        : a[sortField];
+      let bv = sortField === 'weighted'
+        ? (b.target_ticket && b.probability ? b.target_ticket * b.probability : null)
+        : b[sortField];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = (typeof av === 'number' && typeof bv === 'number')
+        ? av - bv
+        : String(av).localeCompare(String(bv), 'nb');
+      return sortDir === 'asc' ? cmp : -cmp;
     });
   }
 
@@ -212,13 +233,13 @@ export async function render(el, state) {
                 <th style="width:28px;padding:8px 12px">
                   <input type="checkbox" id="select-all-chk" ${allChecked ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue)">
                 </th>
-                <th>Investor</th>
-                <th style="width:140px">Fase</th>
-                <th style="width:160px">Ansvarlig</th>
-                <th style="width:100px;text-align:right">Ticket (M)</th>
-                <th style="width:90px;text-align:right">Sanns. %</th>
-                <th style="width:90px;text-align:right">Vektet</th>
-                <th style="width:200px">Hva skal til</th>
+                <th data-sort="name" style="cursor:pointer;user-select:none">Investor <span class="sort-icon" data-for="name"></span></th>
+                <th data-sort="phase" style="width:140px;cursor:pointer;user-select:none">Fase <span class="sort-icon" data-for="phase"></span></th>
+                <th data-sort="lead" style="width:160px;cursor:pointer;user-select:none">Ansvarlig <span class="sort-icon" data-for="lead"></span></th>
+                <th data-sort="target_ticket" style="width:100px;text-align:right;cursor:pointer;user-select:none">Ticket (M) <span class="sort-icon" data-for="target_ticket"></span></th>
+                <th data-sort="probability" style="width:90px;text-align:right;cursor:pointer;user-select:none">Sanns. % <span class="sort-icon" data-for="probability"></span></th>
+                <th data-sort="weighted" style="width:90px;text-align:right;cursor:pointer;user-select:none">Vektet <span class="sort-icon" data-for="weighted"></span></th>
+                <th data-sort="next_steps" style="width:200px;cursor:pointer;user-select:none">Hva skal til <span class="sort-icon" data-for="next_steps"></span></th>
                 <th style="width:28px"></th>
                 <th style="width:44px"></th>
               </tr>
@@ -330,6 +351,68 @@ export async function render(el, state) {
     });
   }
 
+  function updateSortIndicators() {
+    el.querySelectorAll('.sort-icon').forEach(span => {
+      const field = span.dataset.for;
+      span.textContent = field === sortField ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    });
+  }
+
+  function attachHeaderEvents() {
+    el.querySelectorAll('thead th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort;
+        if (sortField === field) {
+          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortField = field;
+          sortDir = 'asc';
+        }
+        updateSortIndicators();
+        rebuildTable();
+      });
+    });
+  }
+
+  const COL_WIDTHS_KEY = 'crm_bulk_colwidths';
+  function saveColWidths(table) {
+    const widths = [...table.querySelectorAll('thead th')].map(th => th.offsetWidth);
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(widths));
+  }
+  function restoreColWidths(table) {
+    try {
+      const widths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY));
+      if (!Array.isArray(widths)) return;
+      const ths = table.querySelectorAll('thead th');
+      widths.forEach((w, i) => { if (ths[i] && w > 20) ths[i].style.width = w + 'px'; });
+    } catch { /* ignorér */ }
+  }
+  function makeColumnsResizable(table) {
+    restoreColWidths(table);
+    table.querySelectorAll('thead th').forEach(th => {
+      if (th.querySelector('.col-resize-handle')) return;
+      th.style.position = 'relative';
+      const handle = document.createElement('div');
+      handle.className = 'col-resize-handle';
+      handle.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;user-select:none;z-index:1';
+      handle.title = 'Dra for å justere kolonnebredde';
+      th.appendChild(handle);
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const startX = e.pageX;
+        const startW = th.offsetWidth;
+        const onMove = ev => { th.style.width = Math.max(30, startW + ev.pageX - startX) + 'px'; };
+        const onUp   = ()  => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup',   onUp);
+          saveColWidths(table);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+      });
+    });
+  }
+
   function buildPage() {
     const filtered = getFiltered();
 
@@ -347,7 +430,11 @@ export async function render(el, state) {
       <div class="content">
         <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           ${selectHtml('filter-phase', filterPhase, phases, 'Alle faser')}
-          ${selectHtml('filter-type', filterType, types, 'Alle typer')}
+          <select id="filter-type" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);min-height:44px">
+            <option value="">Alle typer</option>
+            <option value="__ukjent__"${filterType === '__ukjent__' ? ' selected' : ''}>Ukjent type</option>
+            ${types.map(t => `<option value="${window.escHtml(t)}"${t === filterType ? ' selected' : ''}>${window.escHtml(t)}</option>`).join('')}
+          </select>
           ${selectHtml('filter-lead', filterLead, leads, 'ORO Kontakt')}
           ${(filterPhase || filterLead || filterType) ? `<button class="btn btn-ghost btn-sm" id="clear-filters-btn" style="min-height:44px">× Nullstill</button>` : ''}
           <span style="font-size:11px;color:#aaa;margin-left:4px">Klikk en celle for å redigere direkte — lagres umiddelbart</span>
@@ -394,6 +481,10 @@ export async function render(el, state) {
 
     attachRowEvents();
     attachBulkEvents();
+    attachHeaderEvents();
+    updateSortIndicators();
+    const table = el.querySelector('table');
+    if (table) makeColumnsResizable(table);
   }
 
   buildPage();
