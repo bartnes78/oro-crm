@@ -67,7 +67,10 @@ async function run() {
 
     // ── Kontakter ─────────────────────────────────────────────────────────────
     const contacts = readJson('contacts');
-    for (const c of contacts) {
+    const invIdSet = new Set(investors.map(i => i.id));
+    const skipped  = contacts.filter(c => !invIdSet.has(c.investor_id));
+    if (skipped.length) console.log(`  Hopper over ${skipped.length} foreldreløse kontakter:`, skipped.map(c => c.investor_id).join(', '));
+    for (const c of contacts.filter(c => invIdSet.has(c.investor_id))) {
       await client.query(`
         INSERT INTO contacts (id, investor_id, name, title, email, phone, is_primary, notes)
         OVERRIDING SYSTEM VALUE VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
