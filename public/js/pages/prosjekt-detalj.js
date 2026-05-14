@@ -98,7 +98,7 @@ function renderContent() {
               background:${sc}22;color:${sc};">${esc(_product.status || '')}</span>
             <span style="font-size:12px;color:var(--muted);">${esc(_product.type || '')}</span>
             ${_product.target_size
-              ? `<span style="font-size:12px;color:var(--muted);">Mål: <b>${fmt(_product.target_size)} MNOK</b></span>`
+              ? `<span style="font-size:16px;font-weight:700;color:var(--text);">${fmt(_product.target_size)} MNOK</span>`
               : ''}
           </div>
           ${_product.description
@@ -122,8 +122,12 @@ function renderContent() {
     <div class="kpi-grid" style="margin-top:16px;">
       ${kpiCard('Totalt',         _investors.length,           null,              null)}
       ${kpiCard('Aktiv pipeline', active.length,               null,              '#2471A3')}
-      ${kpiCard('Vektet volum',   `${fmt(totalWeighted, 1)} M`, 'ticket × sanns.', '#D35400')}
-      ${kpiCard('Tegnet',         signed.length,               signedTicket ? `${fmt(signedTicket)} MNOK` : null, '#1E8449')}
+      ${kpiCard('Estimert volum',  `${fmt(totalWeighted, 1)} M`, 'ticket × sanns.', '#D35400')}
+      <div class="kpi-card" style="border-top-color:#1E8449;">
+        <div class="kpi-label">Tegnet</div>
+        <div class="kpi-value">${signed.length} inv.</div>
+        ${signedTicket ? `<div class="kpi-value" style="font-size:1.35rem;color:#1E8449;">${fmt(signedTicket, 0)} MNOK</div>` : ''}
+      </div>
       ${kpiCard('Avslått',        declined.length,             null,              '#C0392B')}
     </div>
 
