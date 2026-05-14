@@ -134,7 +134,7 @@ export async function render(el, state) {
     // Edit user
     el.querySelectorAll('.edit-user-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const user = users.find(u => u._id === btn.dataset.id);
+        const user = users.find(u => String(u._id) === btn.dataset.id);
         if (user) openUserModal(user);
       });
     });
