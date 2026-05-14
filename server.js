@@ -153,18 +153,17 @@ if (IS_PROD && !ALLOWED_ORIGIN) {
 }
 
 const DEV_ORIGINS = /^https?:\/\/localhost(:\d+)?$/;
-app.use(cors({
+const apiCors = cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true); // same-origin / server-til-server
     if (IS_PROD) {
       return origin === ALLOWED_ORIGIN ? cb(null, true) : cb(new Error('CORS ikke tillatt'));
     }
-    // development: tillat localhost + ALLOWED_ORIGIN om satt
     if (DEV_ORIGINS.test(origin) || (ALLOWED_ORIGIN && origin === ALLOWED_ORIGIN)) return cb(null, true);
     cb(new Error('CORS ikke tillatt'));
   },
   credentials: true,
-}));
+});
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -190,7 +189,7 @@ app.use((req, res, next) => {
 });
 
 // ── Auth-middleware ───────────────────────────────────────────────────────────
-app.use('/api', authLimiter);
+app.use('/api', apiCors, authLimiter);
 app.use('/api', async (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Basic ')) {
