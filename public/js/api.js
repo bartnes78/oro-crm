@@ -36,6 +36,7 @@ export const api = {
   deleteTask:          (id)       => req('DELETE', `/tasks/${id}`),
   lookups:             ()         => req('GET', '/lookups'),
   locations:           ()         => req('GET', '/locations'),
+  productInvestors:      (investorId) => req('GET', `/product-investors?investorId=${investorId}`),
   updateProductInvestor: (productId, investorId, data) =>
     req('PUT', '/product-investors', { product_id: productId, investor_id: investorId, ...data }),
   products:            ()         => req('GET', '/products'),

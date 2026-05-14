@@ -219,6 +219,67 @@ function buildContactsCard(inv, visInaktive) {
   `;
 }
 
+function buildProductCard(inv, products, piData) {
+  if (products.length === 0) return '';
+  const piMap = Object.fromEntries(piData.map(pi => [pi.product_id, pi]));
+  const interests = new Set(inv.product_interests || []);
+
+  const rows = products.map(p => {
+    const interested = interests.has(p._id);
+    const pi = piMap[p._id] || {};
+    const isTegnet  = pi.committed_amount != null;
+    const isDeclined = !!pi.decline_reason;
+
+    return `
+      <div class="pi-row" style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:170px;">
+          <input type="checkbox" class="pi-toggle" data-pid="${window.escHtml(String(p._id))}"
+            ${interested ? 'checked' : ''}
+            style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue);flex-shrink:0;" />
+          <span style="font-weight:${interested ? 600 : 400};font-size:14px;color:${interested ? 'var(--text)' : 'var(--muted)'};">
+            ${window.escHtml(p.name)}
+          </span>
+        </label>
+        ${interested ? `
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="pi-ticket" type="number" step="0.5" data-pid="${window.escHtml(String(p._id))}"
+              value="${pi.target_ticket != null ? pi.target_ticket : ''}" placeholder="—"
+              style="width:75px;font-size:12px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
+            <span style="font-size:12px;color:var(--muted);">MNOK</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="pi-prob" type="number" min="0" max="100" step="5" data-pid="${window.escHtml(String(p._id))}"
+              value="${pi.probability != null ? Math.round(pi.probability * 100) : ''}" placeholder="—"
+              style="width:60px;font-size:12px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
+            <span style="font-size:12px;color:var(--muted);">%</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
+            ${isTegnet ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(26,138,106,.12);color:#1A8A6A;font-weight:700;">&#10003; Tegnet${pi.committed_amount ? ' ' + pi.committed_amount + 'M' : ''}</span>` : ''}
+            ${isDeclined ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(231,76,60,.08);color:#e74c3c;font-weight:600;">Avsl&aring;tt</span>` : ''}
+            <button class="pi-tegnet-btn btn btn-ghost btn-sm"
+              data-pid="${window.escHtml(String(p._id))}"
+              data-pname="${window.escHtml(p.name)}"
+              data-committed="${pi.committed_amount != null ? pi.committed_amount : ''}"
+              style="font-size:11px;color:#1A8A6A;border-color:#1A8A6A;min-height:28px;padding:2px 8px;">
+              ${isTegnet ? 'Endre tegning' : '+ Tegnet'}
+            </button>
+            <button class="btn-quick-decline btn btn-ghost btn-sm"
+              data-product-id="${window.escHtml(String(p._id))}"
+              style="font-size:11px;color:#e74c3c;border-color:#e74c3c;min-height:28px;padding:2px 8px;">&#x2715; Avslag</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Produktinteresse</div>
+      ${rows}
+    </div>
+  `;
+}
+
 function buildLogCard(inv, products) {
   const allLog = inv.log || [];
   const planlagt = allLog.filter(l => l.status === 'planlagt').sort((a, b) => a.date.localeCompare(b.date));
@@ -412,12 +473,6 @@ function openEditModal(inv, lookups, products, reload) {
             <option value="1" ${inv.first_close ? 'selected' : ''}>Ja</option>
           </select>
         </div>
-        <div class="form-group" style="grid-column:1/-1;">
-          <label>Produktinteresse</label>
-          <div id="e-products" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
-            ${buildProductPills(products, inv.product_interests || [], 'product_interest')}
-          </div>
-        </div>
         <div class="form-group full"><label>Hva skal til</label>
           <textarea id="e-nextsteps">${window.escHtml(inv.next_steps || '')}</textarea>
         </div>
@@ -433,19 +488,6 @@ function openEditModal(inv, lookups, products, reload) {
   `;
 
   window.openModal(html, () => {
-    // Product pill toggle interactivity
-    document.querySelectorAll('#e-products label').forEach(lbl => {
-      lbl.addEventListener('click', () => {
-        const cb = lbl.querySelector('input[type=checkbox]');
-        const checked = !cb.checked;
-        cb.checked = checked;
-        lbl.style.borderColor = checked ? 'var(--blue)' : 'var(--border)';
-        lbl.style.background  = checked ? 'rgba(52,152,219,.1)' : 'transparent';
-        lbl.style.color       = checked ? 'var(--blue)' : 'var(--muted)';
-        lbl.style.fontWeight  = checked ? '600' : '400';
-      });
-    });
-
     document.getElementById('edit-save-btn').addEventListener('click', async () => {
       const name = document.getElementById('e-name').value.trim();
       if (!name) {
@@ -455,30 +497,23 @@ function openEditModal(inv, lookups, products, reload) {
         return;
       }
 
-      const checkedProducts = [...document.querySelectorAll('#e-products input[type=checkbox]:checked')]
-        .map(cb => {
-          const v = cb.value;
-          return isNaN(v) ? v : Number(v);
-        });
-
       const ticketVal = document.getElementById('e-ticket').value;
       const probVal   = document.getElementById('e-prob').value;
       const newPhase  = document.getElementById('e-phase').value;
 
       const data = {
         name,
-        country:          document.getElementById('e-country').value.trim(),
-        city:             document.getElementById('e-city').value.trim(),
-        phase:            newPhase,
-        lead:             document.getElementById('e-lead').value,
-        investor_type:    document.getElementById('e-type').value,
-        target_ticket:    ticketVal !== '' ? parseFloat(ticketVal) : null,
-        probability:      probVal   !== '' ? parseFloat(probVal)   : null,
-        advisor:          document.getElementById('e-advisor').value,
-        first_close:      parseInt(document.getElementById('e-firstclose').value),
-        product_interests: checkedProducts,
-        next_steps:       document.getElementById('e-nextsteps').value,
-        comments:         document.getElementById('e-comments').value,
+        country:       document.getElementById('e-country').value.trim(),
+        city:          document.getElementById('e-city').value.trim(),
+        phase:         newPhase,
+        lead:          document.getElementById('e-lead').value,
+        investor_type: document.getElementById('e-type').value,
+        target_ticket: ticketVal !== '' ? parseFloat(ticketVal) : null,
+        probability:   probVal   !== '' ? parseFloat(probVal)   : null,
+        advisor:       document.getElementById('e-advisor').value,
+        first_close:   parseInt(document.getElementById('e-firstclose').value),
+        next_steps:    document.getElementById('e-nextsteps').value,
+        comments:      document.getElementById('e-comments').value,
       };
 
       const btn = document.getElementById('edit-save-btn');
@@ -992,6 +1027,45 @@ function openQuickDeclineModal(inv, product, products, reload) {
   });
 }
 
+function openTegnetModal(inv, productId, productName, currentAmount, reload) {
+  const html = `
+    <div class="modal-header">
+      <h3>Tegning &mdash; ${window.escHtml(productName)}</h3>
+      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+        Registrer tegnet bel&oslash;p for <b>${window.escHtml(inv.name)}</b>
+      </p>
+      <div class="form-group">
+        <label>Tegnet bel&oslash;p (MNOK)</label>
+        <input id="tegnet-amount" type="number" step="0.5" min="0"
+          value="${currentAmount != null ? currentAmount : ''}" placeholder="0" autofocus />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+      <button class="btn btn-green" id="tegnet-save-btn">Bekreft tegning</button>
+    </div>
+  `;
+  window.openModal(html, () => {
+    document.getElementById('tegnet-save-btn').addEventListener('click', async () => {
+      const raw = document.getElementById('tegnet-amount').value;
+      const amount = raw !== '' ? parseFloat(raw) : null;
+      const btn = document.getElementById('tegnet-save-btn');
+      btn.disabled = true; btn.textContent = 'Lagrer…';
+      try {
+        await api.updateProductInvestor(productId, inv.id, { committed_amount: amount });
+        window.closeModal();
+        await reload();
+      } catch (e) {
+        alert('Feil: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Bekreft tegning'; }
+      }
+    });
+  });
+}
+
 // ── Shared setup helpers ──────────────────────────────────────────────────────
 
 function setupStatusToggle(wrapId, hiddenId) {
@@ -1033,13 +1107,14 @@ function setupDeclinedPills(containerId) {
 export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster&hellip;</p></div>';
 
-  let inv, tasks, lookups, products;
+  let inv, tasks, lookups, products, piData;
   try {
-    [inv, tasks, lookups, products] = await Promise.all([
+    [inv, tasks, lookups, products, piData] = await Promise.all([
       api.investor(state.id),
       api.tasks({ investorId: state.id }),
       api.lookups(),
       api.products(),
+      api.productInvestors(state.id),
     ]);
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:#c0392b;">Feil: ${window.escHtml(e.message)}</p></div>`;
@@ -1064,6 +1139,7 @@ export async function render(el, state) {
       </div>
       <div class="content">
         ${buildDetailHeader(inv, products)}
+        ${buildProductCard(inv, products, piData)}
         <div class="grid-2">
           ${buildPipelineCard(inv)}
           ${buildDocsCard(inv, products)}
@@ -1091,7 +1167,65 @@ export async function render(el, state) {
       } catch (e) { alert('Feil ved sletting: ' + e.message); }
     });
 
-    // Quick decline (product ✕ buttons in header)
+    // Produktkort — toggle interesse
+    el.querySelectorAll('.pi-toggle').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const pid = isNaN(cb.dataset.pid) ? cb.dataset.pid : Number(cb.dataset.pid);
+        const newInterests = cb.checked
+          ? [...(inv.product_interests || []), pid]
+          : (inv.product_interests || []).filter(id => id !== pid);
+        try {
+          await api.updateInvestor(inv.id, { product_interests: newInterests });
+          inv.product_interests = newInterests;
+          await reload();
+        } catch (e) { alert('Feil: ' + e.message); cb.checked = !cb.checked; }
+      });
+    });
+
+    // Produktkort — ticket per produkt (lagres ved blur/enter)
+    el.querySelectorAll('.pi-ticket').forEach(input => {
+      const save = async () => {
+        const pid = Number(input.dataset.pid);
+        const val = input.value !== '' ? parseFloat(input.value) : null;
+        try {
+          await api.updateProductInvestor(pid, inv.id, { target_ticket: val });
+          const pi = piData.find(p => p.product_id === pid);
+          if (pi) pi.target_ticket = val;
+          else piData.push({ product_id: pid, investor_id: inv.id, target_ticket: val, probability: null });
+        } catch (e) { alert('Feil ved lagring: ' + e.message); }
+      };
+      input.addEventListener('change', save);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    });
+
+    // Produktkort — sannsynlighet per produkt
+    el.querySelectorAll('.pi-prob').forEach(input => {
+      const save = async () => {
+        const pid = Number(input.dataset.pid);
+        const pct = input.value !== '' ? parseFloat(input.value) : null;
+        const val = pct != null ? pct / 100 : null;
+        try {
+          await api.updateProductInvestor(pid, inv.id, { probability: val });
+          const pi = piData.find(p => p.product_id === pid);
+          if (pi) pi.probability = val;
+          else piData.push({ product_id: pid, investor_id: inv.id, target_ticket: null, probability: val });
+        } catch (e) { alert('Feil ved lagring: ' + e.message); }
+      };
+      input.addEventListener('change', save);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    });
+
+    // Produktkort — tegnet-knapp
+    el.querySelectorAll('.pi-tegnet-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid      = Number(btn.dataset.pid);
+        const pname    = btn.dataset.pname;
+        const committed = btn.dataset.committed !== '' ? parseFloat(btn.dataset.committed) : null;
+        openTegnetModal(inv, pid, pname, committed, reload);
+      });
+    });
+
+    // Quick decline (header-piller og produktkort)
     el.querySelectorAll('.btn-quick-decline').forEach(btn => {
       btn.addEventListener('click', () => {
         const productId = btn.dataset.productId;

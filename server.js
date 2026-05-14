@@ -865,6 +865,15 @@ app.get('/api/lookups', (req, res) => res.json({
 }));
 
 // ── Produkt-investorer ────────────────────────────────────────────────────────
+app.get('/api/product-investors', async (req, res) => {
+  const { investorId } = req.query;
+  if (!investorId) return res.status(400).json({ error: 'investorId er påkrevd' });
+  try {
+    const { rows } = await query('SELECT * FROM product_investors WHERE investor_id = $1', [investorId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/api/product-investors', async (req, res) => {
   const { product_id, investor_id, ...fields } = req.body;
   if (!product_id || !investor_id) return validationError(res, ['product_id og investor_id er påkrevd']);
@@ -880,16 +889,18 @@ app.put('/api/product-investors', async (req, res) => {
   }
   try {
     await query(`
-      INSERT INTO product_investors (product_id, investor_id, target_ticket, probability, decline_reason)
-      VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO product_investors (product_id, investor_id, target_ticket, probability, decline_reason, committed_amount)
+      VALUES ($1,$2,$3,$4,$5,$6)
       ON CONFLICT (product_id, investor_id) DO UPDATE SET
-        target_ticket  = COALESCE(EXCLUDED.target_ticket,  product_investors.target_ticket),
-        probability    = COALESCE(EXCLUDED.probability,    product_investors.probability),
-        decline_reason = COALESCE(EXCLUDED.decline_reason, product_investors.decline_reason)
+        target_ticket    = COALESCE(EXCLUDED.target_ticket,    product_investors.target_ticket),
+        probability      = COALESCE(EXCLUDED.probability,      product_investors.probability),
+        decline_reason   = COALESCE(EXCLUDED.decline_reason,   product_investors.decline_reason),
+        committed_amount = COALESCE(EXCLUDED.committed_amount, product_investors.committed_amount)
     `, [parseInt(product_id), investor_id,
-        fields.target_ticket  ?? null,
-        fields.probability    ?? null,
-        fields.decline_reason ?? null]);
+        fields.target_ticket    ?? null,
+        fields.probability      ?? null,
+        fields.decline_reason   ?? null,
+        fields.committed_amount ?? null]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

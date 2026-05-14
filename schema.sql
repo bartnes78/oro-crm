@@ -86,6 +86,13 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL
 );
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='product_investors' AND column_name='committed_amount') THEN
+    ALTER TABLE product_investors ADD COLUMN committed_amount NUMERIC;
+  END IF;
+END $$;
+
 -- Legg til FK-er på eksisterende databaser (idempotent)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
