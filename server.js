@@ -145,8 +145,8 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-const IS_PROD       = process.env.NODE_ENV === 'production';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || null;
+const IS_PROD        = process.env.NODE_ENV === 'production';
+const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || '').trim().replace(/\/$/, '') || null;
 
 if (IS_PROD && !ALLOWED_ORIGIN) {
   console.error('[sikkerhet] ALLOWED_ORIGIN er ikke satt i production — avbryter oppstart.');
@@ -156,12 +156,14 @@ if (IS_PROD && !ALLOWED_ORIGIN) {
 const DEV_ORIGINS = /^https?:\/\/localhost(:\d+)?$/;
 const apiCors = cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // same-origin / server-til-server
+    // Ingen Origin-header = same-origin eller server-til-server, alltid tillatt
+    if (!origin) return cb(null, true);
+    const normOrigin = origin.trim().replace(/\/$/, '');
     if (IS_PROD) {
-      return origin === ALLOWED_ORIGIN ? cb(null, true) : cb(new Error('CORS ikke tillatt'));
+      // cb(null, false) = avvis stille uten å kaste feil (CORS-blokkering skjer i browser)
+      return cb(null, normOrigin === ALLOWED_ORIGIN);
     }
-    if (DEV_ORIGINS.test(origin) || (ALLOWED_ORIGIN && origin === ALLOWED_ORIGIN)) return cb(null, true);
-    cb(new Error('CORS ikke tillatt'));
+    cb(null, DEV_ORIGINS.test(normOrigin) || normOrigin === ALLOWED_ORIGIN);
   },
   credentials: true,
 });
