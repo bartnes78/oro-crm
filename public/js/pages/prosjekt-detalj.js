@@ -224,6 +224,13 @@ function renderTable() {
     ? (v != null ? fmt(v / pctBase * 100, dec) + ' %' : null)
     : (v != null ? fmt(v, dec)                         : null);
 
+  let sumTicket = 0, sumWeighted = 0;
+  for (const inv of invs) {
+    if (inv.target_ticket != null) sumTicket += inv.target_ticket;
+    if (inv.target_ticket != null && inv.probability != null)
+      sumWeighted += inv.target_ticket * inv.probability;
+  }
+
   const rows = invs.map(inv => {
     const weighted = inv.target_ticket != null && inv.probability != null
       ? inv.target_ticket * inv.probability : null;
@@ -318,6 +325,29 @@ function renderTable() {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:var(--bg);border-top:2px solid var(--border);font-weight:700;">
+            <td></td>
+            <td style="font-size:12px;color:var(--muted);padding-top:8px;padding-bottom:8px;">
+              Sum (${invs.length} inv.)
+            </td>
+            <td></td>
+            <td></td>
+            <td class="text-right" style="font-size:13px;padding-top:8px;padding-bottom:8px;">
+              ${fmtVal(sumTicket, 1) ?? '—'}
+              ${!pctBase && _product?.target_size && sumTicket > 0
+                ? `<div style="font-size:10px;font-weight:400;color:${sumTicket / _product.target_size > 1 ? '#e07000' : '#1A8A6A'};">
+                    ${fmt(sumTicket / _product.target_size * 100, 0)} % av mål
+                   </div>`
+                : ''}
+            </td>
+            <td></td>
+            <td class="text-right" style="font-size:13px;color:#D35400;padding-top:8px;padding-bottom:8px;">
+              ${fmtVal(sumWeighted, 1) ?? '—'}
+            </td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
     <div style="padding:8px 16px;font-size:11px;color:#aaa;border-top:1px solid var(--border);">
