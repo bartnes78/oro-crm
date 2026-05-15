@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "node seed.js",
     "migrate": "node migrate.js"
   },
   "dependencies": {
@@ -17,8 +16,6 @@
     "helmet": "^8.1.0",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.20.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

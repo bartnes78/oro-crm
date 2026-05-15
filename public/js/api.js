@@ -3,7 +3,7 @@ const BASE = '/api';
 async function req(method, url, body) {
   const res = await fetch(BASE + url, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: { 'X-Requested-With': 'XMLHttpRequest', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

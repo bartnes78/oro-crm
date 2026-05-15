@@ -227,6 +227,12 @@ app.use('/api', async (req, res, next) => {
   }
 });
 
+app.use('/api', (req, res, next) => {
+  if (req.headers['x-requested-with'] !== 'XMLHttpRequest')
+    return res.status(403).json({ error: 'Ugyldig forespørsel' });
+  next();
+});
+
 function requireAdmin(req, res, next) {
   if (req.currentUser?.role !== 'admin')
     return res.status(403).json({ error: 'Kun administratorer har tilgang' });
