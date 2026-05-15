@@ -951,6 +951,53 @@ app.delete('/api/products/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: migrer ticket/prob fra backup til product_investors ────────────────
+app.post('/api/admin/migrate-tickets', requireAdmin, async (req, res) => {
+  // Finn nyeste backup-fil som har investors med target_ticket != null
+  let backupInvestors = null;
+  let usedStamp = null;
+  if (fs.existsSync(BACKUP_DIR)) {
+    const files  = fs.readdirSync(BACKUP_DIR).sort().reverse();
+    const stamps = [...new Set(files.map(f => f.slice(0, 19)))];
+    for (const stamp of stamps) {
+      const src = path.join(BACKUP_DIR, `${stamp}_investors.json`);
+      if (!fs.existsSync(src)) continue;
+      const rows = JSON.parse(fs.readFileSync(src, 'utf8'));
+      const withData = rows.filter(r => r.target_ticket != null || r.probability != null);
+      if (withData.length > 0) {
+        backupInvestors = rows;
+        usedStamp = stamp;
+        break;
+      }
+    }
+  }
+  if (!backupInvestors) {
+    return res.status(404).json({ error: 'Ingen backup med ticket/prob-data funnet. Data kan ikke gjenopprettes automatisk.' });
+  }
+
+  const toMigrate = backupInvestors.filter(r => r.target_ticket != null || r.probability != null);
+  let inserted = 0, skipped = 0;
+
+  for (const inv of toMigrate) {
+    const interests = Array.isArray(inv.product_interests) ? inv.product_interests : [];
+    if (interests.length === 0) { skipped++; continue; }
+    for (const pid of interests) {
+      try {
+        const { rowCount } = await query(`
+          INSERT INTO product_investors (product_id, investor_id, target_ticket, probability)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (product_id, investor_id) DO NOTHING
+        `, [parseInt(pid), inv.id, inv.target_ticket ?? null, inv.probability ?? null]);
+        if (rowCount > 0) inserted++;
+      } catch (e) {
+        console.error(`[migrate-tickets] ${inv.id} pid=${pid}: ${e.message}`);
+      }
+    }
+  }
+
+  res.json({ ok: true, stamp: usedStamp, investors: toMigrate.length, inserted, skipped });
+});
+
 // ── Backup API ────────────────────────────────────────────────────────────────
 app.get('/api/backups', (req, res) => {
   try {

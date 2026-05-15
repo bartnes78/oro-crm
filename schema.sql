@@ -110,6 +110,22 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Nullstill legacy globale ticket/prob — disse er nå per produkt i product_investors
+-- Migrer globale ticket/prob til product_investors (idempotent, kjør før nullstilling)
+-- For investorer med product_interests og globale verdier: lag rader i product_investors
+DO $$ BEGIN
+  INSERT INTO product_investors (product_id, investor_id, target_ticket, probability)
+  SELECT
+    (pid.value)::integer,
+    i.id,
+    i.target_ticket,
+    i.probability
+  FROM investors i,
+    jsonb_array_elements(COALESCE(i.product_interests, '[]'::jsonb)) AS pid(value)
+  WHERE (i.target_ticket IS NOT NULL OR i.probability IS NOT NULL)
+  ON CONFLICT (product_id, investor_id) DO NOTHING;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- Nullstill legacy globale felt etter migrering
 UPDATE investors SET target_ticket = NULL, probability = NULL
 WHERE target_ticket IS NOT NULL OR probability IS NOT NULL;
