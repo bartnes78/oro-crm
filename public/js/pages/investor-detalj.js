@@ -922,12 +922,6 @@ function openQuickDeclineModal(inv, product, products, reload) {
         <label>Notat <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
         <textarea id="qd-note" placeholder="Begrunnelse, kommentar&hellip;" style="min-height:60px;"></textarea>
       </div>
-      <div class="form-group full">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-direction:row;">
-          <input type="checkbox" id="qd-remove" checked />
-          Fjern ${window.escHtml(product.name)} fra produktinteresse
-        </label>
-      </div>
     </div>`,
     `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
     <button class="btn btn-primary" id="qd-save-btn" style="background:#e74c3c;border-color:#e74c3c;">Registrer avslag</button>`,
@@ -935,10 +929,9 @@ function openQuickDeclineModal(inv, product, products, reload) {
 
   window.openModal(html, () => {
     document.getElementById('qd-save-btn').addEventListener('click', async () => {
-      const date   = document.getElementById('qd-date').value;
-      const note   = document.getElementById('qd-note').value;
-      const remove = document.getElementById('qd-remove').checked;
-      const btn    = document.getElementById('qd-save-btn');
+      const date = document.getElementById('qd-date').value;
+      const note = document.getElementById('qd-note').value;
+      const btn  = document.getElementById('qd-save-btn');
       btn.disabled = true; btn.textContent = 'Lagrer&hellip;';
       try {
         await Promise.all([
@@ -960,10 +953,6 @@ function openQuickDeclineModal(inv, product, products, reload) {
             declined_at:    date,
           }),
         ]);
-        if (remove) {
-          const updated = (inv.product_interests || []).filter(id => id !== product._id);
-          await api.updateInvestor(inv.id, { product_interests: updated });
-        }
         window.closeModal();
         await reload();
       } catch (e) {

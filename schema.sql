@@ -119,6 +119,10 @@ CREATE TABLE IF NOT EXISTS declined_offers (
   UNIQUE(product_id, investor_id)
 );
 
+-- Rydd orphan-rader som ville hindre FK-constraint-migrasjoner under
+DELETE FROM contact_log WHERE investor_id IS NOT NULL AND investor_id NOT IN (SELECT id FROM investors);
+DELETE FROM tasks       WHERE investor_id IS NOT NULL AND investor_id NOT IN (SELECT id FROM investors);
+
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
     WHERE constraint_name = 'contact_log_investor_id_fkey' AND table_name = 'contact_log') THEN

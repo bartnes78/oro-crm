@@ -486,12 +486,14 @@ app.get('/api/locations', async (req, res) => {
 app.post('/api/investors', async (req, res) => {
   const errors = validateInvestorBody(req.body, true);
   if (errors.length) return validationError(res, errors);
+  const client = await pool.connect();
   try {
-    const { rows: last } = await query(`SELECT id FROM investors WHERE id ~ '^INV-\\d+$' ORDER BY CAST(SUBSTRING(id FROM 5) AS INTEGER) DESC LIMIT 1`);
+    await client.query('BEGIN');
+    const { rows: last } = await client.query(`SELECT id FROM investors WHERE id ~ '^INV-\\d+$' ORDER BY CAST(SUBSTRING(id FROM 5) AS INTEGER) DESC LIMIT 1`);
     const maxNum = last.length ? parseInt(last[0].id.slice(4)) : 0;
     const id = 'INV-' + String(maxNum + 1).padStart(3, '0');
 
-    const { rows: [inv] } = await query(`
+    const { rows: [inv] } = await client.query(`
       INSERT INTO investors
         (id, name, country, city, investor_type, fund_vehicle,
          phase, lead, advisor, first_close, next_steps, comments, updated_at)
@@ -506,13 +508,17 @@ app.post('/api/investors', async (req, res) => {
     const interests = Array.isArray(req.body.product_interests) ? req.body.product_interests : [];
     if (interests.length > 0) {
       await Promise.all(interests.map(pid =>
-        query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, id])
+        client.query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, id])
       ));
     }
+    await client.query('COMMIT');
     res.json({ ...fmtInvestor(inv), product_interests: interests });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[POST /investors]', e.message);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -535,15 +541,17 @@ app.get('/api/investors/:id', async (req, res) => {
 app.put('/api/investors/:id', async (req, res) => {
   const errors = validateInvestorBody(req.body, false);
   if (errors.length) return validationError(res, errors);
+  const client = await pool.connect();
   try {
-    const { rows } = await query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
+    if (!rows[0]) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Not found' }); }
     const cur = rows[0];
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
     const vNull = k => (k in b ? (b[k] || null) : cur[k]);
 
-    const { rows: [updated] } = await query(`
+    const { rows: [updated] } = await client.query(`
       UPDATE investors SET
         name=$2, country=$3, city=$4, investor_type=$5, fund_vehicle=$6,
         phase=$7, lead=$8, advisor=$9,
@@ -563,26 +571,30 @@ app.put('/api/investors/:id', async (req, res) => {
     let newInterests = null;
     if ('product_interests' in b) {
       const newIds = (Array.isArray(b.product_interests) ? b.product_interests : []).map(Number);
-      const { rows: existing } = await query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
+      const { rows: existing } = await client.query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
       const existingIds = existing.map(r => r.product_id);
       const toAdd    = newIds.filter(id => !existingIds.includes(id));
       const toRemove = existingIds.filter(id => !newIds.includes(id));
       if (toAdd.length > 0)
         await Promise.all(toAdd.map(pid =>
-          query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, req.params.id])
+          client.query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, req.params.id])
         ));
       if (toRemove.length > 0)
-        await query('DELETE FROM product_investors WHERE investor_id=$1 AND product_id=ANY($2)', [req.params.id, toRemove]);
+        await client.query('DELETE FROM product_investors WHERE investor_id=$1 AND product_id=ANY($2)', [req.params.id, toRemove]);
       newInterests = newIds;
     } else {
-      const { rows: piRows } = await query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
+      const { rows: piRows } = await client.query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
       newInterests = piRows.map(r => r.product_id).sort((a, b) => a - b);
     }
 
+    await client.query('COMMIT');
     res.json({ ...fmtInvestor(updated), product_interests: newInterests });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[PUT /investors]', e.message);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -708,11 +720,12 @@ app.post('/api/merge', async (req, res) => {
     await client.query('UPDATE contacts SET investor_id=$1 WHERE investor_id=$2', [keep_id, drop_id]);
     await client.query('UPDATE contact_log SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
     await client.query('UPDATE tasks SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
-    // Kopier drop's produktkoblinger til keep (ON CONFLICT = keep beholder sine egne verdier)
+    // Kopier drop's produktkoblinger til keep — behold keep's verdier ved konflikt
     await client.query(`
-      INSERT INTO product_investors (product_id, investor_id)
-      SELECT product_id, $1 FROM product_investors WHERE investor_id = $2
-      ON CONFLICT DO NOTHING
+      INSERT INTO product_investors (product_id, investor_id, target_ticket, probability, committed_amount, decline_reason)
+      SELECT product_id, $1, target_ticket, probability, committed_amount, decline_reason
+      FROM product_investors WHERE investor_id = $2
+      ON CONFLICT (product_id, investor_id) DO NOTHING
     `, [keep_id, drop_id]);
     await client.query('DELETE FROM investors WHERE id=$1', [drop_id]);
     await client.query('COMMIT');
@@ -1191,10 +1204,8 @@ app.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) => 
     const { rows: investors } = await query(`SELECT id FROM investors WHERE investor_type ILIKE '%pensjon%'`);
     if (investors.length === 0) return res.json({ ok: true, inserted: 0, message: 'Ingen investorer med type "pensjon" funnet' });
 
-    // Sett inn i product_investors, oppdater product_interests
-    let inserted = 0, updated = 0;
+    let inserted = 0;
     for (const inv of investors) {
-      // Legg til i product_investors (50 MNOK, 5%)
       const r = await query(
         `INSERT INTO product_investors (product_id, investor_id, target_ticket, probability)
          VALUES ($1, $2, 50, 0.05)
@@ -1202,21 +1213,9 @@ app.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) => 
         [productId, inv.id]
       );
       if (r.rowCount > 0) inserted++;
-
-      // Legg til produktet i product_interests om det mangler
-      await query(
-        `UPDATE investors
-         SET product_interests = CASE
-           WHEN product_interests @> $1::jsonb THEN product_interests
-           ELSE product_interests || $1::jsonb
-         END
-         WHERE id = $2`,
-        [JSON.stringify([productId]), inv.id]
-      );
-      updated++;
     }
 
-    res.json({ ok: true, productId, investorCount: investors.length, inserted, updated });
+    res.json({ ok: true, productId, investorCount: investors.length, inserted });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
