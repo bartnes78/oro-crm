@@ -41,6 +41,7 @@ function fmtInvestor(row) {
     doc_shared:        row.doc_shared    || null,
     meeting_date:      row.meeting_date  || null,
     comments:          row.comments,
+    docs:              row.docs              || {},
     updated_at:        row.updated_at,
   };
 }
@@ -532,7 +533,7 @@ app.put('/api/investors/:id', async (req, res) => {
         product_interests=$7, phase=$8, lead=$9, advisor=$10,
         first_close=$11, source=$12,
         next_steps=$13, last_contact=$14, doc_shared=$15, meeting_date=$16,
-        comments=$17, updated_at=NOW()
+        comments=$17, docs=$18, updated_at=NOW()
       WHERE id=$1 RETURNING *
     `, [
       req.params.id,
@@ -541,6 +542,7 @@ app.put('/api/investors/:id', async (req, res) => {
       v('phase'), vNull('lead'), vNull('advisor'),
       v('first_close') || 0, vNull('source'), vNull('next_steps'),
       vNull('last_contact'), vNull('doc_shared'), vNull('meeting_date'), vNull('comments'),
+      JSON.stringify('docs' in b ? (b.docs || {}) : (cur.docs || {})),
     ]);
     res.json(fmtInvestor(updated));
   } catch (e) {
@@ -554,10 +556,7 @@ app.delete('/api/investors/:id', async (req, res) => {
   try {
     const { rows } = await query('SELECT id FROM investors WHERE id = $1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Investor ikke funnet' });
-    await query('DELETE FROM contact_log WHERE investor_id = $1', [id]);
-    await query('DELETE FROM tasks WHERE investor_id = $1', [id]);
-    await query('DELETE FROM product_investors WHERE investor_id = $1', [id]);
-    await query('DELETE FROM investors WHERE id = $1', [id]); // cascade sletter contacts
+    await query('DELETE FROM investors WHERE id = $1', [id]); // CASCADE sletter contacts, contact_log, tasks, product_investors, declined_offers
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -711,10 +710,11 @@ app.post('/api/contacts', async (req, res) => {
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [c] } = await query(`
-      INSERT INTO contacts (investor_id, name, title, email, phone, is_primary, notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+      INSERT INTO contacts (investor_id, name, title, email, phone, is_primary, notes, active)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *
     `, [req.body.investor_id, req.body.name, req.body.title || null,
-        req.body.email || null, req.body.phone || null, req.body.is_primary || 0, req.body.notes || null]);
+        req.body.email || null, req.body.phone || null, req.body.is_primary || 0, req.body.notes || null,
+        req.body.active ?? 1]);
     res.json(fmtRow(c));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -727,10 +727,11 @@ app.put('/api/contacts/:id', async (req, res) => {
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
     const { rows: [c] } = await query(`
-      UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, is_primary=$7, notes=$8
+      UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, is_primary=$7, notes=$8, active=$9
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id'), v('name'), v('title') || null,
-        v('email') || null, v('phone') || null, v('is_primary') || 0, v('notes') || null]);
+        v('email') || null, v('phone') || null, v('is_primary') || 0, v('notes') || null,
+        'active' in b ? (b.active ?? 1) : (cur.active ?? 1)]);
     res.json(fmtRow(c));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -799,11 +800,12 @@ app.post('/api/log', async (req, res) => {
     await client.query('BEGIN');
     await client.query('UPDATE investors SET last_contact=$1, updated_at=NOW() WHERE id=$2', [req.body.date, req.body.investor_id]);
     const { rows: [entry] } = await client.query(`
-      INSERT INTO contact_log (investor_id, investor_name, date, log_type, contact_person, responsible, subject, outcome, notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+      INSERT INTO contact_log (investor_id, investor_name, date, log_type, contact_person, responsible, subject, outcome, notes, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
     `, [req.body.investor_id, req.body.investor_name || null, req.body.date, req.body.log_type || null,
         req.body.contact_person || null, req.body.responsible || null,
-        req.body.subject || null, req.body.outcome || null, req.body.notes || null]);
+        req.body.subject || null, req.body.outcome || null, req.body.notes || null,
+        req.body.status || null]);
     await client.query('COMMIT');
     res.json(fmtRow(entry));
   } catch (e) {
@@ -826,11 +828,12 @@ app.put('/api/log/:id', async (req, res) => {
     const v   = k => (k in b ? b[k] : cur[k]);
     const { rows: [entry] } = await query(`
       UPDATE contact_log SET investor_id=$2, investor_name=$3, date=$4, log_type=$5,
-        contact_person=$6, responsible=$7, subject=$8, outcome=$9, notes=$10
+        contact_person=$6, responsible=$7, subject=$8, outcome=$9, notes=$10, status=$11
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id'), v('investor_name') || null, v('date'),
         v('log_type') || null, v('contact_person') || null, v('responsible') || null,
-        v('subject') || null, v('outcome') || null, v('notes') || null]);
+        v('subject') || null, v('outcome') || null, v('notes') || null,
+        v('status') || null]);
     res.json(fmtRow(entry));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1221,13 +1224,15 @@ app.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) => 
 // ── Avslåtte tilbud ───────────────────────────────────────────────────────────
 app.get('/api/declined-offers', async (req, res) => {
   const productId = parseInt(req.query.productId);
-  if (!productId) return validationError(res, 'productId påkrevd');
+  if (!productId) return validationError(res, ['productId påkrevd']);
   try {
     const { rows } = await query(
       `SELECT d.id, d.product_id, d.investor_id, d.decline_reason, d.declined_at,
-              i.name AS investor_name, i.lead, i.last_contact, i.target_ticket
+              i.name AS investor_name, i.lead, i.last_contact,
+              pi.target_ticket
        FROM declined_offers d
        JOIN investors i ON i.id = d.investor_id
+       LEFT JOIN product_investors pi ON pi.investor_id = d.investor_id AND pi.product_id = d.product_id
        WHERE d.product_id = $1
        ORDER BY d.declined_at DESC NULLS LAST, i.name`,
       [productId]
@@ -1240,7 +1245,7 @@ app.get('/api/declined-offers', async (req, res) => {
 
 app.post('/api/declined-offers', async (req, res) => {
   const { product_id, investor_id, decline_reason, declined_at } = req.body;
-  if (!product_id || !investor_id) return validationError(res, 'product_id og investor_id påkrevd');
+  if (!product_id || !investor_id) return validationError(res, ['product_id og investor_id påkrevd']);
   try {
     const { rows } = await query(
       `INSERT INTO declined_offers (product_id, investor_id, decline_reason, declined_at)
@@ -1259,7 +1264,7 @@ app.post('/api/declined-offers', async (req, res) => {
 
 app.delete('/api/declined-offers/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  if (!id) return validationError(res, 'Ugyldig id');
+  if (!id) return validationError(res, ['Ugyldig id']);
   try {
     await query('DELETE FROM declined_offers WHERE id = $1', [id]);
     res.json({ ok: true });
@@ -1439,7 +1444,7 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 async function init() {
   await initSchema();
   await bootstrapUsers();
-  await runBackup();
+  runBackup().catch(e => console.error('[backup] Oppstart-backup feilet:', e.message));
   setInterval(runBackup, 24 * 60 * 60 * 1000);
   app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
 }

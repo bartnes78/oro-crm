@@ -941,17 +941,25 @@ function openQuickDeclineModal(inv, product, products, reload) {
       const btn    = document.getElementById('qd-save-btn');
       btn.disabled = true; btn.textContent = 'Lagrer&hellip;';
       try {
-        await api.addLog({
-          date,
-          investor_id:       inv.id,
-          investor_name:     inv.name,
-          log_type:          'Notat',
-          subject:           `Takket nei til ${product.name}`,
-          outcome:           note,
-          responsible:       'Kristian Bartnes',
-          notes:             '',
-          declined_products: [product._id],
-        });
+        await Promise.all([
+          api.addLog({
+            date,
+            investor_id:   inv.id,
+            investor_name: inv.name,
+            log_type:      'Notat',
+            subject:       `Takket nei til ${product.name}`,
+            outcome:       note,
+            responsible:   'Kristian Bartnes',
+            notes:         '',
+            status:        'avholdt',
+          }),
+          api.addDeclinedOffer({
+            product_id:     product._id,
+            investor_id:    inv.id,
+            decline_reason: note || null,
+            declined_at:    date,
+          }),
+        ]);
         if (remove) {
           const updated = (inv.product_interests || []).filter(id => id !== product._id);
           await api.updateInvestor(inv.id, { product_interests: updated });

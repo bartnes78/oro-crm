@@ -341,6 +341,12 @@ function setupEvents(el, state) {
     try {
       await api.addLog(data);
 
+      if (declined.length > 0) {
+        await Promise.all(declined.map(pid =>
+          api.addDeclinedOffer({ product_id: pid, investor_id: invId, declined_at: date })
+        ));
+      }
+
       if (newPhase) {
         await api.updateInvestor(invId, { phase: newPhase });
       }

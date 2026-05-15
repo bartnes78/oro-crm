@@ -119,5 +119,53 @@ CREATE TABLE IF NOT EXISTS declined_offers (
   UNIQUE(product_id, investor_id)
 );
 
--- Legacy migration from investors.target_ticket/probability to product_investors
--- was completed separately. Do not run data-moving migrations from schema bootstrap.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'contact_log_investor_id_fkey' AND table_name = 'contact_log') THEN
+    ALTER TABLE contact_log ADD CONSTRAINT contact_log_investor_id_fkey
+      FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'tasks_investor_id_fkey' AND table_name = 'tasks') THEN
+    ALTER TABLE tasks ADD CONSTRAINT tasks_investor_id_fkey
+      FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='docs') THEN
+    ALTER TABLE investors ADD COLUMN docs JSONB DEFAULT '{}';
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='contacts' AND column_name='active') THEN
+    ALTER TABLE contacts ADD COLUMN active INTEGER DEFAULT 1;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='contact_log' AND column_name='status') THEN
+    ALTER TABLE contact_log ADD COLUMN status TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='target_ticket') THEN
+    ALTER TABLE investors DROP COLUMN target_ticket;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='probability') THEN
+    ALTER TABLE investors DROP COLUMN probability;
+  END IF;
+END $$;
