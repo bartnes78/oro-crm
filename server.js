@@ -258,6 +258,88 @@ function validateInvestorBody(body, requireName = true) {
   return errors;
 }
 
+// ── Analyse ───────────────────────────────────────────────────────────────────
+app.get('/api/analyse', requireAuth, async (req, res) => {
+  try {
+    const [{ rows: products }, { rows: piRows }, { rows: investors }, { rows: logRows }] = await Promise.all([
+      query('SELECT * FROM products ORDER BY id'),
+      query('SELECT product_id, investor_id, target_ticket, probability, committed_amount FROM product_investors'),
+      query('SELECT id, phase, investor_type FROM investors'),
+      query(`SELECT DATE_TRUNC('month', date)::date AS month, COUNT(*)::int AS count, responsible
+             FROM contact_log
+             WHERE date >= NOW() - INTERVAL '13 months'
+             GROUP BY 1, 3 ORDER BY 1`),
+    ]);
+
+    const invMap = Object.fromEntries(investors.map(i => [i.id, i]));
+
+    const fundStats = products.map(p => {
+      const pis = piRows.filter(pi => pi.product_id === p.id);
+      const ticket    = pis.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
+      const weighted  = pis.reduce((s, pi) => s + (pi.target_ticket != null && pi.probability != null
+        ? Number(pi.target_ticket) * Number(pi.probability) : 0), 0);
+      const committed = pis.reduce((s, pi) => s + (Number(pi.committed_amount) || 0), 0);
+      const signedPis = pis.filter(pi => invMap[pi.investor_id]?.phase === 'Tegnet');
+      const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
+      return {
+        id: p.id, name: p.name, target_size: p.target_size,
+        investorCount: pis.length,
+        ticket:      Math.round(ticket * 10) / 10,
+        weighted:    Math.round(weighted * 10) / 10,
+        committed:   Math.round(committed * 10) / 10,
+        signedCount: signedPis.length,
+        signedTicket: Math.round(signedTicket * 10) / 10,
+      };
+    });
+
+    // Monthly totals (last 12 months)
+    const monthTotals = {};
+    logRows.forEach(r => {
+      const m = String(r.month).slice(0, 7);
+      monthTotals[m] = (monthTotals[m] || 0) + r.count;
+    });
+
+    // Per-responsible totals
+    const respMap = {};
+    logRows.forEach(r => {
+      if (!r.responsible) return;
+      respMap[r.responsible] = (respMap[r.responsible] || 0) + r.count;
+    });
+    const byResponsible = Object.entries(respMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Phase breakdown with ticket
+    const phaseMap = {};
+    investors.forEach(i => {
+      const p = i.phase || 'Ukjent';
+      if (!phaseMap[p]) phaseMap[p] = { phase: p, count: 0 };
+      phaseMap[p].count++;
+    });
+    const byPhase = Object.values(phaseMap).sort((a, b) => b.count - a.count);
+
+    // Investor type with ticket
+    const typeMap = {};
+    piRows.forEach(pi => {
+      const inv = invMap[pi.investor_id];
+      if (!inv) return;
+      const t = inv.investor_type || 'Ukjent';
+      if (!typeMap[t]) typeMap[t] = { type: t, count: 0, ticket: 0 };
+      typeMap[t].ticket += Number(pi.target_ticket) || 0;
+    });
+    investors.forEach(i => {
+      const t = i.investor_type || 'Ukjent';
+      if (!typeMap[t]) typeMap[t] = { type: t, count: 0, ticket: 0 };
+      typeMap[t].count++;
+    });
+    const byType = Object.values(typeMap)
+      .map(t => ({ ...t, ticket: Math.round(t.ticket * 10) / 10 }))
+      .sort((a, b) => b.ticket - a.ticket);
+
+    res.json({ fundStats, monthly: monthTotals, byResponsible, byPhase, byType });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {

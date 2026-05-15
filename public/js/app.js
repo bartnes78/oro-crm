@@ -13,6 +13,7 @@ import { render as renderEpost }           from './pages/epost-import.js';
 import { render as renderOppfolging }      from './pages/oppfolging.js';
 import { render as renderBackup }          from './pages/backup.js';
 import { render as renderBrukere }         from './pages/bruker-admin.js';
+import { render as renderAnalyse }         from './pages/analyse.js';
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const state = { page: 'dashboard', id: null, currentUser: null };
@@ -66,17 +67,17 @@ window.escHtml = function(s) {
 const NAV_MAIN = [
   { id:'dashboard',  icon:'◼', label:'Dashboard' },
   { id:'investorer', icon:'◈', label:'Investorer' },
-  { id:'logg',       icon:'✎', label:'Logg kontakt' },
   { id:'epost',      icon:'✉', label:'Importer fra Outlook' },
   { id:'oppfolging', icon:'⏱', label:'Oppfølging' },
   { id:'oppgaver',   icon:'☑', label:'Oppgaver' },
   { id:'prosjekter', icon:'◧', label:'Prosjekter' },
+  { id:'analyse',    icon:'📊', label:'Analyse' },
 ];
 const NAV_ADMIN = [
-  { id:'bulk',         icon:'⊞', label:'Bulkredigering' },
-  { id:'duplikater',   icon:'⧉', label:'Duplikater' },
-  { id:'dupkontakter', icon:'👥', label:'Duplikate kontakter' },
-  { id:'backup',       icon:'↩', label:'Backup' },
+  { id:'bulk',         icon:'⊞',  label:'Bulkredigering' },
+  { id:'duplikater',   icon:'⧉',  label:'Duplikater' },
+  { id:'dupkontakter', icon:'👥', label:'Duplikate kontakter', iconColor:'#E67E22' },
+  { id:'backup',       icon:'↩',  label:'Backup' },
 ];
 
 function buildSidebar() {
@@ -89,7 +90,7 @@ function buildSidebar() {
   </button>
   <div id="admin-items">
     ${NAV_ADMIN.map(i => navItem(i)).join('')}
-    ${isAdmin ? navItem({ id:'brukere', icon:'👤', label:'Brukere' }) : ''}
+    ${isAdmin ? navItem({ id:'brukere', icon:'👤', label:'Brukere', iconColor:'#8E44AD' }) : ''}
   </div>`;
   nav.innerHTML = html;
 
@@ -105,8 +106,9 @@ function buildSidebar() {
 }
 
 function navItem(i) {
+  const iconStyle = i.iconColor ? ` style="color:${i.iconColor}"` : '';
   return `<button class="nav-item" data-page="${i.id}">
-    <span class="nav-icon">${i.icon}</span>${escHtml(i.label)}
+    <span class="nav-icon"${iconStyle}>${i.icon}</span>${escHtml(i.label)}
   </button>`;
 }
 
@@ -151,7 +153,8 @@ function renderPage() {
     logg:'Logg kontakt', oppgaver:'Oppgaver', prosjekter:'Prosjekter',
     prosjektDetalj:'Prosjekt', duplikater:'Duplikater',
     dupkontakter:'Duplikate kontakter', bulk:'Bulkredigering',
-    epost:'E-post import', oppfolging:'Oppfølging', backup:'Backup', brukere:'Brukere',
+    epost:'E-post import', oppfolging:'Oppfølging', backup:'Backup',
+    brukere:'Brukere', analyse:'Analyse',
   };
   const mobileTitle = document.getElementById('mobile-title');
   if (mobileTitle) mobileTitle.textContent = titles[page] || 'ORO CRM';
@@ -171,6 +174,7 @@ function renderPage() {
     case 'oppfolging':     renderOppfolging(el, state);      break;
     case 'backup':         renderBackup(el, state);          break;
     case 'brukere':        renderBrukere(el, state);         break;
+    case 'analyse':        renderAnalyse(el, state);         break;
     default:
       el.innerHTML = '<div class="content"><p class="text-muted">Side ikke funnet.</p></div>';
   }

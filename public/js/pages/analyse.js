@@ -1,0 +1,208 @@
+import { api } from '../api.js';
+
+function esc(s) { return window.escHtml(s); }
+function fmt(n, dec = 0) { return window.fmt(n, dec); }
+
+// ── SVG sparkline ─────────────────────────────────────────────────────────────
+function sparkline(values, w = 320, h = 52) {
+  if (!values.length) return '';
+  const max = Math.max(...values, 1);
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1 || 1)) * w;
+    const y = h - (v / max) * (h - 8) - 4;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    <polyline points="${pts}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
+    ${values.map((v, i) => {
+      const x = (i / (values.length - 1 || 1)) * w;
+      const y = h - (v / max) * (h - 8) - 4;
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--gold)"/>`;
+    }).join('')}
+  </svg>`;
+}
+
+// ── Fondsstatus ───────────────────────────────────────────────────────────────
+function buildFundStats(fundStats) {
+  if (!fundStats.length) return '';
+  const rows = fundStats.map(f => {
+    const pct = f.target_size ? Math.min(Math.round(f.signedTicket / f.target_size * 100), 100) : null;
+    const pctPipeline = f.target_size ? Math.min(Math.round(f.weighted / f.target_size * 100), 100) : null;
+    return `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <span style="font-weight:600;font-size:14px">${esc(f.name)}</span>
+          <span style="font-size:12px;color:var(--muted)">${f.investorCount} investorer</span>
+        </div>
+        ${f.target_size ? `
+        <div style="background:var(--border);border-radius:4px;height:8px;margin-bottom:6px;position:relative;overflow:hidden">
+          <div style="position:absolute;left:0;top:0;height:100%;width:${pctPipeline}%;background:rgba(180,140,60,.35);border-radius:4px"></div>
+          <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:#1E8449;border-radius:4px"></div>
+        </div>
+        <div style="display:flex;gap:20px;font-size:12px">
+          <span style="color:#1E8449"><b>${fmt(f.signedTicket, 0)} MNOK</b> tegnet (${pct}% av mål)</span>
+          <span style="color:var(--muted)">Vektet pipeline: ${fmt(f.weighted, 0)} MNOK (${pctPipeline}%)</span>
+          <span style="color:var(--muted)">Mål: ${fmt(f.target_size, 0)} MNOK</span>
+        </div>
+        ` : `
+        <div style="font-size:12px;color:var(--muted)">
+          Vektet: <b style="color:var(--text)">${fmt(f.weighted, 0)} MNOK</b> &nbsp;·&nbsp;
+          Tegnet: <b style="color:#1E8449">${fmt(f.signedTicket, 0)} MNOK</b>
+          &nbsp;(${f.signedCount} inv.)
+        </div>
+        `}
+      </div>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Fondsstatus</div>
+      ${rows}
+    </div>`;
+}
+
+// ── Pipeline per fase (CSS-stolper) ──────────────────────────────────────────
+function buildPhaseChart(byPhase) {
+  const COLORS = {
+    'Prospekt':'#1A5276','Ny kontakt':'#0F4949','Intro sendt':'#1A7A5E',
+    'Møte avtalt':'#9A6A1E','Aktiv dialog':'#2155A3',
+    'Tegnet':'#1E8449','Ikke relevant nå':'#717D87','Onboardet':'#1A5C1A',
+  };
+  const max = Math.max(...byPhase.map(p => p.count), 1);
+  const rows = byPhase.map(p => {
+    const pct = Math.round((p.count / max) * 100);
+    const color = COLORS[p.phase] || '#2471A3';
+    return `
+      <div style="display:grid;grid-template-columns:130px 1fr 40px;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.phase)}</span>
+        <div style="background:var(--border);border-radius:3px;height:7px">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:3px"></div>
+        </div>
+        <span style="font-size:12px;text-align:right;color:var(--muted)">${p.count}</span>
+      </div>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Pipeline per fase</div>
+      ${rows}
+    </div>`;
+}
+
+// ── Investor-type tabell ───────────────────────────────────────────────────────
+function buildTypeTable(byType) {
+  const rows = byType.map(t => `
+    <tr>
+      <td>${esc(t.type)}</td>
+      <td class="text-right">${t.count}</td>
+      <td class="text-right">${fmt(t.ticket, 0)}</td>
+    </tr>`).join('');
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Investor-type</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Pipeline (MNOK)</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3" style="color:var(--muted);padding:16px 0;text-align:center">Ingen data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── Aktivitet ─────────────────────────────────────────────────────────────────
+function buildActivity(monthly, byResponsible) {
+  // Build last 12 month keys
+  const months = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.toISOString().slice(0, 7));
+  }
+  const values = months.map(m => monthly[m] || 0);
+  const total = values.reduce((s, v) => s + v, 0);
+
+  const labels = months.map(m => {
+    const [y, mo] = m.split('-');
+    return new Date(+y, +mo - 1, 1).toLocaleString('nb-NO', { month: 'short' });
+  });
+
+  const monthRow = months.map((m, i) => `
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <span style="font-size:11px;color:var(--muted);margin-top:4px">${esc(labels[i])}</span>
+    </div>`).join('');
+
+  const respRows = byResponsible.slice(0, 6).map(r => `
+    <tr>
+      <td>${esc(r.name)}</td>
+      <td class="text-right">${r.count}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">Kontaktaktivitet siste 12 måneder
+          <span style="font-weight:400;font-size:12px;color:var(--muted);margin-left:8px">${total} totalt</span>
+        </div>
+        <div style="margin:8px 0">${sparkline(values)}</div>
+        <div style="display:flex">${monthRow}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Aktivitet per ansvarlig</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ORO Kontakt</th><th class="text-right">Aktiviteter</th></tr></thead>
+            <tbody>${respRows || '<tr><td colspan="2" style="color:var(--muted);padding:16px 0;text-align:center">Ingen data</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── KPI-rad øverst ────────────────────────────────────────────────────────────
+function buildKPIs(fundStats) {
+  const totalTicket   = fundStats.reduce((s, f) => s + f.ticket, 0);
+  const totalWeighted = fundStats.reduce((s, f) => s + f.weighted, 0);
+  const totalSigned   = fundStats.reduce((s, f) => s + f.signedTicket, 0);
+  const totalInv      = fundStats.reduce((s, f) => s + f.investorCount, 0);
+  return `
+    <div class="kpi-grid" style="margin-bottom:20px">
+      <div class="kpi-card">
+        <div class="kpi-label">Investorer i pipeline</div>
+        <div class="kpi-value">${fmt(totalInv)}</div>
+      </div>
+      <div class="kpi-card" style="border-top-color:#1A5276">
+        <div class="kpi-label">Aggregert ticket</div>
+        <div class="kpi-value">${fmt(totalTicket, 0)}</div>
+        <div class="kpi-sub">MNOK</div>
+      </div>
+      <div class="kpi-card" style="border-top-color:#D35400">
+        <div class="kpi-label">Vektet volum</div>
+        <div class="kpi-value">${fmt(totalWeighted, 0)}</div>
+        <div class="kpi-sub">MNOK (ticket × sanns.)</div>
+      </div>
+      <div class="kpi-card" style="border-top-color:#1E8449">
+        <div class="kpi-label">Tegnet</div>
+        <div class="kpi-value">${fmt(totalSigned, 0)}</div>
+        <div class="kpi-sub">MNOK</div>
+      </div>
+    </div>`;
+}
+
+// ── Render entry ──────────────────────────────────────────────────────────────
+export async function render(el) {
+  el.innerHTML = '<div class="content"><p class="text-muted">Laster analyse…</p></div>';
+  try {
+    const data = await api.analyse();
+    el.innerHTML = `
+      <div class="topbar"><span class="topbar-title">Analyse</span></div>
+      <div class="content">
+        ${buildKPIs(data.fundStats)}
+        ${buildFundStats(data.fundStats)}
+        <div class="grid-2" style="margin-bottom:20px">
+          ${buildPhaseChart(data.byPhase)}
+          ${buildTypeTable(data.byType)}
+        </div>
+        ${buildActivity(data.monthly, data.byResponsible)}
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="content"><p style="color:red">Feil: ${esc(e.message)}</p></div>`;
+  }
+}
