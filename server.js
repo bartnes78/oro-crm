@@ -253,14 +253,6 @@ function validateInvestorBody(body, requireName = true) {
   if (body.investor_type && !VALID_TYPES.includes(body.investor_type))  errors.push(`Ugyldig type: ${body.investor_type}`);
   if (body.lead          && !VALID_LEADS.includes(body.lead))           errors.push(`Ugyldig lead: ${body.lead}`);
   if (body.fund_vehicle  && !VALID_VEHICLES.includes(body.fund_vehicle))errors.push(`Ugyldig kjøretøy: ${body.fund_vehicle}`);
-  if (body.target_ticket != null && body.target_ticket !== '') {
-    const t = parseFloat(body.target_ticket);
-    if (isNaN(t) || t < 0) errors.push('Målticket må være et positivt tall');
-  }
-  if (body.probability != null && body.probability !== '') {
-    const p = parseFloat(body.probability);
-    if (isNaN(p) || p < 0 || p > 1) errors.push('Sannsynlighet må være mellom 0 og 1');
-  }
   if (body.product_interests != null && !Array.isArray(body.product_interests))
     errors.push('product_interests må være en liste');
   return errors;
@@ -269,22 +261,38 @@ function validateInvestorBody(body, requireName = true) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
-    const [{ rows: investors }, { rows: recent }] = await Promise.all([
+    const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }] = await Promise.all([
       query('SELECT * FROM investors'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
+      query('SELECT investor_id, target_ticket, probability FROM product_investors WHERE target_ticket IS NOT NULL'),
+      query('SELECT * FROM products'),
     ]);
 
-    const total  = investors.length;
-    const ticket = investors.reduce((s, i) => s + (i.target_ticket || 0), 0);
-    const wgtd   = investors.reduce((s, i) => s + (weighted(i) || 0), 0);
+    const total = investors.length;
+
+    // Aggregate ticket and weighted from product_investors (per-product values)
+    const ticket = piRows.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
+    const wgtd   = piRows.reduce((s, pi) =>
+      s + (pi.target_ticket != null && pi.probability != null
+        ? Number(pi.target_ticket) * Number(pi.probability) : 0), 0);
+
+    // Per-investor sums for breakdown tables
+    const invPiMap = {};
+    for (const pi of piRows) {
+      if (!invPiMap[pi.investor_id]) invPiMap[pi.investor_id] = { ticket: 0, weighted: 0 };
+      invPiMap[pi.investor_id].ticket += Number(pi.target_ticket) || 0;
+      if (pi.probability != null)
+        invPiMap[pi.investor_id].weighted += Number(pi.target_ticket) * Number(pi.probability);
+    }
 
     const phaseMap = {};
     investors.forEach(i => {
       const p = i.phase || 'Ukjent';
       if (!phaseMap[p]) phaseMap[p] = { phase: p, count: 0, ticket: 0, weighted: 0 };
       phaseMap[p].count++;
-      phaseMap[p].ticket   += i.target_ticket || 0;
-      phaseMap[p].weighted += weighted(i) || 0;
+      const pi = invPiMap[i.id] || {};
+      phaseMap[p].ticket   += pi.ticket   || 0;
+      phaseMap[p].weighted += pi.weighted || 0;
     });
     const byPhase = Object.values(phaseMap).sort((a, b) => b.count - a.count);
 
@@ -293,23 +301,22 @@ app.get('/api/dashboard', async (req, res) => {
       const t = i.investor_type || 'Ukjent';
       if (!typeMap[t]) typeMap[t] = { investor_type: t, count: 0, ticket: 0 };
       typeMap[t].count++;
-      typeMap[t].ticket += i.target_ticket || 0;
+      typeMap[t].ticket += (invPiMap[i.id] || {}).ticket || 0;
     });
     const byType = Object.values(typeMap).sort((a, b) => b.count - a.count);
 
-    const { rows: productList } = await query('SELECT * FROM products');
     const products = productList.map(p => ({
       _id: p.id, name: p.name,
       count: investors.filter(i => Array.isArray(i.product_interests) && i.product_interests.includes(p.id)).length,
     }));
 
     const top10 = investors
-      .filter(i => weighted(i) != null)
-      .sort((a, b) => weighted(b) - weighted(a))
-      .slice(0, 10)
-      .map(i => ({ ...fmtInvestor(i), weighted: weighted(i) }));
+      .map(i => ({ ...fmtInvestor(i), weighted: (invPiMap[i.id] || {}).weighted || null }))
+      .filter(i => i.weighted > 0)
+      .sort((a, b) => b.weighted - a.weighted)
+      .slice(0, 10);
 
-    res.json({ total, ticket, weighted: Math.round(wgtd * 10) / 10, byPhase, byType, products, top10, recent: recent.map(fmtRow) });
+    res.json({ total, ticket: Math.round(ticket * 10) / 10, weighted: Math.round(wgtd * 10) / 10, byPhase, byType, products, top10, recent: recent.map(fmtRow) });
   } catch (e) {
     console.error('[dashboard]', e.message);
     res.status(500).json({ error: e.message });
@@ -344,12 +351,11 @@ app.get('/api/investors', async (req, res) => {
       const piMap = Object.fromEntries(piRows.map(pi => [pi.investor_id, pi]));
       rows = rows.map(inv => {
         const pi = piMap[inv.id];
-        if (!pi) return inv;
         return {
           ...inv,
-          target_ticket:  pi.target_ticket  != null ? pi.target_ticket  : inv.target_ticket,
-          probability:    pi.probability    != null ? pi.probability    : inv.probability,
-          decline_reason: pi.decline_reason ?? null,
+          target_ticket:  pi?.target_ticket  ?? null,
+          probability:    pi?.probability    ?? null,
+          decline_reason: pi?.decline_reason ?? null,
         };
       });
     }
@@ -384,15 +390,14 @@ app.post('/api/investors', async (req, res) => {
     const { rows: [inv] } = await query(`
       INSERT INTO investors
         (id, name, country, city, investor_type, fund_vehicle, product_interests,
-         phase, lead, advisor, target_ticket, probability, first_close, next_steps, comments, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+         phase, lead, advisor, first_close, next_steps, comments, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
       RETURNING *
     `, [
       id, String(req.body.name).trim(), req.body.country || 'Norge', req.body.city || null,
       req.body.investor_type || null, null,
       JSON.stringify(Array.isArray(req.body.product_interests) ? req.body.product_interests : []),
-      req.body.phase || 'Prospekt', req.body.lead || null, req.body.advisor || null,
-      req.body.target_ticket || null, req.body.probability || null, 0,
+      req.body.phase || 'Prospekt', req.body.lead || null, req.body.advisor || null, 0,
       req.body.next_steps || null, req.body.comments || null,
     ]);
     res.json(fmtInvestor(inv));
@@ -431,17 +436,15 @@ app.put('/api/investors/:id', async (req, res) => {
       UPDATE investors SET
         name=$2, country=$3, city=$4, investor_type=$5, fund_vehicle=$6,
         product_interests=$7, phase=$8, lead=$9, advisor=$10,
-        target_ticket=$11, probability=$12, first_close=$13, source=$14,
-        next_steps=$15, last_contact=$16, doc_shared=$17, meeting_date=$18,
-        comments=$19, updated_at=NOW()
+        first_close=$11, source=$12,
+        next_steps=$13, last_contact=$14, doc_shared=$15, meeting_date=$16,
+        comments=$17, updated_at=NOW()
       WHERE id=$1 RETURNING *
     `, [
       req.params.id,
       v('name'), v('country'), vNull('city'), vNull('investor_type'), vNull('fund_vehicle'),
       JSON.stringify('product_interests' in b ? (b.product_interests || []) : (cur.product_interests || [])),
       v('phase'), vNull('lead'), vNull('advisor'),
-      'target_ticket' in b ? (b.target_ticket ?? null) : cur.target_ticket,
-      'probability'   in b ? (b.probability   ?? null) : cur.probability,
       v('first_close') || 0, vNull('source'), vNull('next_steps'),
       vNull('last_contact'), vNull('doc_shared'), vNull('meeting_date'), vNull('comments'),
     ]);
@@ -573,11 +576,10 @@ app.post('/api/merge', async (req, res) => {
     await client.query('BEGIN');
     await client.query(`
       UPDATE investors SET name=$2, country=$3, city=$4, investor_type=$5, phase=$6, lead=$7,
-        advisor=$8, target_ticket=$9, probability=$10, comments=$11, product_interests=$12, updated_at=NOW()
+        advisor=$8, comments=$9, product_interests=$10, updated_at=NOW()
       WHERE id=$1
     `, [keep_id, merged.name, merged.country, merged.city, merged.investor_type, merged.phase,
-        merged.lead, merged.advisor, merged.target_ticket, merged.probability,
-        merged.comments, JSON.stringify(merged.product_interests)]);
+        merged.lead, merged.advisor, merged.comments, JSON.stringify(merged.product_interests)]);
     await client.query('UPDATE contacts SET investor_id=$1 WHERE investor_id=$2', [keep_id, drop_id]);
     await client.query('UPDATE contact_log SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
     await client.query('UPDATE tasks SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);

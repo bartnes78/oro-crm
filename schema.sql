@@ -109,3 +109,7 @@ DO $$ BEGIN
       FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE;
   END IF;
 END $$;
+
+-- Nullstill legacy globale ticket/prob — disse er nå per produkt i product_investors
+UPDATE investors SET target_ticket = NULL, probability = NULL
+WHERE target_ticket IS NOT NULL OR probability IS NOT NULL;
