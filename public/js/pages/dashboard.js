@@ -12,6 +12,7 @@ const PHASE_COLORS = {
 };
 
 const FILTER_KEY = 'crm_filter_dashboard';
+let _productInvestors = null; // cached per-product investor list
 
 function loadFilter() {
   try { return JSON.parse(localStorage.getItem(FILTER_KEY)) || {}; } catch { return {}; }
@@ -26,22 +27,26 @@ function saveFilter(f) {
 function esc(s) { return window.escHtml(s); }
 function fmt(n, d) { return window.fmt(n, d); }
 
-function applyFilter(investors, filter) {
-  return investors
-    .filter(i => !filter.filterPhase   || i.phase === filter.filterPhase)
-    .filter(i => !filter.filterType    || i.investor_type === filter.filterType)
-    .filter(i => !filter.filterLead    || i.lead === filter.filterLead)
-    .filter(i => !filter.filterProduct ||
-      (Array.isArray(i.product_interests) &&
-       i.product_interests.includes(parseInt(filter.filterProduct, 10))))
-    .filter(i => (i.target_ticket != null && i.probability != null) || i.phase === 'Ikke relevant nå')
-    .map(i => ({
-      ...i,
-      weighted: (i.target_ticket != null && i.probability != null)
-        ? Math.round(i.target_ticket * i.probability * 10) / 10
-        : null,
-    }))
-    .sort((a, b) => (b.weighted ?? -1) - (a.weighted ?? -1))
+function computeTop10(data, filter) {
+  if (filter.filterProduct && _productInvestors) {
+    // Per-product investors have real ticket + probability
+    return _productInvestors
+      .filter(i => !filter.filterPhase || i.phase === filter.filterPhase)
+      .filter(i => !filter.filterType  || i.investor_type === filter.filterType)
+      .filter(i => !filter.filterLead  || i.lead === filter.filterLead)
+      .filter(i => i.target_ticket != null && i.probability != null)
+      .map(i => ({
+        ...i,
+        weighted: Math.round(i.target_ticket * i.probability * 10) / 10,
+      }))
+      .sort((a, b) => (b.weighted ?? -1) - (a.weighted ?? -1))
+      .slice(0, 10);
+  }
+  // Default: use pre-aggregated top10 from server, apply phase/type/lead filters
+  return (data.top10 || [])
+    .filter(i => !filter.filterPhase || i.phase === filter.filterPhase)
+    .filter(i => !filter.filterType  || i.investor_type === filter.filterType)
+    .filter(i => !filter.filterLead  || i.lead === filter.filterLead)
     .slice(0, 10);
 }
 
@@ -119,8 +124,9 @@ function buildTypeCard(data) {
 }
 
 function buildTop10Card(data, investors, filter) {
-  const filteredTop = applyFilter(investors, filter);
+  const filteredTop = computeTop10(data, filter);
   const hasFilter   = filter.filterPhase || filter.filterType || filter.filterLead || filter.filterProduct;
+  const showProbCol = !!filter.filterProduct;
 
   const phases   = [...new Set(investors.map(i => i.phase).filter(Boolean))].sort();
   const types    = [...new Set(investors.map(i => i.investor_type).filter(Boolean))].sort();
@@ -156,8 +162,9 @@ function buildTop10Card(data, investors, filter) {
       </button>`
     : '';
 
+  const cols = showProbCol ? 7 : 6;
   const tableRows = filteredTop.length === 0
-    ? `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px 0">Ingen treff</td></tr>`
+    ? `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:20px 0">Ingen treff</td></tr>`
     : filteredTop.map((inv, i) => `
         <tr class="dash-inv-row" data-id="${esc(String(inv.id))}" style="cursor:pointer">
           <td style="color:#aaa;font-weight:700">${i + 1}</td>
@@ -165,7 +172,7 @@ function buildTop10Card(data, investors, filter) {
           <td>${esc(inv.investor_type || '—')}</td>
           <td>${window.phaseBadge(inv.phase)}</td>
           <td class="text-right">${fmt(inv.target_ticket)}</td>
-          <td class="text-right">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>
+          ${showProbCol ? `<td class="text-right">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>` : ''}
           <td class="text-right" style="font-weight:700;color:#1A3E5C">${fmt(inv.weighted, 1)}</td>
         </tr>`).join('');
 
@@ -188,7 +195,8 @@ function buildTop10Card(data, investors, filter) {
           <thead>
             <tr>
               <th>#</th><th>Investor</th><th>Type</th><th>Fase</th>
-              <th class="text-right">Ticket</th><th class="text-right">Sanns.</th>
+              <th class="text-right">Ticket</th>
+              ${showProbCol ? '<th class="text-right">Sanns.</th>' : ''}
               <th class="text-right">Vektet</th>
             </tr>
           </thead>
@@ -227,9 +235,14 @@ function buildRecentActivity(recent) {
 // card = the .dash-top10-card element; pageRoot = the page container element
 function bindTop10Card(card, pageRoot, data, investors, filter) {
   card.querySelectorAll('.dash-filter').forEach(sel => {
-    sel.addEventListener('change', () => {
+    sel.addEventListener('change', async () => {
       filter[sel.dataset.key] = sel.value;
       saveFilter(filter);
+      if (sel.dataset.key === 'filterProduct') {
+        _productInvestors = sel.value
+          ? await api.investors({ product: parseInt(sel.value) }).catch(() => [])
+          : null;
+      }
       refreshTop10Card(pageRoot, data, investors, filter);
     });
   });
@@ -298,6 +311,10 @@ export async function render(el) {
       filterLead:    saved.filterLead    || '',
       filterProduct: saved.filterProduct || '',
     };
+
+    _productInvestors = filter.filterProduct
+      ? await api.investors({ product: parseInt(filter.filterProduct) }).catch(() => [])
+      : null;
 
     el.innerHTML = `
       <div class="topbar">

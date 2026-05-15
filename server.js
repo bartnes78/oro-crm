@@ -311,7 +311,11 @@ app.get('/api/dashboard', async (req, res) => {
     }));
 
     const top10 = investors
-      .map(i => ({ ...fmtInvestor(i), weighted: (invPiMap[i.id] || {}).weighted || null }))
+      .map(i => ({
+        ...fmtInvestor(i),
+        target_ticket: (invPiMap[i.id] || {}).ticket  || null,
+        weighted:      (invPiMap[i.id] || {}).weighted || null,
+      }))
       .filter(i => i.weighted > 0)
       .sort((a, b) => b.weighted - a.weighted)
       .slice(0, 10);
