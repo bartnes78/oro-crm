@@ -79,12 +79,12 @@ function renderContent() {
   if (!content) return;
 
   const active   = _investors.filter(i => ACTIVE_PHASES.includes(i.phase));
-  const signed   = _investors.filter(i => Number(i.committed_amount) > 0);
+  const signed   = _investors.filter(i => i.phase === 'Tegnet' || Number(i.committed_amount) > 0);
   const declined = _investors.filter(i => i.phase === 'Ikke relevant nå');
 
   const totalWeighted = active.reduce((s, i) =>
     s + (i.target_ticket != null && i.probability != null ? i.target_ticket * i.probability : 0), 0);
-  const signedTicket = signed.reduce((s, i) => s + (Number(i.committed_amount) || 0), 0);
+  const signedTicket = signed.reduce((s, i) => s + (Number(i.committed_amount) || Number(i.target_ticket) || 0), 0);
   const fillPct      = _product.target_size
     ? Math.round((signedTicket / _product.target_size) * 100) : null;
 

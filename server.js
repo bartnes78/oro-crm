@@ -286,8 +286,8 @@ app.get('/api/analyse', async (req, res) => {
       const ticket    = pis.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
       const weighted  = pis.reduce((s, pi) => s + (pi.target_ticket != null && pi.probability != null
         ? Number(pi.target_ticket) * Number(pi.probability) : 0), 0);
-      const signedPis = pis.filter(pi => Number(pi.committed_amount) > 0);
-      const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.committed_amount) || 0), 0);
+      const signedPis = pis.filter(pi => invMap[pi.investor_id]?.phase === 'Tegnet' || Number(pi.committed_amount) > 0);
+      const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.committed_amount) || Number(pi.target_ticket) || 0), 0);
       return {
         id: p.id, name: p.name, target_size: p.target_size,
         investorCount: pis.length,
