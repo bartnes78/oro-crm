@@ -18,7 +18,12 @@ function buildDetailHeader(inv, products) {
 
   const prodPills = interestedProds.map(p => `
     <span style="display:inline-flex;align-items:center;gap:4px;">
-      <span>&#9733; ${window.escHtml(p.name)}</span>
+      <button
+        class="btn-prod-nav"
+        data-product-id="${window.escHtml(String(p._id))}"
+        style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:var(--blue);font-weight:600;"
+        title="Gå til prosjekt"
+      >&#9733; ${window.escHtml(p.name)}</button>
       <button
         class="icon-btn icon-btn-danger icon-btn-sm btn-quick-decline"
         data-product-id="${window.escHtml(String(p._id))}"
@@ -1081,6 +1086,10 @@ export async function render(el, state) {
   function bindTopbar() {
     el.querySelector('#back-btn').addEventListener('click', () => window.navigate('investorer'));
     el.querySelector('#edit-btn').addEventListener('click', () => openEditModal(inv, lookups, products, reload));
+
+    el.querySelectorAll('.btn-prod-nav').forEach(btn => {
+      btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.productId));
+    });
     el.querySelector('#logg-btn').addEventListener('click', () => openLogModal(inv, lookups, products, reload, { responsible: state.currentUser?.displayName }));
     el.querySelector('#delete-btn').addEventListener('click', async () => {
       if (!window.confirm(`Slette ${inv.name}?\n\nDette sletter investoren permanent, inkludert alle kontakter og loggposter.`)) return;
