@@ -150,7 +150,21 @@ function renderContent() {
     <!-- Investor table -->
     <div class="card" style="padding:0;overflow:hidden;margin-top:16px;" id="inv-table-wrap">
       ${renderTable()}
-    </div>`;
+    </div>
+
+    <!-- Declined section -->
+    ${declined.length > 0 ? `
+    <details id="declined-section" style="margin-top:16px;">
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;user-select:none;font-size:13px;font-weight:600;color:var(--muted);">
+        <span style="color:#C0392B;">&#9679;</span>
+        Takket nei — ${declined.length} investor${declined.length !== 1 ? 'er' : ''}
+        <span style="font-size:11px;font-weight:400;margin-left:4px;">(telles ikke i volum)</span>
+        <span class="details-arrow" style="margin-left:auto;font-size:11px;opacity:.5;">▼</span>
+      </summary>
+      <div class="card" style="padding:0;overflow:hidden;margin-top:4px;border-radius:0 0 8px 8px;">
+        ${renderDeclinedSection(declined)}
+      </div>
+    </details>` : ''}`;
 
   attachTableEvents();
 
@@ -161,6 +175,14 @@ function renderContent() {
       renderContent();
     });
   }
+
+  // Nav links in declined section
+  const declinedSection = content.querySelector('#declined-section');
+  if (declinedSection) {
+    declinedSection.querySelectorAll('.inv-link').forEach(el => {
+      el.addEventListener('click', () => window.navigate('detalj', el.dataset.invId));
+    });
+  }
 }
 
 function kpiCard(label, value, sub, color) {
@@ -169,6 +191,41 @@ function kpiCard(label, value, sub, color) {
     <div class="kpi-value">${esc(String(value))}</div>
     ${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ''}
   </div>`;
+}
+
+// ── Declined section ─────────────────────────────────────────────────────────
+function renderDeclinedSection(declined) {
+  const rows = [...declined]
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'nb'))
+    .map(inv => {
+      const ticket = inv.target_ticket != null ? `${fmt(inv.target_ticket, 0)} M` : '—';
+      return `<tr>
+        <td style="font-weight:600;max-width:220px;">
+          <span class="inv-link" data-inv-id="${esc(String(inv.id))}"
+            style="cursor:pointer;color:var(--blue);">${esc(inv.name || '')}</span>
+        </td>
+        <td style="font-size:12px;color:var(--muted);">${esc(inv.lead || '—')}</td>
+        <td style="font-size:12px;color:#c0392b;">${esc(inv.decline_reason || '—')}</td>
+        <td class="text-right" style="font-size:12px;color:var(--muted);opacity:.6;">${ticket}</td>
+        <td style="font-size:12px;color:var(--muted);">${esc(inv.last_contact || '—')}</td>
+      </tr>`;
+    }).join('');
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Investor</th>
+            <th>Ansvarlig</th>
+            <th>Avslagsårsak</th>
+            <th class="text-right" style="opacity:.6;">Ticket (ikke medregnet)</th>
+            <th>Sist kontakt</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
@@ -212,7 +269,7 @@ function daysSince(dateStr) {
 }
 
 function renderTable() {
-  const invs = sortedInvestors();
+  const invs = sortedInvestors().filter(i => i.phase !== 'Ikke relevant nå');
   if (!invs.length) {
     return `<div class="table-wrap">
       <p style="padding:24px;color:var(--muted);font-size:13px;">Ingen investorer koblet til dette prosjektet.</p>
