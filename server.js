@@ -278,16 +278,14 @@ app.get('/api/analyse', async (req, res) => {
       const ticket    = pis.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
       const weighted  = pis.reduce((s, pi) => s + (pi.target_ticket != null && pi.probability != null
         ? Number(pi.target_ticket) * Number(pi.probability) : 0), 0);
-      const committed = pis.reduce((s, pi) => s + (Number(pi.committed_amount) || 0), 0);
-      const signedPis = pis.filter(pi => invMap[pi.investor_id]?.phase === 'Tegnet');
-      const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.target_ticket) || 0), 0);
+      const signedPis = pis.filter(pi => Number(pi.committed_amount) > 0);
+      const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.committed_amount) || 0), 0);
       return {
         id: p.id, name: p.name, target_size: p.target_size,
         investorCount: pis.length,
-        ticket:      Math.round(ticket * 10) / 10,
-        weighted:    Math.round(weighted * 10) / 10,
-        committed:   Math.round(committed * 10) / 10,
-        signedCount: signedPis.length,
+        ticket:       Math.round(ticket * 10) / 10,
+        weighted:     Math.round(weighted * 10) / 10,
+        signedCount:  signedPis.length,
         signedTicket: Math.round(signedTicket * 10) / 10,
       };
     });
@@ -439,9 +437,10 @@ app.get('/api/investors', async (req, res) => {
         const pi = piMap[inv.id];
         return {
           ...inv,
-          target_ticket:  pi?.target_ticket  ?? null,
-          probability:    pi?.probability    ?? null,
-          decline_reason: pi?.decline_reason ?? null,
+          target_ticket:    pi?.target_ticket    ?? null,
+          probability:      pi?.probability      ?? null,
+          decline_reason:   pi?.decline_reason   ?? null,
+          committed_amount: pi?.committed_amount ?? null,
         };
       });
     }
