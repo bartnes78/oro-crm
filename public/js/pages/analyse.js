@@ -24,7 +24,7 @@ function sparkline(values, w = 320, h = 52) {
 
 // ── Fondsstatus ───────────────────────────────────────────────────────────────
 function buildFundStats(fundStats) {
-  if (!fundStats.length) return '';
+  if (!fundStats.length) return `<div class="card" style="margin-bottom:20px">${window.ui.emptyState('Ingen fondsdata')}</div>`;
   const rows = fundStats.map(f => {
     const pct = f.target_size ? Math.min(Math.round(f.signedTicket / f.target_size * 100), 100) : null;
     const pctPipeline = f.target_size ? Math.min(Math.round(f.weighted / f.target_size * 100), 100) : null;
@@ -60,30 +60,24 @@ function buildFundStats(fundStats) {
     </div>`;
 }
 
-// ── Pipeline per fase (CSS-stolper) ──────────────────────────────────────────
+// ── Pipeline per fase ─────────────────────────────────────────────────────────
+const PHASE_COLORS = {
+  'Prospekt':'#1A5276','Ny kontakt':'#0F4949','Intro sendt':'#1A7A5E',
+  'Møte avtalt':'#9A6A1E','Aktiv dialog':'#2155A3',
+  'Tegnet':'var(--color-signed)','Ikke relevant nå':'#717D87','Onboardet':'#1A5C1A',
+};
+
 function buildPhaseChart(byPhase) {
-  const COLORS = {
-    'Prospekt':'#1A5276','Ny kontakt':'#0F4949','Intro sendt':'#1A7A5E',
-    'Møte avtalt':'#9A6A1E','Aktiv dialog':'#2155A3',
-    'Tegnet':'var(--color-signed)','Ikke relevant nå':'#717D87','Onboardet':'#1A5C1A',
-  };
   const max = Math.max(...byPhase.map(p => p.count), 1);
   const rows = byPhase.map(p => {
-    const pct = Math.round((p.count / max) * 100);
-    const color = COLORS[p.phase] || '#2471A3';
-    return `
-      <div style="display:grid;grid-template-columns:130px 1fr 40px;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.phase)}</span>
-        <div style="background:var(--border);border-radius:3px;height:7px">
-          <div style="width:${pct}%;height:100%;background:${color};border-radius:3px"></div>
-        </div>
-        <span style="font-size:12px;text-align:right;color:var(--muted)">${p.count}</span>
-      </div>`;
+    const pct   = Math.round((p.count / max) * 100);
+    const color = PHASE_COLORS[p.phase] || '#2471A3';
+    return window.ui.pipelineBar(p.phase, pct, color, p.count);
   }).join('');
   return `
     <div class="card" style="margin-bottom:20px">
       <div class="card-title">Pipeline per fase</div>
-      ${rows}
+      ${rows || window.ui.emptyState('Ingen data')}
     </div>`;
 }
 
@@ -101,7 +95,7 @@ function buildTypeTable(byType) {
       <div class="table-wrap">
         <table>
           <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Pipeline (MNOK)</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="3" style="color:var(--muted);padding:16px 0;text-align:center">Ingen data</td></tr>'}</tbody>
+          <tbody>${rows || window.ui.emptyRow('Ingen data', 3)}</tbody>
         </table>
       </div>
     </div>`;
@@ -149,7 +143,7 @@ function buildActivity(monthly, byResponsible) {
         <div class="table-wrap">
           <table>
             <thead><tr><th>ORO Kontakt</th><th class="text-right">Aktiviteter</th></tr></thead>
-            <tbody>${respRows || '<tr><td colspan="2" style="color:var(--muted);padding:16px 0;text-align:center">Ingen data</td></tr>'}</tbody>
+            <tbody>${respRows || window.ui.emptyRow('Ingen data', 2)}</tbody>
           </table>
         </div>
       </div>

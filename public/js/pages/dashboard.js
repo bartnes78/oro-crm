@@ -87,20 +87,13 @@ function buildPipelineCard(data) {
   const rows = (data.byPhase || []).map(p => {
     const pct   = Math.round((p.count / maxPhase) * 100);
     const color = PHASE_COLORS[p.phase] || '#2471A3';
-    return `
-      <div class="phase-bar">
-        <span class="phase-bar-label">${esc(p.phase)}</span>
-        <div class="phase-bar-track">
-          <div class="phase-bar-fill" style="width:${pct}%;background:${color}"></div>
-        </div>
-        <span class="phase-bar-count">${p.count}</span>
-        <span style="font-size:11px;color:#aaa;width:60px;text-align:right">${fmt(p.ticket)} M</span>
-      </div>`;
+    const extra = `<span style="font-size:11px;color:#aaa;width:60px;text-align:right">${fmt(p.ticket)} M</span>`;
+    return window.ui.pipelineBar(p.phase, pct, color, p.count, extra);
   }).join('');
   return `
     <div class="card">
       <div class="card-title">Pipeline per fase</div>
-      ${rows || '<p class="text-muted" style="padding:8px 0">Ingen data</p>'}
+      ${rows || window.ui.emptyState('Ingen data')}
     </div>`;
 }
 
@@ -117,7 +110,7 @@ function buildTypeCard(data) {
       <div class="table-wrap">
         <table>
           <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Ticket (M)</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="3" style="color:var(--muted);padding:16px 0;text-align:center">Ingen data</td></tr>'}</tbody>
+          <tbody>${rows || window.ui.emptyRow('Ingen data', 3)}</tbody>
         </table>
       </div>
     </div>`;
@@ -164,7 +157,7 @@ function buildTop10Card(data, investors, filter) {
 
   const cols = showProbCol ? 7 : 6;
   const tableRows = filteredTop.length === 0
-    ? `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:20px 0">Ingen treff</td></tr>`
+    ? window.ui.emptyRow('Ingen treff', cols)
     : filteredTop.map((inv, i) => `
         <tr class="dash-inv-row" data-id="${esc(String(inv.id))}" style="cursor:pointer">
           <td style="color:#aaa;font-weight:700">${i + 1}</td>
@@ -177,7 +170,7 @@ function buildTop10Card(data, investors, filter) {
         </tr>`).join('');
 
   return `
-    <div class="card dash-top10-card" style="margin-top:24px">
+    <div class="card dash-top10-card">
       <div style="margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
         <div class="card-title" style="margin:0">
           Topp ${filteredTop.length} — høyest vektet volum
@@ -224,10 +217,98 @@ function buildRecentActivity(recent) {
     </div>`).join('');
 
   return `
-    <div class="card" style="margin-top:24px">
+    <div class="card">
       <div class="card-title">Siste aktivitet</div>
       <div class="log-list">${items}</div>
     </div>`;
+}
+
+// ── Quick log modal ───────────────────────────────────────────────────────────
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function openQuickLogModal(investors, el) {
+  let lookups;
+  try { lookups = await api.lookups(); } catch { lookups = {}; }
+
+  const sortedInvestors = [...investors].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'nb'));
+  const investorOpts = sortedInvestors
+    .map(i => `<option value="${esc(String(i.id))}">${esc(i.name)}</option>`)
+    .join('');
+  const typeOpts = (lookups.logTypes || ['Møte', 'E-post', 'Telefon', 'Notat'])
+    .map(t => `<option>${esc(t)}</option>`)
+    .join('');
+  const leadOpts = (lookups.leads || [])
+    .map(l => `<option>${esc(l)}</option>`)
+    .join('');
+
+  const html = window.ui.modal(
+    'Logg kontakt',
+    `<div id="ql-error" class="alert-err" style="display:none;"></div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Investor *</label>
+        <select id="ql-investor">
+          <option value="">— Velg investor —</option>
+          ${investorOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Dato</label>
+        <input type="date" id="ql-date" value="${today()}" />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="ql-type">${typeOpts}</select>
+      </div>
+      ${leadOpts ? `
+      <div class="form-group full">
+        <label>Ansvarlig</label>
+        <select id="ql-responsible">${leadOpts}</select>
+      </div>` : ''}
+      <div class="form-group full">
+        <label>Emne</label>
+        <input id="ql-subject" placeholder="Kort beskrivelse&hellip;" />
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-green" id="ql-save-btn">Logg &#8594;</button>`,
+  );
+
+  window.openModal(html, () => {
+    document.getElementById('ql-save-btn').addEventListener('click', async () => {
+      const investorId = document.getElementById('ql-investor').value;
+      const date       = document.getElementById('ql-date').value;
+      if (!investorId || !date) {
+        const errEl = document.getElementById('ql-error');
+        errEl.textContent = 'Velg investor og dato.';
+        errEl.style.display = '';
+        return;
+      }
+      const investor = investors.find(i => String(i.id) === investorId);
+      const btn = document.getElementById('ql-save-btn');
+      btn.disabled = true; btn.textContent = 'Lagrer…';
+      try {
+        await api.addLog({
+          date,
+          investor_id:   investorId,
+          investor_name: investor?.name || '',
+          log_type:      document.getElementById('ql-type').value,
+          responsible:   document.getElementById('ql-responsible')?.value || '',
+          subject:       document.getElementById('ql-subject').value,
+          status:        'avholdt',
+        });
+        window.closeModal();
+        await render(el);
+      } catch (e) {
+        const errEl = document.getElementById('ql-error');
+        if (errEl) { errEl.textContent = e.message; errEl.style.display = ''; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Logg →'; }
+      }
+    });
+  });
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -275,9 +356,8 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
 }
 
 function setupEvents(el, data, investors, filter) {
-  // Logg kontakt button
   const loggBtn = el.querySelector('#dash-logg-btn');
-  if (loggBtn) loggBtn.addEventListener('click', () => window.navigate('logg'));
+  if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el));
 
   // Top-10 card filters & rows
   const card = el.querySelector('.dash-top10-card');
@@ -316,6 +396,7 @@ export async function render(el) {
       ? await api.investors({ product: parseInt(filter.filterProduct) }).catch(() => [])
       : null;
 
+    const recentHtml = buildRecentActivity(data.recent);
     el.innerHTML = `
       <div class="topbar">
         <span class="topbar-title">Dashboard</span>
@@ -327,8 +408,10 @@ export async function render(el) {
           ${buildPipelineCard(data)}
           ${buildTypeCard(data)}
         </div>
-        ${buildTop10Card(data, investors, filter)}
-        ${buildRecentActivity(data.recent)}
+        <div style="display:grid;grid-template-columns:${recentHtml ? '1fr 300px' : '1fr'};gap:20px;margin-top:24px;align-items:start">
+          ${buildTop10Card(data, investors, filter)}
+          ${recentHtml}
+        </div>
       </div>`;
 
     setupEvents(el, data, investors, filter);
