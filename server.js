@@ -72,6 +72,7 @@ async function runBackup() {
     { name: 'tasks',             sql: 'SELECT * FROM tasks' },
     { name: 'products',          sql: 'SELECT * FROM products' },
     { name: 'product_investors', sql: 'SELECT * FROM product_investors' },
+    { name: 'declined_offers',   sql: 'SELECT * FROM declined_offers' },
     { name: 'users',             sql: 'SELECT * FROM users' },
   ];
   try {
@@ -1139,9 +1140,10 @@ app.post('/api/backups/restore/:stamp', async (req, res) => {
       { file: 'tasks',             table: 'tasks',             isText: false },
       { file: 'products',          table: 'products',          isText: false },
       { file: 'product_investors', table: 'product_investors', isText: false },
+      { file: 'declined_offers',   table: 'declined_offers',   isText: false },
     ];
 
-    await client.query('TRUNCATE product_investors, contact_log, tasks, products RESTART IDENTITY CASCADE');
+    await client.query('TRUNCATE declined_offers, product_investors, contact_log, tasks, products RESTART IDENTITY CASCADE');
     await client.query('DELETE FROM contacts');
     await client.query('DELETE FROM investors');
 
@@ -1214,6 +1216,56 @@ app.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) => 
 
     res.json({ ok: true, productId, investorCount: investors.length, inserted, updated });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Avslåtte tilbud ───────────────────────────────────────────────────────────
+app.get('/api/declined-offers', async (req, res) => {
+  const productId = parseInt(req.query.productId);
+  if (!productId) return validationError(res, 'productId påkrevd');
+  try {
+    const { rows } = await query(
+      `SELECT d.id, d.product_id, d.investor_id, d.decline_reason, d.declined_at,
+              i.name AS investor_name, i.lead, i.last_contact, i.target_ticket
+       FROM declined_offers d
+       JOIN investors i ON i.id = d.investor_id
+       WHERE d.product_id = $1
+       ORDER BY d.declined_at DESC NULLS LAST, i.name`,
+      [productId]
+    );
+    res.json(rows.map(fmtRow));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/declined-offers', async (req, res) => {
+  const { product_id, investor_id, decline_reason, declined_at } = req.body;
+  if (!product_id || !investor_id) return validationError(res, 'product_id og investor_id påkrevd');
+  try {
+    const { rows } = await query(
+      `INSERT INTO declined_offers (product_id, investor_id, decline_reason, declined_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (product_id, investor_id) DO UPDATE
+         SET decline_reason = EXCLUDED.decline_reason,
+             declined_at    = EXCLUDED.declined_at
+       RETURNING *`,
+      [product_id, investor_id, decline_reason || null, declined_at || null]
+    );
+    res.json(fmtRow(rows[0]));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/declined-offers/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return validationError(res, 'Ugyldig id');
+  try {
+    await query('DELETE FROM declined_offers WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── MSG-parsing ───────────────────────────────────────────────────────────────

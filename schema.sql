@@ -110,5 +110,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS declined_offers (
+  id             SERIAL PRIMARY KEY,
+  product_id     INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  investor_id    TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  decline_reason TEXT,
+  declined_at    DATE DEFAULT CURRENT_DATE,
+  UNIQUE(product_id, investor_id)
+);
+
 -- Legacy migration from investors.target_ticket/probability to product_investors
 -- was completed separately. Do not run data-moving migrations from schema bootstrap.

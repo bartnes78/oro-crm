@@ -21,13 +21,14 @@ const STATUS_COLOR = {
 };
 
 // ── Module state ──────────────────────────────────────────────────────────────
-let _el         = null;
-let _productId  = null;
-let _product    = null;
-let _investors  = [];
-let _sort       = { col: 'weighted', dir: 'desc' };
-let _saving     = {};   // investorId -> 'saving' | 'ok' | 'err'
-let _showPct    = false;
+let _el             = null;
+let _productId      = null;
+let _product        = null;
+let _investors      = [];
+let _declinedOffers = [];
+let _sort           = { col: 'weighted', dir: 'desc' };
+let _saving         = {};   // investorId -> 'saving' | 'ok' | 'err'
+let _showPct        = false;
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 export async function render(el, state) {
@@ -56,12 +57,14 @@ export async function render(el, state) {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 async function loadData() {
-  const [products, investors] = await Promise.all([
+  const [products, investors, declinedOffers] = await Promise.all([
     api.products(),
     api.investors({ product: _productId }),
+    api.declinedOffers(_productId),
   ]);
-  _product   = products.find(p => String(p._id) === String(_productId)) || null;
-  _investors = investors;
+  _product        = products.find(p => String(p._id) === String(_productId)) || null;
+  _investors      = investors;
+  _declinedOffers = declinedOffers;
 
   if (!_product) {
     document.getElementById('pd-content').innerHTML =
@@ -144,7 +147,7 @@ function renderContent() {
             : fmt(signedTicket, 0) + ' MNOK'}
         </div>` : ''}
       </div>
-      ${kpiCard('Avslått',        declined.length,             null,              '#C0392B')}
+      ${kpiCard('Avslått',        _declinedOffers.length,      null,              '#C0392B')}
     </div>
 
     <!-- Investor table -->
@@ -152,19 +155,18 @@ function renderContent() {
       ${renderTable()}
     </div>
 
-    <!-- Declined section -->
-    ${declined.length > 0 ? `
-    <details id="declined-section" style="margin-top:16px;">
+    <!-- Avslåtte tilbud -->
+    <details id="declined-section" style="margin-top:16px;" ${_declinedOffers.length > 0 ? 'open' : ''}>
       <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;user-select:none;font-size:13px;font-weight:600;color:var(--muted);">
         <span style="color:#C0392B;">&#9679;</span>
-        Takket nei — ${declined.length} investor${declined.length !== 1 ? 'er' : ''}
+        Avslåtte tilbud — ${_declinedOffers.length} investor${_declinedOffers.length !== 1 ? 'er' : ''}
         <span style="font-size:11px;font-weight:400;margin-left:4px;">(telles ikke i volum)</span>
         <span class="details-arrow" style="margin-left:auto;font-size:11px;opacity:.5;">▼</span>
       </summary>
       <div class="card" style="padding:0;overflow:hidden;margin-top:4px;border-radius:0 0 8px 8px;">
-        ${renderDeclinedSection(declined)}
+        ${renderDeclinedSection()}
       </div>
-    </details>` : ''}`;
+    </details>`;
 
   attachTableEvents();
 
@@ -176,13 +178,20 @@ function renderContent() {
     });
   }
 
-  // Nav links in declined section
-  const declinedSection = content.querySelector('#declined-section');
-  if (declinedSection) {
-    declinedSection.querySelectorAll('.inv-link').forEach(el => {
-      el.addEventListener('click', () => window.navigate('detalj', el.dataset.invId));
+  content.querySelector('#declined-section')?.querySelectorAll('.inv-link').forEach(el => {
+    el.addEventListener('click', () => window.navigate('detalj', el.dataset.invId));
+  });
+
+  content.querySelector('#declined-section')?.querySelectorAll('.delete-declined-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Fjern avslaget?')) return;
+      try {
+        await api.deleteDeclinedOffer(parseInt(btn.dataset.id));
+        _declinedOffers = _declinedOffers.filter(d => String(d._id) !== btn.dataset.id);
+        renderContent();
+      } catch (e) { alert(e.message); }
     });
-  }
+  });
 }
 
 function kpiCard(label, value, sub, color) {
@@ -193,23 +202,29 @@ function kpiCard(label, value, sub, color) {
   </div>`;
 }
 
-// ── Declined section ─────────────────────────────────────────────────────────
-function renderDeclinedSection(declined) {
-  const rows = [...declined]
-    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'nb'))
-    .map(inv => {
-      const ticket = inv.target_ticket != null ? `${fmt(inv.target_ticket, 0)} M` : '—';
-      return `<tr>
-        <td style="font-weight:600;max-width:220px;">
-          <span class="inv-link" data-inv-id="${esc(String(inv.id))}"
-            style="cursor:pointer;color:var(--blue);">${esc(inv.name || '')}</span>
-        </td>
-        <td style="font-size:12px;color:var(--muted);">${esc(inv.lead || '—')}</td>
-        <td style="font-size:12px;color:#c0392b;">${esc(inv.decline_reason || '—')}</td>
-        <td class="text-right" style="font-size:12px;color:var(--muted);opacity:.6;">${ticket}</td>
-        <td style="font-size:12px;color:var(--muted);">${esc(inv.last_contact || '—')}</td>
-      </tr>`;
-    }).join('');
+// ── Avslåtte tilbud-seksjon ───────────────────────────────────────────────────
+function renderDeclinedSection() {
+  if (!_declinedOffers.length) {
+    return `<p style="padding:16px;font-size:13px;color:var(--muted);">Ingen registrerte avslag for dette prosjektet.</p>`;
+  }
+  const rows = _declinedOffers.map(d => {
+    const ticket = d.target_ticket != null ? `${fmt(d.target_ticket, 0)} M` : '—';
+    return `<tr>
+      <td style="font-weight:600;max-width:220px;">
+        <span class="inv-link" data-inv-id="${esc(String(d.investor_id))}"
+          style="cursor:pointer;color:var(--blue);">${esc(d.investor_name || '')}</span>
+      </td>
+      <td style="font-size:12px;color:var(--muted);">${esc(d.lead || '—')}</td>
+      <td style="font-size:12px;color:#c0392b;">${esc(d.decline_reason || '—')}</td>
+      <td style="font-size:12px;color:var(--muted);">${esc(d.declined_at || '—')}</td>
+      <td class="text-right" style="font-size:12px;color:var(--muted);opacity:.6;">${ticket}</td>
+      <td style="text-align:right;">
+        <button class="delete-declined-btn" data-id="${esc(String(d._id))}"
+          style="background:none;border:none;cursor:pointer;color:#C0392B;font-size:13px;padding:2px 6px;opacity:.5;"
+          title="Fjern avslag">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
 
   return `
     <div class="table-wrap">
@@ -219,8 +234,9 @@ function renderDeclinedSection(declined) {
             <th>Investor</th>
             <th>Ansvarlig</th>
             <th>Avslagsårsak</th>
-            <th class="text-right" style="opacity:.6;">Ticket (ikke medregnet)</th>
-            <th>Sist kontakt</th>
+            <th>Dato</th>
+            <th class="text-right" style="opacity:.6;">Ticket</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -361,6 +377,13 @@ function renderTable() {
         font-weight:${stale ? 600 : 400};">
         ${esc(lastContactText)}
       </td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="register-decline-btn"
+          data-inv-id="${esc(String(inv.id))}"
+          data-inv-name="${esc(inv.name || '')}"
+          style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #c0392b;background:none;color:#c0392b;cursor:pointer;opacity:.6;"
+          title="Registrer avslag for dette prosjektet">Avslag</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -376,9 +399,10 @@ function renderTable() {
             ${sortTh('target_ticket', pctBase ? 'Ticket (%)' : 'Ticket (M)', true)}
             ${sortTh('probability',   'Sanns.',                              true)}
             ${sortTh('weighted',      pctBase ? 'Vektet (%)' : 'Vektet (M)', true)}
-            <th>Avlag</th>
+            <th>Avslag</th>
             <th>Neste steg</th>
             ${sortTh('last_contact',  'Sist kontakt')}
+            <th></th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -568,6 +592,11 @@ function attachTableEvents() {
     });
   });
 
+  // Registrer avslag-knapper
+  wrap.querySelectorAll('.register-decline-btn').forEach(btn => {
+    btn.addEventListener('click', () => openDeclineModal(btn.dataset.invId, btn.dataset.invName));
+  });
+
   // Decline cells
   wrap.querySelectorAll('.decline-cell').forEach(td => {
     if (td.dataset.phase !== 'Ikke relevant nå') return;
@@ -702,6 +731,58 @@ function openEditModal() {
         const err = document.getElementById('edit-err');
         err.textContent = e.message || 'Lagring feilet.';
         err.style.display = '';
+      }
+    });
+  });
+}
+
+// ── Registrer avslag-modal ────────────────────────────────────────────────────
+function openDeclineModal(invId, invName) {
+  const today = new Date().toISOString().slice(0, 10);
+  const reasonOpts = DECLINE_REASONS.map(r =>
+    `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+
+  window.openModal(`
+    <div style="padding:24px;min-width:340px;">
+      <h3 style="margin:0 0 16px;font-size:16px;">Registrer avslag</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">${esc(invName)}</p>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Avslagsårsak</label>
+        <select id="decline-reason-sel" style="width:100%;padding:7px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;">
+          <option value="">— Velg årsak —</option>
+          ${reasonOpts}
+        </select>
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Dato</label>
+        <input id="decline-date-inp" type="date" value="${today}"
+          style="width:100%;padding:7px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <p id="decline-err" style="display:none;color:red;font-size:12px;margin:0 0 10px;"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="decline-cancel-btn" class="btn btn-ghost btn-sm">Avbryt</button>
+        <button id="decline-save-btn" class="btn btn-sm" style="background:#c0392b;color:#fff;border:none;">Registrer avslag</button>
+      </div>
+    </div>`, (modal) => {
+    modal.querySelector('#decline-cancel-btn').addEventListener('click', window.closeModal);
+    modal.querySelector('#decline-save-btn').addEventListener('click', async () => {
+      const reason = modal.querySelector('#decline-reason-sel').value;
+      const date   = modal.querySelector('#decline-date-inp').value;
+      const errEl  = modal.querySelector('#decline-err');
+      if (!reason) { errEl.textContent = 'Velg en årsak.'; errEl.style.display = ''; return; }
+      try {
+        const result = await api.addDeclinedOffer({
+          product_id: _productId, investor_id: invId,
+          decline_reason: reason, declined_at: date || null,
+        });
+        const existing = _declinedOffers.findIndex(d => d.investor_id === invId);
+        if (existing >= 0) _declinedOffers[existing] = result;
+        else _declinedOffers.unshift(result);
+        window.closeModal();
+        renderContent();
+      } catch (e) {
+        errEl.textContent = e.message || 'Lagring feilet.';
+        errEl.style.display = '';
       }
     });
   });

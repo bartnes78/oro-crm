@@ -2,7 +2,19 @@
 
 ## Pågående
 
-*(ingen aktiv oppgave)*
+### Avslåtte tilbud — ny `declined_offers`-tabell
+
+- [x] Velg løsning (alternativ B: egen tabell)
+- [ ] `schema.sql` — legg til `declined_offers`-tabell
+- [ ] `server.js` — backup og restore inkluderer ny tabell
+- [ ] `server.js` — GET `/api/declined-offers?productId=X`
+- [ ] `server.js` — POST `/api/declined-offers`
+- [ ] `server.js` — DELETE `/api/declined-offers/:id`
+- [ ] `public/js/api.js` — 3 nye metoder
+- [ ] `prosjekt-detalj.js` — last `_declinedOffers` i `loadData()`
+- [ ] `prosjekt-detalj.js` — erstatt eksisterende "Takket nei"-seksjon med ny datakilde
+- [ ] `prosjekt-detalj.js` — "Registrer avslag"-knapp per investorrad (modal med grunn + dato)
+- [ ] `prosjekt-detalj.js` — slett-knapp i avslåtte-seksjonen
 
 ---
 
@@ -25,17 +37,23 @@
 ### Teknisk gjeld
 
 - [ ] `server.js` er 1357 linjer — vurder å splitte i rutemoduler hvis filen vokser ytterligere
-- [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter (`/api/investors`, `/api/dashboard`)
-- [ ] `react` og `react-dom` er listet som avhengigheter men ikke brukt — fjern fra `package.json`
+- [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
 - [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
 
 ### Backup-rutine
 
-- [ ] Avtal hvem er ansvarlig for ukentlig Excel-eksport (Investorer → Eksporter Excel)
-- [ ] Vurder om Railway volume/persistent storage bør settes opp for ekstra sikring
+- [ ] Avtal hvem er ansvarlig for ukentlig Excel-eksport
+- [ ] Vurder om Railway volume/persistent storage bør settes opp
 
 ---
 
 ## Fullført
 
-*(ingen fullførte oppgaver ennå)*
+- [x] CLAUDE.md, tasks/todo.md, tasks/lessons.md opprettet
+- [x] Fjernet ubrukte react/react-dom-avhengigheter
+- [x] Slettet ødelagt seed.js
+- [x] CSRF-beskyttelse via X-Requested-With (POST/PUT/DELETE)
+- [x] multer 1.x → 2.x
+- [x] xlsx → exceljs (0 sårbarheter)
+- [x] Fikset fmtInvestor: committed_amount og decline_reason inkludert
+- [x] Fikset tegnet-telling: fase Tegnet brukes, ikke bare committed_amount
