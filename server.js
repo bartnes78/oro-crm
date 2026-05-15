@@ -1060,6 +1060,47 @@ app.post('/api/backups/restore/:stamp', async (req, res) => {
   }
 });
 
+// ── Admin: seed pensjon-investorer inn i ORO Areal ────────────────────────────
+app.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) => {
+  try {
+    // Finn ORO Areal-produktet
+    const { rows: products } = await query(`SELECT id FROM products WHERE name ILIKE '%ORO Areal%' LIMIT 1`);
+    if (products.length === 0) return res.status(404).json({ error: 'Fant ikke produkt med navn "ORO Areal"' });
+    const productId = products[0].id;
+
+    // Finn alle investorer med investor_type = 'Pensjon' (case-insensitive)
+    const { rows: investors } = await query(`SELECT id FROM investors WHERE investor_type ILIKE '%pensjon%'`);
+    if (investors.length === 0) return res.json({ ok: true, inserted: 0, message: 'Ingen investorer med type "pensjon" funnet' });
+
+    // Sett inn i product_investors, oppdater product_interests
+    let inserted = 0, updated = 0;
+    for (const inv of investors) {
+      // Legg til i product_investors (50 MNOK, 5%)
+      const r = await query(
+        `INSERT INTO product_investors (product_id, investor_id, target_ticket, probability)
+         VALUES ($1, $2, 50, 0.05)
+         ON CONFLICT (product_id, investor_id) DO NOTHING`,
+        [productId, inv.id]
+      );
+      if (r.rowCount > 0) inserted++;
+
+      // Legg til produktet i product_interests om det mangler
+      await query(
+        `UPDATE investors
+         SET product_interests = CASE
+           WHEN product_interests @> $1::jsonb THEN product_interests
+           ELSE product_interests || $1::jsonb
+         END
+         WHERE id = $2`,
+        [JSON.stringify([productId]), inv.id]
+      );
+      updated++;
+    }
+
+    res.json({ ok: true, productId, investorCount: investors.length, inserted, updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── MSG-parsing ───────────────────────────────────────────────────────────────
 let _multer, _MsgReader;
 function getMulter()    { if (!_multer)    _multer    = require('multer');                  return _multer; }
