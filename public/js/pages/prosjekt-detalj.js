@@ -719,15 +719,12 @@ function openDeclineModal(invId, invName) {
     const errEl  = document.getElementById('decline-err');
     if (!reason) { errEl.textContent = 'Velg en årsak.'; errEl.style.display = ''; return; }
     try {
-      const result = await api.addDeclinedOffer({
+      await api.addDeclinedOffer({
         product_id: _productId, investor_id: invId,
         decline_reason: reason, declined_at: date || null,
       });
-      const existing = _declinedOffers.findIndex(d => d.investor_id === invId);
-      if (existing >= 0) _declinedOffers[existing] = result;
-      else _declinedOffers.unshift(result);
       window.closeModal();
-      renderContent();
+      await loadData();
     } catch (e) {
       errEl.textContent = e.message || 'Lagring feilet.';
       errEl.style.display = '';
