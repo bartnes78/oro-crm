@@ -23,19 +23,33 @@ function statusIcon(status) {
   return '';
 }
 
-function buildRow(inv, savedStatus, leads, phases, types, selectedSet) {
-  const weighted = (inv.target_ticket && inv.probability)
+function buildRow(inv, savedStatus, leads, phases, types, selectedSet, showTickets) {
+  const weighted = showTickets && inv.target_ticket && inv.probability
     ? (inv.target_ticket * inv.probability).toFixed(1)
     : null;
-  const pctDisplay = (inv.probability != null && inv.probability !== '')
-    ? Math.round(parseFloat(inv.probability) * 100) + '%'
-    : '<span style="color:#ccc">—</span>';
-  const ticketDisplay = (inv.target_ticket != null && inv.target_ticket !== '')
-    ? Number(inv.target_ticket).toLocaleString('nb-NO')
-    : '<span style="color:#ccc">—</span>';
 
-  const checked = selectedSet.has(inv.id) ? ' checked' : '';
+  const checked    = selectedSet.has(inv.id) ? ' checked' : '';
   const rowOpacity = savedStatus === 'saving' ? 'opacity:.6;' : '';
+  const colspan    = showTickets ? 11 : 8;
+
+  const ticketCols = showTickets ? `
+    <td style="padding:6px 8px;width:100px;text-align:right">
+      <input class="edit-cell" type="number" data-id="${window.escHtml(inv.id)}" data-field="target_ticket"
+        value="${inv.target_ticket != null ? inv.target_ticket : ''}"
+        style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:80px;text-align:right;min-height:36px"
+        placeholder="—">
+    </td>
+    <td style="padding:6px 8px;width:80px;text-align:right">
+      <input class="edit-cell" type="number" data-id="${window.escHtml(inv.id)}" data-field="probability"
+        value="${inv.probability != null ? Math.round(parseFloat(inv.probability) * 100) : ''}"
+        min="0" max="100" step="1"
+        style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:65px;text-align:right;min-height:36px"
+        placeholder="—">
+    </td>
+    <td class="weighted-cell" style="padding:8px 12px;text-align:right;width:80px;font-weight:600;color:${weighted ? 'var(--navy,#1A2B4A)' : '#ccc'}">
+      ${weighted ? Number(weighted).toLocaleString('nb-NO') : '—'}
+    </td>
+  ` : '';
 
   return `<tr data-inv-id="${window.escHtml(inv.id)}" style="${rowOpacity}border-top:1px solid var(--border)">
     <td style="padding:8px 12px;text-align:center;width:28px">
@@ -57,29 +71,14 @@ function buildRow(inv, savedStatus, leads, phases, types, selectedSet) {
         ${leads.map(l => `<option value="${window.escHtml(l)}"${l === inv.lead ? ' selected' : ''}>${window.escHtml(l)}</option>`).join('')}
       </select>
     </td>
-    <td style="padding:6px 8px;width:160px">
+    <td style="padding:6px 8px;width:150px">
       <select class="edit-cell" data-id="${window.escHtml(inv.id)}" data-field="investor_type"
         style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:100%;min-height:36px">
         <option value="">—</option>
         ${types.map(t => `<option value="${window.escHtml(t)}"${t === inv.investor_type ? ' selected' : ''}>${window.escHtml(t)}</option>`).join('')}
       </select>
     </td>
-    <td style="padding:6px 8px;width:100px;text-align:right">
-      <input class="edit-cell" type="number" data-id="${window.escHtml(inv.id)}" data-field="target_ticket"
-        value="${inv.target_ticket != null ? inv.target_ticket : ''}"
-        style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:80px;text-align:right;min-height:36px"
-        placeholder="—">
-    </td>
-    <td style="padding:6px 8px;width:90px;text-align:right">
-      <input class="edit-cell" type="number" data-id="${window.escHtml(inv.id)}" data-field="probability"
-        value="${inv.probability != null ? Math.round(parseFloat(inv.probability) * 100) : ''}"
-        min="0" max="100" step="1"
-        style="font-size:12px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);width:70px;text-align:right;min-height:36px"
-        placeholder="—">
-    </td>
-    <td style="padding:8px 12px;text-align:right;width:90px;font-weight:600;color:${weighted ? 'var(--navy,#1A2B4A)' : '#ccc'}">
-      ${weighted ? Number(weighted).toLocaleString('nb-NO') : '—'}
-    </td>
+    ${ticketCols}
     <td style="padding:6px 8px;width:200px">
       <input class="edit-cell" type="text" data-id="${window.escHtml(inv.id)}" data-field="next_steps"
         value="${window.escHtml(inv.next_steps || '')}"
@@ -99,20 +98,20 @@ function buildRow(inv, savedStatus, leads, phases, types, selectedSet) {
 export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted" style="padding:24px">Laster…</p></div>';
 
-  let investors = [], lookups = {};
-  const savedStatus = {}; // id → 'saving'|'ok'|'err'
-  const pendingChanges = {}; // id → {field: value}
+  let investors = [], lookups = {}, products = [];
+  const savedStatus = {};
   let selectedIds = new Set();
   const flt = loadFilter();
-  let search = flt.search || '';
-  let filterPhase = flt.filterPhase || '';
-  let filterLead  = flt.filterLead  || '';
-  let filterType  = flt.filterType  || '';
+  let search        = flt.search        || '';
+  let filterPhase   = flt.filterPhase   || '';
+  let filterLead    = flt.filterLead    || '';
+  let filterType    = flt.filterType    || '';
+  let filterProduct = flt.filterProduct || '';
   let sortField = '';
   let sortDir   = 'asc';
 
   try {
-    [investors, lookups] = await Promise.all([api.investors({}), api.lookups()]);
+    [lookups, products] = await Promise.all([api.lookups(), api.products()]);
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:red">Feil: ${window.escHtml(e.message)}</p></div>`;
     return;
@@ -122,6 +121,19 @@ export async function render(el, state) {
   const phases = lookups.phases || PHASES;
   const types  = lookups.types  || [];
 
+  async function loadInvestors() {
+    const params = {};
+    if (filterProduct) params.product = filterProduct;
+    investors = await api.investors(params);
+  }
+
+  try {
+    await loadInvestors();
+  } catch (e) {
+    el.innerHTML = `<div class="content"><p style="color:red">Feil: ${window.escHtml(e.message)}</p></div>`;
+    return;
+  }
+
   function getFiltered() {
     const q = search.toLowerCase();
     const filtered = investors.filter(inv => {
@@ -130,7 +142,7 @@ export async function render(el, state) {
       if (filterLead  && inv.lead  !== filterLead)  return false;
       if (filterType) {
         if (filterType === '__ukjent__') { if (inv.investor_type) return false; }
-        else if (inv.investor_type !== filterType)  return false;
+        else if (inv.investor_type !== filterType) return false;
       }
       return true;
     });
@@ -168,13 +180,18 @@ export async function render(el, state) {
     updateStatusCell(id);
 
     try {
-      const updated = await api.updateInvestor(id, { [field]: value });
-      const idx = investors.findIndex(i => i.id === id);
-      if (idx !== -1) investors[idx] = { ...investors[idx], ...updated };
+      if (filterProduct && (field === 'target_ticket' || field === 'probability')) {
+        await api.updateProductInvestor(parseInt(filterProduct), id, { [field]: value });
+        const idx = investors.findIndex(i => i.id === id);
+        if (idx !== -1) investors[idx] = { ...investors[idx], [field]: value };
+      } else {
+        const updated = await api.updateInvestor(id, { [field]: value });
+        const idx = investors.findIndex(i => i.id === id);
+        if (idx !== -1) investors[idx] = { ...investors[idx], ...updated };
+      }
       savedStatus[id] = 'ok';
       updateStatusCell(id);
-      // Update weighted cell
-      updateWeightedCell(id);
+      if (filterProduct) updateWeightedCell(id);
       setTimeout(() => { delete savedStatus[id]; updateStatusCell(id); }, 1500);
     } catch {
       savedStatus[id] = 'err';
@@ -186,7 +203,7 @@ export async function render(el, state) {
     const row = el.querySelector(`tr[data-inv-id="${CSS.escape(id)}"]`);
     if (!row) return;
     const cells = row.querySelectorAll('td');
-    const statusCell = cells[cells.length - 2]; // second to last
+    const statusCell = cells[cells.length - 2];
     if (statusCell) statusCell.innerHTML = `<span style="font-size:14px;display:inline-block;width:20px;text-align:center">${statusIcon(savedStatus[id])}</span>`;
     row.style.opacity = savedStatus[id] === 'saving' ? '0.6' : '1';
   }
@@ -198,8 +215,7 @@ export async function render(el, state) {
     if (!inv) return;
     const weighted = (inv.target_ticket && inv.probability)
       ? (inv.target_ticket * inv.probability).toFixed(1) : null;
-    const cells = row.querySelectorAll('td');
-    const wCell = cells[7]; // index of weighted column
+    const wCell = row.querySelector('.weighted-cell');
     if (wCell) {
       wCell.style.color = weighted ? 'var(--navy,#1A2B4A)' : '#ccc';
       wCell.textContent = weighted ? Number(weighted).toLocaleString('nb-NO') : '—';
@@ -221,14 +237,23 @@ export async function render(el, state) {
     </div>`;
   }
 
+  function buildTicketHeaders() {
+    if (!filterProduct) return '';
+    return `
+      <th data-sort="target_ticket" style="width:100px;text-align:right;cursor:pointer;user-select:none">Ticket (M) <span class="sort-icon" data-for="target_ticket"></span></th>
+      <th data-sort="probability" style="width:80px;text-align:right;cursor:pointer;user-select:none">Sanns. % <span class="sort-icon" data-for="probability"></span></th>
+      <th data-sort="weighted" style="width:80px;text-align:right;cursor:pointer;user-select:none">Vektet <span class="sort-icon" data-for="weighted"></span></th>`;
+  }
+
+  function colspan() { return filterProduct ? 11 : 8; }
+
   function buildTable() {
     const filtered = getFiltered();
-    const pendingCount = Object.keys(pendingChanges).length;
     const allChecked = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id));
 
     const rows = filtered.length === 0
-      ? `<tr><td colspan="11" class="empty-state">Ingen investorer funnet.</td></tr>`
-      : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds)).join('');
+      ? `<tr><td colspan="${colspan()}" class="empty-state">Ingen investorer funnet.</td></tr>`
+      : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds, !!filterProduct)).join('');
 
     return `
       ${buildBulkBar()}
@@ -243,10 +268,8 @@ export async function render(el, state) {
                 <th data-sort="name" style="cursor:pointer;user-select:none">Investor <span class="sort-icon" data-for="name"></span></th>
                 <th data-sort="phase" style="width:140px;cursor:pointer;user-select:none">Fase <span class="sort-icon" data-for="phase"></span></th>
                 <th data-sort="lead" style="width:160px;cursor:pointer;user-select:none">Ansvarlig <span class="sort-icon" data-for="lead"></span></th>
-                <th data-sort="investor_type" style="width:160px;cursor:pointer;user-select:none">Type <span class="sort-icon" data-for="investor_type"></span></th>
-                <th data-sort="target_ticket" style="width:100px;text-align:right;cursor:pointer;user-select:none">Ticket (M) <span class="sort-icon" data-for="target_ticket"></span></th>
-                <th data-sort="probability" style="width:90px;text-align:right;cursor:pointer;user-select:none">Sanns. % <span class="sort-icon" data-for="probability"></span></th>
-                <th data-sort="weighted" style="width:90px;text-align:right;cursor:pointer;user-select:none">Vektet <span class="sort-icon" data-for="weighted"></span></th>
+                <th data-sort="investor_type" style="width:150px;cursor:pointer;user-select:none">Type <span class="sort-icon" data-for="investor_type"></span></th>
+                ${buildTicketHeaders()}
                 <th data-sort="next_steps" style="width:200px;cursor:pointer;user-select:none">Hva skal til <span class="sort-icon" data-for="next_steps"></span></th>
                 <th style="width:28px"></th>
                 <th style="width:44px"></th>
@@ -257,7 +280,10 @@ export async function render(el, state) {
         </div>
       </div>
       <div style="margin-top:8px;font-size:11px;color:#aaa">
-        Tips: Endre en verdi i kolonnen direkte og trykk Tab/Enter eller klikk bort for å lagre umiddelbart. Klikk investornavnet for fullstendig detaljside.
+        ${filterProduct
+          ? 'Ticket og sannsynlighet lagres direkte på dette prosjektet per investor.'
+          : 'Velg et prosjekt i filteret for å redigere ticket og sannsynlighet.'}
+        Klikk investornavnet for fullstendig detaljside.
       </div>`;
   }
 
@@ -270,23 +296,17 @@ export async function render(el, state) {
 
     if (tbody) {
       tbody.innerHTML = filtered.length === 0
-        ? `<tr><td colspan="11" class="empty-state">Ingen investorer funnet.</td></tr>`
-        : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds)).join('');
+        ? `<tr><td colspan="${colspan()}" class="empty-state">Ingen investorer funnet.</td></tr>`
+        : filtered.map(inv => buildRow(inv, savedStatus[inv.id], leads, phases, types, selectedIds, !!filterProduct)).join('');
       attachRowEvents();
     }
 
-    // Rebuild bulk bar
     const bulkBar = el.querySelector('#bulk-bar');
     if (bulkBar) {
       bulkBar.outerHTML = buildBulkBar();
-    } else {
-      const contentDiv = el.querySelector('.content > div:first-child');
-      if (selectedIds.size > 0) {
-        const bulkHtml = buildBulkBar();
-        const card = el.querySelector('.card');
-        if (card) card.insertAdjacentHTML('beforebegin', bulkHtml);
-        attachBulkEvents();
-      }
+    } else if (selectedIds.size > 0) {
+      const card = el.querySelector('.card');
+      if (card) card.insertAdjacentHTML('beforebegin', buildBulkBar());
     }
     attachBulkEvents();
   }
@@ -301,17 +321,13 @@ export async function render(el, state) {
       const sel = el.querySelector('#bulk-phase-select');
       const phase = sel?.value;
       if (!phase) { alert('Velg en fase først.'); return; }
-      const ids = [...selectedIds];
-      for (const id of ids) {
-        await saveOne(id, 'phase', phase);
-      }
+      for (const id of [...selectedIds]) await saveOne(id, 'phase', phase);
       selectedIds.clear();
       rebuildTable();
     });
   }
 
   function attachRowEvents() {
-    // Checkboxes
     el.querySelectorAll('.row-check').forEach(chk => {
       chk.addEventListener('change', () => {
         const id = chk.dataset.id;
@@ -320,7 +336,6 @@ export async function render(el, state) {
       });
     });
 
-    // Select all
     el.querySelector('#select-all-chk')?.addEventListener('change', e => {
       const filtered = getFiltered();
       if (e.target.checked) filtered.forEach(i => selectedIds.add(i.id));
@@ -328,7 +343,6 @@ export async function render(el, state) {
       rebuildTable();
     });
 
-    // Inline edit cells — save on change/blur
     el.querySelectorAll('.edit-cell').forEach(input => {
       const id    = input.dataset.id;
       const field = input.dataset.field;
@@ -353,7 +367,6 @@ export async function render(el, state) {
       }
     });
 
-    // Investor name links
     el.querySelectorAll('.inv-link, .inv-open').forEach(btn => {
       btn.addEventListener('click', () => window.navigate('detalj', btn.dataset.id));
     });
@@ -423,6 +436,7 @@ export async function render(el, state) {
 
   function buildPage() {
     const filtered = getFiltered();
+    const hasFilters = filterPhase || filterLead || filterType || filterProduct;
 
     el.innerHTML = `
       <div class="topbar">
@@ -437,6 +451,10 @@ export async function render(el, state) {
       </div>
       <div class="content">
         <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select id="filter-product" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1.5px solid ${filterProduct ? 'var(--blue)' : 'var(--border)'};background:${filterProduct ? 'rgba(52,152,219,.07)' : 'transparent'};min-height:44px;font-weight:${filterProduct ? 600 : 400}">
+            <option value="">Alle prosjekter</option>
+            ${products.map(p => `<option value="${window.escHtml(String(p._id))}"${String(p._id) === String(filterProduct) ? ' selected' : ''}>${window.escHtml(p.name)}</option>`).join('')}
+          </select>
           ${selectHtml('filter-phase', filterPhase, phases, 'Alle faser')}
           <select id="filter-type" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);min-height:44px">
             <option value="">Alle typer</option>
@@ -444,46 +462,57 @@ export async function render(el, state) {
             ${types.map(t => `<option value="${window.escHtml(t)}"${t === filterType ? ' selected' : ''}>${window.escHtml(t)}</option>`).join('')}
           </select>
           ${selectHtml('filter-lead', filterLead, leads, 'ORO Kontakt')}
-          ${(filterPhase || filterLead || filterType) ? `<button class="btn btn-ghost btn-sm" id="clear-filters-btn" style="min-height:44px">× Nullstill</button>` : ''}
-          <span style="font-size:11px;color:#aaa;margin-left:4px">Klikk en celle for å redigere direkte — lagres umiddelbart</span>
+          ${hasFilters ? `<button class="btn btn-ghost btn-sm" id="clear-filters-btn" style="min-height:44px">× Nullstill</button>` : ''}
         </div>
         <div id="table-container">
           ${buildTable()}
         </div>
       </div>`;
 
-    // Filter events
+    function updateTitle() {
+      el.querySelector('.topbar-title').textContent = `Bulkredigering (${getFiltered().length})`;
+    }
+
     el.querySelector('#search-input')?.addEventListener('input', e => {
       search = e.target.value;
-      saveFilter({ search, filterPhase, filterLead, filterType });
-      el.querySelector('.topbar-title').textContent = `Bulkredigering (${getFiltered().length})`;
+      saveFilter({ search, filterPhase, filterLead, filterType, filterProduct });
+      updateTitle();
       rebuildTable();
+    });
+
+    el.querySelector('#filter-product')?.addEventListener('change', async e => {
+      filterProduct = e.target.value;
+      saveFilter({ search, filterPhase, filterLead, filterType, filterProduct });
+      // Re-fetch investors for the selected product (gets per-product ticket/prob)
+      try { await loadInvestors(); } catch {}
+      buildPage(); // full rebuild — columns change
     });
 
     el.querySelector('#filter-phase')?.addEventListener('change', e => {
       filterPhase = e.target.value;
-      saveFilter({ search, filterPhase, filterLead, filterType });
-      el.querySelector('.topbar-title').textContent = `Bulkredigering (${getFiltered().length})`;
+      saveFilter({ search, filterPhase, filterLead, filterType, filterProduct });
+      updateTitle();
       rebuildTable();
     });
 
     el.querySelector('#filter-type')?.addEventListener('change', e => {
       filterType = e.target.value;
-      saveFilter({ search, filterPhase, filterLead, filterType });
-      el.querySelector('.topbar-title').textContent = `Bulkredigering (${getFiltered().length})`;
+      saveFilter({ search, filterPhase, filterLead, filterType, filterProduct });
+      updateTitle();
       rebuildTable();
     });
 
     el.querySelector('#filter-lead')?.addEventListener('change', e => {
       filterLead = e.target.value;
-      saveFilter({ search, filterPhase, filterLead, filterType });
-      el.querySelector('.topbar-title').textContent = `Bulkredigering (${getFiltered().length})`;
+      saveFilter({ search, filterPhase, filterLead, filterType, filterProduct });
+      updateTitle();
       rebuildTable();
     });
 
-    el.querySelector('#clear-filters-btn')?.addEventListener('click', () => {
-      filterPhase = ''; filterLead = ''; filterType = '';
+    el.querySelector('#clear-filters-btn')?.addEventListener('click', async () => {
+      filterPhase = ''; filterLead = ''; filterType = ''; filterProduct = '';
       localStorage.removeItem(FILTER_KEY);
+      try { await loadInvestors(); } catch {}
       buildPage();
     });
 
