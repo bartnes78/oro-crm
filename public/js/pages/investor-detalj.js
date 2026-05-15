@@ -244,14 +244,19 @@ function buildProductCard(inv, products, piData) {
 
     return `
       <div class="pi-row" style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:170px;">
-          <input type="checkbox" class="pi-toggle" data-pid="${window.escHtml(String(p._id))}"
-            ${interested ? 'checked' : ''}
-            style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue);flex-shrink:0;" />
-          <span style="font-weight:${interested ? 600 : 400};font-size:14px;color:${interested ? 'var(--text)' : 'var(--muted)'};">
+        <div style="display:flex;align-items:center;gap:8px;min-width:180px;">
+          <label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;">
+            <input type="checkbox" class="pi-toggle" data-pid="${window.escHtml(String(p._id))}"
+              ${interested ? 'checked' : ''}
+              style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue);" />
+          </label>
+          <button class="pi-name-nav" data-pid="${window.escHtml(String(p._id))}"
+            style="background:none;border:none;padding:0;cursor:pointer;text-align:left;
+                   font-weight:${interested ? 600 : 400};font-size:15px;
+                   color:${interested ? 'var(--blue)' : 'var(--muted)'};">
             ${window.escHtml(p.name)}
-          </span>
-        </label>
+          </button>
+        </div>
         ${interested ? `
           <div style="display:flex;align-items:center;gap:4px;">
             <input class="pi-ticket" type="number" step="0.5" data-pid="${window.escHtml(String(p._id))}"
@@ -1122,6 +1127,10 @@ export async function render(el, state) {
   }
 
   function bindProducts() {
+    el.querySelectorAll('.pi-name-nav').forEach(btn => {
+      btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.pid));
+    });
+
     el.querySelectorAll('.pi-toggle').forEach(cb => {
       cb.addEventListener('change', async () => {
         const pid = isNaN(cb.dataset.pid) ? cb.dataset.pid : Number(cb.dataset.pid);
