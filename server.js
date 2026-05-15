@@ -165,11 +165,10 @@ const apiLimiter = rateLimit({
   message: { error: 'For mange forespørsler. Prøv igjen om litt.' },
 });
 
-// Streng auth-limiter — teller kun feilede forsøk, hindrer brute-force
+// Brute-force-limiter — kallast manuelt berre ved feil credentials, aldri på andre API-feil
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  skipSuccessfulRequests: true,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'For mange innloggingsforsøk. Prøv igjen om 15 minutter.' },
@@ -190,7 +189,7 @@ app.use((req, res, next) => {
 });
 
 // ── Auth-middleware ───────────────────────────────────────────────────────────
-app.use('/api', apiCors, apiLimiter, authLimiter);
+app.use('/api', apiCors, apiLimiter);
 app.use('/api', async (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Basic ')) {
@@ -205,8 +204,11 @@ app.use('/api', async (req, res, next) => {
     const { rows } = await query('SELECT * FROM users WHERE username = $1', [username]);
     const user = rows[0];
     if (!user || !verifyPassword(password, user.password_hash)) {
-      res.setHeader('WWW-Authenticate', 'Basic realm="ORO CRM"');
-      return res.status(401).json({ error: 'Feil brukernavn eller passord' });
+      // Kallast berre ved reell auth-feil — teller mot brute-force-grensa (15/15 min per IP)
+      return authLimiter(req, res, () => {
+        res.setHeader('WWW-Authenticate', 'Basic realm="ORO CRM"');
+        res.status(401).json({ error: 'Feil brukernavn eller passord' });
+      });
     }
     req.currentUser = fmtUser(user);
     next();
@@ -539,7 +541,7 @@ app.put('/api/investors/:id', async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
-    if (!rows[0]) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Not found' }); }
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const cur = rows[0];
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
