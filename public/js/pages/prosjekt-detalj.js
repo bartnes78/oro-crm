@@ -285,7 +285,8 @@ function daysSince(dateStr) {
 }
 
 function renderTable() {
-  const invs = sortedInvestors().filter(i => i.phase !== 'Ikke relevant nå');
+  const declinedIds = new Set(_declinedOffers.map(d => d.investor_id));
+  const invs = sortedInvestors().filter(i => i.phase !== 'Ikke relevant nå' && !declinedIds.has(i.id));
   if (!invs.length) {
     return `<div class="table-wrap">
       <p style="padding:24px;color:var(--muted);font-size:13px;">Ingen investorer koblet til dette prosjektet.</p>
