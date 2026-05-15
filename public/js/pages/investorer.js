@@ -13,181 +13,74 @@ function saveFilter(search, filter) {
 function esc(s) { return window.escHtml(s); }
 function fmt(n) { return window.fmt(n); }
 
-// ── Ny investor modal ─────────────────────────────────────────────────────────
+// ── Ny investor modal (rask opprettelse — fullfør på detalj-siden) ────────────
 
-function openNyInvestorModal(lookups, products) {
-  // Build product pill checkboxes
-  const productPills = products.map(p => `
-    <label class="prod-pill-toggle" data-id="${p._id}"
-      style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
-             padding:5px 12px;border-radius:20px;border:2px solid var(--border);
-             background:transparent;color:var(--muted);font-weight:400;font-size:13px;
-             user-select:none;min-height:36px;transition:all .15s">
-      <input type="checkbox" name="product_interests" value="${p._id}"
-        style="position:absolute;opacity:0;pointer-events:none">
-      ${esc(p.name)}
-    </label>`).join('');
-
-  const phaseOpts = (lookups.phases || [])
-    .map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-
+function openNyInvestorModal(lookups) {
+  const typeOpts = (lookups.types || [])
+    .map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const leadOpts = (lookups.leads || [])
     .map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
 
-  const typeOpts = (lookups.types || [])
-    .map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-
-  const advisorOpts = (lookups.advisors || [])
-    .map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
-
-  window.openModal(`
-    <div class="modal-header">
-      <h3>Ny investor</h3>
-      <button class="btn-close" onclick="window.closeModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div id="ny-inv-error" class="alert-err" style="display:none"></div>
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Navn *</label>
-          <input id="ni-name" type="text" placeholder="Selskapsnavn…" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>Land</label>
-          <input id="ni-country" type="text" value="Norge" placeholder="Norge">
-        </div>
-        <div class="form-group">
-          <label>By</label>
-          <input id="ni-city" type="text" placeholder="Oslo, Bergen…">
-        </div>
-        <div class="form-group">
-          <label>Fase</label>
-          <select id="ni-phase">
-            ${phaseOpts}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Ansvarlig</label>
-          <select id="ni-lead">
-            <option value="">—</option>
-            ${leadOpts}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Type investor</label>
-          <select id="ni-type">
-            <option value="">—</option>
-            ${typeOpts}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Rådgiver</label>
-          <select id="ni-advisor">
-            <option value="">—</option>
-            ${advisorOpts}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Målticket (MNOK)</label>
-          <input id="ni-ticket" type="number" min="0" placeholder="eks. 100">
-        </div>
-        <div class="form-group">
-          <label>Sannsynlighet (0–1)</label>
-          <input id="ni-prob" type="number" min="0" max="1" step="0.05" placeholder="eks. 0.3">
-        </div>
-        <div class="form-group full">
-          <label>Produktinteresse</label>
-          <div id="ni-products" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-            ${productPills}
-          </div>
-        </div>
-        <div class="form-group full">
-          <label>Hva skal til</label>
-          <textarea id="ni-nextsteps" rows="3" placeholder="Neste steg, hva mangler for å komme videre…"></textarea>
-        </div>
-        <div class="form-group full">
-          <label>Kommentar</label>
-          <textarea id="ni-comments" rows="2"></textarea>
-        </div>
+  const html = window.ui.modal(
+    'Ny investor',
+    `<p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      Fyll inn det viktigste — fullfør resten p&aring; investorkortet.
+    </p>
+    <div id="ni-error" class="alert-err" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Navn *</label>
+        <input id="ni-name" type="text" placeholder="Selskapsnavn&hellip;" autocomplete="off" />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="ni-save-btn">+ Opprett investor</button>
-    </div>
-  `, () => {
-    // Focus name field
+      <div class="form-group">
+        <label>Type investor</label>
+        <select id="ni-type">
+          <option value="">—</option>
+          ${typeOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ansvarlig</label>
+        <select id="ni-lead">
+          <option value="">—</option>
+          ${leadOpts}
+        </select>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="ni-save-btn">Opprett og &aring;pne &rarr;</button>`,
+  );
+
+  window.openModal(html, () => {
     const nameEl = document.getElementById('ni-name');
     if (nameEl) setTimeout(() => nameEl.focus(), 50);
 
-    // Product pill toggles
-    document.querySelectorAll('.prod-pill-toggle').forEach(label => {
-      label.addEventListener('click', () => {
-        const cb = label.querySelector('input[type="checkbox"]');
-        if (!cb) return;
-        cb.checked = !cb.checked;
-        if (cb.checked) {
-          label.style.borderColor  = 'var(--blue)';
-          label.style.background   = 'rgba(52,152,219,.1)';
-          label.style.color        = 'var(--blue)';
-          label.style.fontWeight   = '600';
-        } else {
-          label.style.borderColor  = 'var(--border)';
-          label.style.background   = 'transparent';
-          label.style.color        = 'var(--muted)';
-          label.style.fontWeight   = '400';
-        }
-      });
-    });
-
-    // Save
     document.getElementById('ni-save-btn').addEventListener('click', async () => {
-      const saveBtn = document.getElementById('ni-save-btn');
-      const errEl   = document.getElementById('ny-inv-error');
-
-      const name = (document.getElementById('ni-name')?.value || '').trim();
+      const btn   = document.getElementById('ni-save-btn');
+      const errEl = document.getElementById('ni-error');
+      const name  = (nameEl?.value || '').trim();
       if (!name) {
         errEl.textContent = 'Navn er påkrevd.';
         errEl.style.display = '';
-        document.getElementById('ni-name')?.focus();
+        nameEl?.focus();
         return;
       }
       errEl.style.display = 'none';
-
-      const selectedProducts = [...document.querySelectorAll('#ni-products input[type="checkbox"]:checked')]
-        .map(cb => parseInt(cb.value, 10))
-        .sort((a, b) => a - b);
-
-      const ticketVal = parseFloat(document.getElementById('ni-ticket')?.value);
-      const probVal   = parseFloat(document.getElementById('ni-prob')?.value);
-
-      const payload = {
-        name,
-        country:          (document.getElementById('ni-country')?.value || '').trim() || 'Norge',
-        city:             (document.getElementById('ni-city')?.value || '').trim(),
-        phase:            document.getElementById('ni-phase')?.value || '',
-        lead:             document.getElementById('ni-lead')?.value || '',
-        investor_type:    document.getElementById('ni-type')?.value || '',
-        advisor:          document.getElementById('ni-advisor')?.value || '',
-        target_ticket:    isNaN(ticketVal) ? null : ticketVal,
-        probability:      isNaN(probVal)   ? null : probVal,
-        product_interests: selectedProducts,
-        next_steps:       (document.getElementById('ni-nextsteps')?.value || '').trim(),
-        comments:         (document.getElementById('ni-comments')?.value || '').trim(),
-      };
-
-      saveBtn.disabled   = true;
-      saveBtn.textContent = 'Lagrer…';
-
+      btn.disabled = true; btn.textContent = 'Lagrer…';
       try {
-        const inv = await api.createInvestor(payload);
+        const inv = await api.createInvestor({
+          name,
+          investor_type: document.getElementById('ni-type').value,
+          lead:          document.getElementById('ni-lead').value,
+          phase:         'Prospekt',
+          country:       'Norge',
+        });
         window.closeModal();
         window.navigate('detalj', inv.id || inv._id);
       } catch (e) {
-        errEl.textContent   = 'Feil: ' + e.message;
+        errEl.textContent = 'Feil: ' + e.message;
         errEl.style.display = '';
-        saveBtn.disabled    = false;
-        saveBtn.textContent = '+ Opprett investor';
+        btn.disabled = false; btn.textContent = 'Opprett og åpne →';
       }
     });
   });

@@ -63,6 +63,27 @@ window.escHtml = function(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 };
 
+window.ui = {
+  emptyState: (msg) =>
+    `<p class="text-muted" style="padding:20px 0;text-align:center;font-size:13px">${window.escHtml(msg)}</p>`,
+  emptyRow: (msg, cols) =>
+    `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:20px 0">${window.escHtml(msg)}</td></tr>`,
+  pipelineBar: (label, pct, color, count, extra = '') =>
+    `<div class="phase-bar">
+      <span class="phase-bar-label">${window.escHtml(label)}</span>
+      <div class="phase-bar-track"><div class="phase-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="phase-bar-count">${count}</span>
+      ${extra}
+    </div>`,
+  modal: (title, body, footer) =>
+    `<div class="modal-header">
+      <h3>${title}</h3>
+      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">${body}</div>
+    <div class="modal-footer">${footer}</div>`,
+};
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const NAV_MAIN = [
   { id:'dashboard',  icon:'◼', label:'Dashboard' },

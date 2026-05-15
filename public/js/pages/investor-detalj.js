@@ -444,42 +444,35 @@ function buildStatusToggle(currentStatus) {
 }
 
 function openEditModal(inv, lookups, products, reload) {
-  const html = `
-    <div class="modal-header">
-      <h3>Rediger investor</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div id="edit-error" class="alert-err" style="display:none;"></div>
-      <div class="form-grid">
-        <div class="form-group full"><label>Navn</label><input id="e-name" value="${window.escHtml(inv.name || '')}" /></div>
-        <div class="form-group"><label>Land</label><input id="e-country" value="${window.escHtml(inv.country || '')}" /></div>
-        <div class="form-group"><label>By</label><input id="e-city" value="${window.escHtml(inv.city || '')}" placeholder="Oslo, Bergen&hellip;" /></div>
-        <div class="form-group"><label>Type investor</label>
-          <select id="e-type">
-            <option value="">—</option>
-            ${(lookups.types || []).map(t => `<option ${inv.investor_type === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>R&aring;dgiver</label>
-          <select id="e-advisor">
-            <option value="">—</option>
-            ${(lookups.advisors || []).map(a => `<option ${inv.advisor === a ? 'selected' : ''}>${window.escHtml(a)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>First Close</label>
-          <select id="e-firstclose">
-            <option value="0" ${!inv.first_close ? 'selected' : ''}>Nei</option>
-            <option value="1" ${inv.first_close ? 'selected' : ''}>Ja</option>
-          </select>
-        </div>
+  const html = window.ui.modal(
+    'Rediger investor',
+    `<div id="edit-error" class="alert-err" style="display:none;"></div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Navn</label><input id="e-name" value="${window.escHtml(inv.name || '')}" /></div>
+      <div class="form-group"><label>Land</label><input id="e-country" value="${window.escHtml(inv.country || '')}" /></div>
+      <div class="form-group"><label>By</label><input id="e-city" value="${window.escHtml(inv.city || '')}" placeholder="Oslo, Bergen&hellip;" /></div>
+      <div class="form-group"><label>Type investor</label>
+        <select id="e-type">
+          <option value="">—</option>
+          ${(lookups.types || []).map(t => `<option ${inv.investor_type === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
+        </select>
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="edit-save-btn">Lagre</button>
-    </div>
-  `;
+      <div class="form-group"><label>R&aring;dgiver</label>
+        <select id="e-advisor">
+          <option value="">—</option>
+          ${(lookups.advisors || []).map(a => `<option ${inv.advisor === a ? 'selected' : ''}>${window.escHtml(a)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>First Close</label>
+        <select id="e-firstclose">
+          <option value="0" ${!inv.first_close ? 'selected' : ''}>Nei</option>
+          <option value="1" ${inv.first_close ? 'selected' : ''}>Ja</option>
+        </select>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="edit-save-btn">Lagre</button>`,
+  );
 
   window.openModal(html, () => {
     document.getElementById('edit-save-btn').addEventListener('click', async () => {
@@ -523,66 +516,59 @@ function openLogModal(inv, lookups, products, reload, prefill = {}) {
   const defResponsible = prefill.responsible || 'Kristian Bartnes';
   const initStatus = prefill.status || 'avholdt';
 
-  const html = `
-    <div class="modal-header">
-      <h3>Logg kontakt &mdash; ${window.escHtml(inv.name)}</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div id="log-error" class="alert-err" style="display:none;"></div>
-      <div class="form-grid">
-        <div class="form-group"><label>Dato</label>
-          <input type="date" id="l-date" value="${window.escHtml(prefill.date || today())}" />
-        </div>
-        <div class="form-group"><label>Type</label>
-          <select id="l-type">
-            ${(lookups.logTypes || []).map(t => `<option ${(prefill.log_type || 'M&oslash;te') === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Kontaktperson</label>
-          <select id="l-contact">
-            <option value="">— Velg —</option>
-            ${(inv.contacts || []).filter(c => c.active !== 0).map(c => `
-              <option value="${window.escHtml(c.name)}" ${(prefill.contact_person || '') === c.name ? 'selected' : ''}>
-                ${window.escHtml(c.name)}${c.title ? ' (' + window.escHtml(c.title) + ')' : ''}
-              </option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Ansvarlig</label>
-          <select id="l-responsible">
-            ${(lookups.leads || []).map(l => `<option ${defResponsible === l ? 'selected' : ''}>${window.escHtml(l)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group full" style="grid-column:1/-1;">
-          <label>Status</label>
-          <div style="display:flex;gap:8px;margin-top:4px;" id="l-status-wrap">
-            ${buildStatusToggle(initStatus)}
-          </div>
-          <input type="hidden" id="l-status" value="${initStatus}" />
-        </div>
-        <div class="form-group full"><label>Emne / Agenda</label>
-          <input id="l-subject" value="${window.escHtml(prefill.subject || '')}" />
-        </div>
-        <div class="form-group full"><label>Utfall / Neste steg</label>
-          <textarea id="l-outcome">${window.escHtml(prefill.outcome || '')}</textarea>
-        </div>
-        ${(inv.product_interests || []).length > 0 ? `
-        <div class="form-group full">
-          <label>Avsto fra <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
-          <div id="l-declined" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
-            ${buildDeclinedPills(products, inv.product_interests, prefill.declined_products || [])}
-          </div>
-        </div>` : ''}
-        <div class="form-group full"><label>Notat</label>
-          <textarea id="l-notes">${window.escHtml(prefill.notes || '')}</textarea>
-        </div>
+  const html = window.ui.modal(
+    `Logg kontakt &mdash; ${window.escHtml(inv.name)}`,
+    `<div id="log-error" class="alert-err" style="display:none;"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Dato</label>
+        <input type="date" id="l-date" value="${window.escHtml(prefill.date || today())}" />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-green" id="log-save-btn">Logg &#8594;</button>
-    </div>
-  `;
+      <div class="form-group"><label>Type</label>
+        <select id="l-type">
+          ${(lookups.logTypes || []).map(t => `<option ${(prefill.log_type || 'M&oslash;te') === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Kontaktperson</label>
+        <select id="l-contact">
+          <option value="">— Velg —</option>
+          ${(inv.contacts || []).filter(c => c.active !== 0).map(c => `
+            <option value="${window.escHtml(c.name)}" ${(prefill.contact_person || '') === c.name ? 'selected' : ''}>
+              ${window.escHtml(c.name)}${c.title ? ' (' + window.escHtml(c.title) + ')' : ''}
+            </option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Ansvarlig</label>
+        <select id="l-responsible">
+          ${(lookups.leads || []).map(l => `<option ${defResponsible === l ? 'selected' : ''}>${window.escHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group full" style="grid-column:1/-1;">
+        <label>Status</label>
+        <div style="display:flex;gap:8px;margin-top:4px;" id="l-status-wrap">
+          ${buildStatusToggle(initStatus)}
+        </div>
+        <input type="hidden" id="l-status" value="${initStatus}" />
+      </div>
+      <div class="form-group full"><label>Emne / Agenda</label>
+        <input id="l-subject" value="${window.escHtml(prefill.subject || '')}" />
+      </div>
+      <div class="form-group full"><label>Utfall / Neste steg</label>
+        <textarea id="l-outcome">${window.escHtml(prefill.outcome || '')}</textarea>
+      </div>
+      ${(inv.product_interests || []).length > 0 ? `
+      <div class="form-group full">
+        <label>Avsto fra <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
+        <div id="l-declined" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+          ${buildDeclinedPills(products, inv.product_interests, prefill.declined_products || [])}
+        </div>
+      </div>` : ''}
+      <div class="form-group full"><label>Notat</label>
+        <textarea id="l-notes">${window.escHtml(prefill.notes || '')}</textarea>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-green" id="log-save-btn">Logg &#8594;</button>`,
+  );
 
   window.openModal(html, () => {
     setupStatusToggle('l-status-wrap', 'l-status');
@@ -628,66 +614,59 @@ function openLogModal(inv, lookups, products, reload, prefill = {}) {
 }
 
 function openEditLogModal(entry, inv, lookups, products, reload) {
-  const html = `
-    <div class="modal-header">
-      <h3>Rediger aktivitet</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div id="editlog-error" class="alert-err" style="display:none;"></div>
-      <div class="form-grid">
-        <div class="form-group"><label>Dato</label>
-          <input type="date" id="el-date" value="${window.escHtml(entry.date || '')}" />
-        </div>
-        <div class="form-group"><label>Type</label>
-          <select id="el-type">
-            ${(lookups.logTypes || []).map(t => `<option ${entry.log_type === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Kontaktperson</label>
-          <select id="el-contact">
-            <option value="">— Velg —</option>
-            ${(inv.contacts || []).filter(c => c.active !== 0).map(c => `
-              <option value="${window.escHtml(c.name)}" ${(entry.contact_person || '') === c.name ? 'selected' : ''}>
-                ${window.escHtml(c.name)}${c.title ? ' (' + window.escHtml(c.title) + ')' : ''}
-              </option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Ansvarlig</label>
-          <select id="el-responsible">
-            ${(lookups.leads || []).map(l => `<option ${entry.responsible === l ? 'selected' : ''}>${window.escHtml(l)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group full" style="grid-column:1/-1;">
-          <label>Status</label>
-          <div style="display:flex;gap:8px;margin-top:4px;" id="el-status-wrap">
-            ${buildStatusToggle(entry.status || 'avholdt')}
-          </div>
-          <input type="hidden" id="el-status" value="${window.escHtml(entry.status || 'avholdt')}" />
-        </div>
-        <div class="form-group full"><label>Emne / Agenda</label>
-          <input id="el-subject" value="${window.escHtml(entry.subject || '')}" />
-        </div>
-        <div class="form-group full"><label>Utfall / Neste steg</label>
-          <textarea id="el-outcome">${window.escHtml(entry.outcome || '')}</textarea>
-        </div>
-        ${(inv.product_interests || []).length > 0 ? `
-        <div class="form-group full">
-          <label>Avsto fra <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
-          <div id="el-declined" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
-            ${buildDeclinedPills(products, inv.product_interests, entry.declined_products || [])}
-          </div>
-        </div>` : ''}
-        <div class="form-group full"><label>Notat</label>
-          <textarea id="el-notes">${window.escHtml(entry.notes || '')}</textarea>
-        </div>
+  const html = window.ui.modal(
+    'Rediger aktivitet',
+    `<div id="editlog-error" class="alert-err" style="display:none;"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Dato</label>
+        <input type="date" id="el-date" value="${window.escHtml(entry.date || '')}" />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="editlog-save-btn">Lagre</button>
-    </div>
-  `;
+      <div class="form-group"><label>Type</label>
+        <select id="el-type">
+          ${(lookups.logTypes || []).map(t => `<option ${entry.log_type === t ? 'selected' : ''}>${window.escHtml(t)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Kontaktperson</label>
+        <select id="el-contact">
+          <option value="">— Velg —</option>
+          ${(inv.contacts || []).filter(c => c.active !== 0).map(c => `
+            <option value="${window.escHtml(c.name)}" ${(entry.contact_person || '') === c.name ? 'selected' : ''}>
+              ${window.escHtml(c.name)}${c.title ? ' (' + window.escHtml(c.title) + ')' : ''}
+            </option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Ansvarlig</label>
+        <select id="el-responsible">
+          ${(lookups.leads || []).map(l => `<option ${entry.responsible === l ? 'selected' : ''}>${window.escHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group full" style="grid-column:1/-1;">
+        <label>Status</label>
+        <div style="display:flex;gap:8px;margin-top:4px;" id="el-status-wrap">
+          ${buildStatusToggle(entry.status || 'avholdt')}
+        </div>
+        <input type="hidden" id="el-status" value="${window.escHtml(entry.status || 'avholdt')}" />
+      </div>
+      <div class="form-group full"><label>Emne / Agenda</label>
+        <input id="el-subject" value="${window.escHtml(entry.subject || '')}" />
+      </div>
+      <div class="form-group full"><label>Utfall / Neste steg</label>
+        <textarea id="el-outcome">${window.escHtml(entry.outcome || '')}</textarea>
+      </div>
+      ${(inv.product_interests || []).length > 0 ? `
+      <div class="form-group full">
+        <label>Avsto fra <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
+        <div id="el-declined" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+          ${buildDeclinedPills(products, inv.product_interests, entry.declined_products || [])}
+        </div>
+      </div>` : ''}
+      <div class="form-group full"><label>Notat</label>
+        <textarea id="el-notes">${window.escHtml(entry.notes || '')}</textarea>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="editlog-save-btn">Lagre</button>`,
+  );
 
   window.openModal(html, () => {
     setupStatusToggle('el-status-wrap', 'el-status');
@@ -726,46 +705,39 @@ function openEditLogModal(entry, inv, lookups, products, reload) {
 
 function openContactModal(contact, reload) {
   const isNew = !contact._id;
-  const html = `
-    <div class="modal-header">
-      <h3>${isNew ? 'Legg til kontaktperson' : 'Rediger kontaktperson'}</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Navn *</label>
-          <input id="c-name" value="${window.escHtml(contact.name || '')}" placeholder="Fullt navn" autofocus />
-        </div>
-        <div class="form-group full">
-          <label>Tittel</label>
-          <input id="c-title" value="${window.escHtml(contact.title || '')}" placeholder="CIO, Portfolio Manager&hellip;" />
-        </div>
-        <div class="form-group">
-          <label>E-post</label>
-          <input id="c-email" type="email" value="${window.escHtml(contact.email || '')}" placeholder="navn@selskap.no" />
-        </div>
-        <div class="form-group">
-          <label>Telefon</label>
-          <input id="c-phone" value="${window.escHtml(contact.phone || '')}" placeholder="+47 900 00 000" />
-        </div>
-        <div class="form-group full">
-          <label>Notat</label>
-          <textarea id="c-notes" style="min-height:52px;" placeholder="Valgfritt&hellip;">${window.escHtml(contact.notes || '')}</textarea>
-        </div>
-        <div class="form-group full">
-          <label style="flex-direction:row;gap:8px;align-items:center;cursor:pointer;display:flex;">
-            <input type="checkbox" id="c-primary" ${contact.is_primary ? 'checked' : ''} />
-            Prim&aelig;rkontakt
-          </label>
-        </div>
+  const html = window.ui.modal(
+    isNew ? 'Legg til kontaktperson' : 'Rediger kontaktperson',
+    `<div class="form-grid">
+      <div class="form-group full">
+        <label>Navn *</label>
+        <input id="c-name" value="${window.escHtml(contact.name || '')}" placeholder="Fullt navn" autofocus />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="contact-save-btn">${isNew ? 'Legg til' : 'Lagre'}</button>
-    </div>
-  `;
+      <div class="form-group full">
+        <label>Tittel</label>
+        <input id="c-title" value="${window.escHtml(contact.title || '')}" placeholder="CIO, Portfolio Manager&hellip;" />
+      </div>
+      <div class="form-group">
+        <label>E-post</label>
+        <input id="c-email" type="email" value="${window.escHtml(contact.email || '')}" placeholder="navn@selskap.no" />
+      </div>
+      <div class="form-group">
+        <label>Telefon</label>
+        <input id="c-phone" value="${window.escHtml(contact.phone || '')}" placeholder="+47 900 00 000" />
+      </div>
+      <div class="form-group full">
+        <label>Notat</label>
+        <textarea id="c-notes" style="min-height:52px;" placeholder="Valgfritt&hellip;">${window.escHtml(contact.notes || '')}</textarea>
+      </div>
+      <div class="form-group full">
+        <label style="flex-direction:row;gap:8px;align-items:center;cursor:pointer;display:flex;">
+          <input type="checkbox" id="c-primary" ${contact.is_primary ? 'checked' : ''} />
+          Prim&aelig;rkontakt
+        </label>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="contact-save-btn">${isNew ? 'Legg til' : 'Lagre'}</button>`,
+  );
 
   window.openModal(html, () => {
     document.getElementById('contact-save-btn').addEventListener('click', async () => {
@@ -799,39 +771,32 @@ function openContactModal(contact, reload) {
 }
 
 function openTaskModal(inv, lookups, reload) {
-  const html = `
-    <div class="modal-header">
-      <h3>Ny oppgave</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Investor</label>
-          <input value="${window.escHtml(inv.name)}" disabled style="opacity:.6;" />
-        </div>
-        <div class="form-group full">
-          <label>Oppgave *</label>
-          <input id="t-label" placeholder="Beskriv oppgaven&hellip;" autofocus />
-        </div>
-        <div class="form-group">
-          <label>Frist</label>
-          <input type="date" id="t-due" />
-        </div>
-        <div class="form-group">
-          <label>Ansvarlig</label>
-          <select id="t-responsible">
-            <option value="">—</option>
-            ${(lookups.leads || []).map(l => `<option>${window.escHtml(l)}</option>`).join('')}
-          </select>
-        </div>
+  const html = window.ui.modal(
+    'Ny oppgave',
+    `<div class="form-grid">
+      <div class="form-group full">
+        <label>Investor</label>
+        <input value="${window.escHtml(inv.name)}" disabled style="opacity:.6;" />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="task-save-btn">Legg til</button>
-    </div>
-  `;
+      <div class="form-group full">
+        <label>Oppgave *</label>
+        <input id="t-label" placeholder="Beskriv oppgaven&hellip;" autofocus />
+      </div>
+      <div class="form-group">
+        <label>Frist</label>
+        <input type="date" id="t-due" />
+      </div>
+      <div class="form-group">
+        <label>Ansvarlig</label>
+        <select id="t-responsible">
+          <option value="">—</option>
+          ${(lookups.leads || []).map(l => `<option>${window.escHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="task-save-btn">Legg til</button>`,
+  );
 
   window.openModal(html, () => {
     document.getElementById('task-save-btn').addEventListener('click', async () => {
@@ -862,33 +827,26 @@ function openPaVentModal(inv, reload) {
   const chips = [[3, '3 mnd'], [6, '6 mnd'], [12, '12 mnd']];
   const selected = new Set();
 
-  const html = `
-    <div class="modal-header">
-      <h3>N&aring;r tar du kontakt igjen?</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
+  const html = window.ui.modal(
+    'N&aring;r tar du kontakt igjen?',
+    `<p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+      ${window.escHtml(inv.name)} er satt p&aring; vent. Velg oppf&oslash;lgingstidspunkt:
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:20px;" id="pavent-chips">
+      ${chips.map(([m, l]) => `
+        <button type="button" class="pavent-chip" data-months="${m}"
+          style="flex:1;padding:10px 0;border-radius:8px;border:2px solid var(--border);background:transparent;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer;min-height:44px;">
+          ${l}
+        </button>
+      `).join('')}
     </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
-        ${window.escHtml(inv.name)} er satt p&aring; vent. Velg oppf&oslash;lgingstidspunkt:
-      </p>
-      <div style="display:flex;gap:8px;margin-bottom:20px;" id="pavent-chips">
-        ${chips.map(([m, l]) => `
-          <button type="button" class="pavent-chip" data-months="${m}"
-            style="flex:1;padding:10px 0;border-radius:8px;border:2px solid var(--border);background:transparent;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer;min-height:44px;">
-            ${l}
-          </button>
-        `).join('')}
-      </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label>Eller velg dato</label>
-        <input type="date" id="pavent-custom" />
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Hopp over</button>
-      <button class="btn btn-primary" id="pavent-save-btn">Legg til oppgaver</button>
-    </div>
-  `;
+    <div class="form-group" style="margin-bottom:0;">
+      <label>Eller velg dato</label>
+      <input type="date" id="pavent-custom" />
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Hopp over</button>
+    <button class="btn btn-primary" id="pavent-save-btn">Legg til oppgaver</button>`,
+  );
 
   window.openModal(html, () => {
     document.querySelectorAll('.pavent-chip').forEach(btn => {
@@ -939,38 +897,31 @@ function openPaVentModal(inv, reload) {
 }
 
 function openQuickDeclineModal(inv, product, products, reload) {
-  const html = `
-    <div class="modal-header">
-      <h3>Takket nei</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:14px;margin-bottom:16px;">
-        <b>${window.escHtml(inv.name)}</b> avsto fra
-        <span style="color:#e74c3c;font-weight:600;">${window.escHtml(product.name)}</span>
-      </p>
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Dato</label>
-          <input type="date" id="qd-date" value="${today()}" />
-        </div>
-        <div class="form-group full">
-          <label>Notat <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
-          <textarea id="qd-note" placeholder="Begrunnelse, kommentar&hellip;" style="min-height:60px;"></textarea>
-        </div>
-        <div class="form-group full">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-direction:row;">
-            <input type="checkbox" id="qd-remove" checked />
-            Fjern ${window.escHtml(product.name)} fra produktinteresse
-          </label>
-        </div>
+  const html = window.ui.modal(
+    'Takket nei',
+    `<p style="font-size:14px;margin-bottom:16px;">
+      <b>${window.escHtml(inv.name)}</b> avsto fra
+      <span style="color:#e74c3c;font-weight:600;">${window.escHtml(product.name)}</span>
+    </p>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Dato</label>
+        <input type="date" id="qd-date" value="${today()}" />
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-primary" id="qd-save-btn" style="background:#e74c3c;border-color:#e74c3c;">Registrer avslag</button>
-    </div>
-  `;
+      <div class="form-group full">
+        <label>Notat <span style="font-weight:400;color:var(--muted);font-size:11px;">(valgfritt)</span></label>
+        <textarea id="qd-note" placeholder="Begrunnelse, kommentar&hellip;" style="min-height:60px;"></textarea>
+      </div>
+      <div class="form-group full">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-direction:row;">
+          <input type="checkbox" id="qd-remove" checked />
+          Fjern ${window.escHtml(product.name)} fra produktinteresse
+        </label>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-primary" id="qd-save-btn" style="background:#e74c3c;border-color:#e74c3c;">Registrer avslag</button>`,
+  );
 
   window.openModal(html, () => {
     document.getElementById('qd-save-btn').addEventListener('click', async () => {
@@ -1006,26 +957,19 @@ function openQuickDeclineModal(inv, product, products, reload) {
 }
 
 function openTegnetModal(inv, productId, productName, currentAmount, reload) {
-  const html = `
-    <div class="modal-header">
-      <h3>Tegning &mdash; ${window.escHtml(productName)}</h3>
-      <button class="btn-close" onclick="window.closeModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
-        Registrer tegnet bel&oslash;p for <b>${window.escHtml(inv.name)}</b>
-      </p>
-      <div class="form-group">
-        <label>Tegnet bel&oslash;p (MNOK)</label>
-        <input id="tegnet-amount" type="number" step="0.5" min="0"
-          value="${currentAmount != null ? currentAmount : ''}" placeholder="0" autofocus />
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
-      <button class="btn btn-green" id="tegnet-save-btn">Bekreft tegning</button>
-    </div>
-  `;
+  const html = window.ui.modal(
+    `Tegning &mdash; ${window.escHtml(productName)}`,
+    `<p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+      Registrer tegnet bel&oslash;p for <b>${window.escHtml(inv.name)}</b>
+    </p>
+    <div class="form-group">
+      <label>Tegnet bel&oslash;p (MNOK)</label>
+      <input id="tegnet-amount" type="number" step="0.5" min="0"
+        value="${currentAmount != null ? currentAmount : ''}" placeholder="0" autofocus />
+    </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+    <button class="btn btn-green" id="tegnet-save-btn">Bekreft tegning</button>`,
+  );
   window.openModal(html, () => {
     document.getElementById('tegnet-save-btn').addEventListener('click', async () => {
       const raw = document.getElementById('tegnet-amount').value;
@@ -1134,8 +1078,7 @@ export async function render(el, state) {
     bindEvents();
   }
 
-  function bindEvents() {
-    // Topbar
+  function bindTopbar() {
     el.querySelector('#back-btn').addEventListener('click', () => window.navigate('investorer'));
     el.querySelector('#edit-btn').addEventListener('click', () => openEditModal(inv, lookups, products, reload));
     el.querySelector('#logg-btn').addEventListener('click', () => openLogModal(inv, lookups, products, reload, { responsible: state.currentUser?.displayName }));
@@ -1146,8 +1089,9 @@ export async function render(el, state) {
         window.navigate('investorer');
       } catch (e) { alert('Feil ved sletting: ' + e.message); }
     });
+  }
 
-    // Inline pipeline fields
+  function bindPipeline() {
     const saveInline = async (field, value) => {
       try {
         await api.updateInvestor(inv.id, { [field]: value });
@@ -1166,8 +1110,9 @@ export async function render(el, state) {
 
     const inlineComments = el.querySelector('#inline-comments');
     if (inlineComments) inlineComments.addEventListener('blur', () => saveInline('comments', inlineComments.value));
+  }
 
-    // Produktkort — toggle interesse
+  function bindProducts() {
     el.querySelectorAll('.pi-toggle').forEach(cb => {
       cb.addEventListener('change', async () => {
         const pid = isNaN(cb.dataset.pid) ? cb.dataset.pid : Number(cb.dataset.pid);
@@ -1182,7 +1127,6 @@ export async function render(el, state) {
       });
     });
 
-    // Produktkort — ticket per produkt (lagres ved blur/enter)
     el.querySelectorAll('.pi-ticket').forEach(input => {
       const save = async () => {
         const pid = Number(input.dataset.pid);
@@ -1198,7 +1142,6 @@ export async function render(el, state) {
       input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
     });
 
-    // Produktkort — sannsynlighet per produkt
     el.querySelectorAll('.pi-prob').forEach(input => {
       const save = async () => {
         const pid = Number(input.dataset.pid);
@@ -1215,26 +1158,24 @@ export async function render(el, state) {
       input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
     });
 
-    // Produktkort — tegnet-knapp
     el.querySelectorAll('.pi-tegnet-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const pid      = Number(btn.dataset.pid);
-        const pname    = btn.dataset.pname;
+        const pid       = Number(btn.dataset.pid);
+        const pname     = btn.dataset.pname;
         const committed = btn.dataset.committed !== '' ? parseFloat(btn.dataset.committed) : null;
         openTegnetModal(inv, pid, pname, committed, reload);
       });
     });
 
-    // Quick decline (header-piller og produktkort)
     el.querySelectorAll('.btn-quick-decline').forEach(btn => {
       btn.addEventListener('click', () => {
-        const productId = btn.dataset.productId;
-        const product = products.find(p => String(p._id) === String(productId));
+        const product = products.find(p => String(p._id) === String(btn.dataset.productId));
         if (product) openQuickDeclineModal(inv, product, products, reload);
       });
     });
+  }
 
-    // Docs card — checkbox, date, version
+  function bindDocs() {
     el.querySelectorAll('.doc-checkbox').forEach(cb => {
       cb.addEventListener('change', async () => {
         const pid = cb.dataset.productId;
@@ -1245,11 +1186,7 @@ export async function render(el, state) {
           ...docs,
           [pid]: {
             ...(docs[pid] || {}),
-            [key]: {
-              ...existing,
-              done: cb.checked ? 1 : 0,
-              date: existing.date || new Date().toISOString().slice(0, 10),
-            },
+            [key]: { ...existing, done: cb.checked ? 1 : 0, date: existing.date || new Date().toISOString().slice(0, 10) },
           },
         };
         try {
@@ -1264,13 +1201,9 @@ export async function render(el, state) {
         const pid = input.dataset.productId;
         const key = input.dataset.docKey;
         const docs = inv.docs || {};
-        const existing = (docs[pid] || {})[key] || {};
         const updated = {
           ...docs,
-          [pid]: {
-            ...(docs[pid] || {}),
-            [key]: { ...existing, date: input.value },
-          },
+          [pid]: { ...(docs[pid] || {}), [key]: { ...((docs[pid] || {})[key] || {}), date: input.value } },
         };
         try {
           await api.updateInvestor(inv.id, { docs: updated });
@@ -1284,13 +1217,9 @@ export async function render(el, state) {
         const pid = input.dataset.productId;
         const key = input.dataset.docKey;
         const docs = inv.docs || {};
-        const existing = (docs[pid] || {})[key] || {};
         const updated = {
           ...docs,
-          [pid]: {
-            ...(docs[pid] || {}),
-            [key]: { ...existing, version: input.value },
-          },
+          [pid]: { ...(docs[pid] || {}), [key]: { ...((docs[pid] || {})[key] || {}), version: input.value } },
         };
         try {
           await api.updateInvestor(inv.id, { docs: updated });
@@ -1298,8 +1227,9 @@ export async function render(el, state) {
         } catch (e) { alert('Feil: ' + e.message); }
       });
     });
+  }
 
-    // Contacts card
+  function bindContacts() {
     const addContactBtn = el.querySelector('#add-contact-btn');
     if (addContactBtn) {
       addContactBtn.addEventListener('click', () => {
@@ -1311,27 +1241,24 @@ export async function render(el, state) {
     if (toggleInaktiveBtn) {
       toggleInaktiveBtn.addEventListener('click', async () => {
         visInaktive = !visInaktive;
-        // Re-render just the contacts card region is complex; full reload simpler
         await reload();
       });
     }
 
     el.querySelectorAll('.contact-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const cid = btn.dataset.contactId;
-        const contact = (inv.contacts || []).find(c => String(c._id) === String(cid));
+        const contact = (inv.contacts || []).find(c => String(c._id) === String(btn.dataset.contactId));
         if (contact) openContactModal({ ...contact }, reload);
       });
     });
 
     el.querySelectorAll('.contact-toggle-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const cid    = btn.dataset.contactId;
-        const active = parseInt(btn.dataset.active);
-        const contact = (inv.contacts || []).find(c => String(c._id) === String(cid));
+        const active  = parseInt(btn.dataset.active);
+        const contact = (inv.contacts || []).find(c => String(c._id) === String(btn.dataset.contactId));
         if (!contact) return;
         try {
-          await api.updateContact(cid, { ...contact, active: active === 1 ? 0 : 1 });
+          await api.updateContact(btn.dataset.contactId, { ...contact, active: active === 1 ? 0 : 1 });
           await reload();
         } catch (e) { alert('Feil: ' + e.message); }
       });
@@ -1346,8 +1273,9 @@ export async function render(el, state) {
         } catch (e) { alert('Feil: ' + e.message); }
       });
     });
+  }
 
-    // Log card
+  function bindLog() {
     const newLogBtn = el.querySelector('#new-log-btn');
     if (newLogBtn) {
       newLogBtn.addEventListener('click', () => openLogModal(inv, lookups, products, reload, { responsible: state.currentUser?.displayName }));
@@ -1355,8 +1283,7 @@ export async function render(el, state) {
 
     el.querySelectorAll('.log-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const lid = btn.dataset.logId;
-        const entry = (inv.log || []).find(l => String(l._id) === String(lid));
+        const entry = (inv.log || []).find(l => String(l._id) === String(btn.dataset.logId));
         if (entry) openEditLogModal(entry, inv, lookups, products, reload);
       });
     });
@@ -1373,13 +1300,13 @@ export async function render(el, state) {
 
     el.querySelectorAll('.log-marker-avholdt').forEach(btn => {
       btn.addEventListener('click', () => {
-        const lid = btn.dataset.logId;
-        const entry = (inv.log || []).find(l => String(l._id) === String(lid));
+        const entry = (inv.log || []).find(l => String(l._id) === String(btn.dataset.logId));
         if (entry) openEditLogModal({ ...entry, status: 'avholdt' }, inv, lookups, products, reload);
       });
     });
+  }
 
-    // Tasks card
+  function bindTasks() {
     const newTaskBtn = el.querySelector('#new-task-btn');
     if (newTaskBtn) {
       newTaskBtn.addEventListener('click', () => openTaskModal(inv, lookups, reload));
@@ -1393,7 +1320,6 @@ export async function render(el, state) {
         try {
           await api.updateTask(tid, { done: task.done ? 0 : 1 });
           task.done = task.done ? 0 : 1;
-          // Update visuals inline
           const row = el.querySelector(`[data-task-id="${tid}"]`);
           if (row) {
             const label = row.querySelector('div > div:first-child');
@@ -1419,6 +1345,16 @@ export async function render(el, state) {
         } catch (e) { alert('Feil: ' + e.message); }
       });
     });
+  }
+
+  function bindEvents() {
+    bindTopbar();
+    bindPipeline();
+    bindProducts();
+    bindDocs();
+    bindContacts();
+    bindLog();
+    bindTasks();
   }
 
   buildPage();
