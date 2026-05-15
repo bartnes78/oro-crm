@@ -964,32 +964,54 @@ app.get('/api/product-investors', async (req, res) => {
 app.put('/api/product-investors', async (req, res) => {
   const { product_id, investor_id, ...fields } = req.body;
   if (!product_id || !investor_id) return validationError(res, ['product_id og investor_id er påkrevd']);
-  if (fields.target_ticket != null && fields.target_ticket !== '') {
+
+  // Validate numeric fields only when explicitly sent and non-empty
+  if ('target_ticket' in fields && fields.target_ticket != null && fields.target_ticket !== '') {
     const t = parseFloat(fields.target_ticket);
     if (isNaN(t) || t < 0) return validationError(res, ['Målticket må være et positivt tall']);
     fields.target_ticket = t;
-  }
-  if (fields.probability != null && fields.probability !== '') {
+  } else if ('target_ticket' in fields) { fields.target_ticket = null; }
+
+  if ('probability' in fields && fields.probability != null && fields.probability !== '') {
     const p = parseFloat(fields.probability);
     if (isNaN(p) || p < 0 || p > 1) return validationError(res, ['Sannsynlighet må være mellom 0 og 1']);
     fields.probability = p;
-  }
+  } else if ('probability' in fields) { fields.probability = null; }
+
+  if ('committed_amount' in fields && fields.committed_amount != null && fields.committed_amount !== '') {
+    const c = parseFloat(fields.committed_amount);
+    if (isNaN(c) || c < 0) return validationError(res, ['Innbetalt beløp må være et positivt tall']);
+    fields.committed_amount = c;
+  } else if ('committed_amount' in fields) { fields.committed_amount = null; }
+
+  // Only update fields that were explicitly sent — allows clearing to null
+  const allowed = ['target_ticket', 'probability', 'decline_reason', 'committed_amount'];
+  const sent = allowed.filter(f => f in fields);
+
+  const client = await pool.connect();
   try {
-    await query(`
-      INSERT INTO product_investors (product_id, investor_id, target_ticket, probability, decline_reason, committed_amount)
-      VALUES ($1,$2,$3,$4,$5,$6)
-      ON CONFLICT (product_id, investor_id) DO UPDATE SET
-        target_ticket    = COALESCE(EXCLUDED.target_ticket,    product_investors.target_ticket),
-        probability      = COALESCE(EXCLUDED.probability,      product_investors.probability),
-        decline_reason   = COALESCE(EXCLUDED.decline_reason,   product_investors.decline_reason),
-        committed_amount = COALESCE(EXCLUDED.committed_amount, product_investors.committed_amount)
-    `, [parseInt(product_id), investor_id,
-        fields.target_ticket    ?? null,
-        fields.probability      ?? null,
-        fields.decline_reason   ?? null,
-        fields.committed_amount ?? null]);
+    await client.query('BEGIN');
+    // Ensure row exists
+    await client.query(
+      'INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [parseInt(product_id), investor_id]
+    );
+    // Update only the fields that were sent (null = explicit clear)
+    if (sent.length > 0) {
+      const setParts = sent.map((f, i) => `${f} = $${i + 3}`);
+      await client.query(
+        `UPDATE product_investors SET ${setParts.join(', ')} WHERE product_id=$1 AND investor_id=$2`,
+        [parseInt(product_id), investor_id, ...sent.map(f => fields[f] ?? null)]
+      );
+    }
+    await client.query('COMMIT');
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 // ── Produkter ─────────────────────────────────────────────────────────────────
@@ -1231,28 +1253,65 @@ app.post('/api/email/parse-msg', (req, res, next) => {
 // ── Excel-eksport ─────────────────────────────────────────────────────────────
 app.get('/api/export/excel', async (req, res) => {
   try {
-    const [{ rows: investors }, { rows: contacts }, { rows: log }, { rows: products }] = await Promise.all([
+    const [{ rows: investors }, { rows: contacts }, { rows: log }, { rows: products }, { rows: piRows }] = await Promise.all([
       query('SELECT * FROM investors ORDER BY name'),
       query('SELECT * FROM contacts'),
       query('SELECT * FROM contact_log ORDER BY date DESC'),
       query('SELECT * FROM products'),
+      query('SELECT * FROM product_investors'),
     ]);
     const prodNameById = Object.fromEntries(products.map(p => [p.id, p.name]));
     const wb = XLSX.utils.book_new();
 
-    const invRows = investors.map(i => ({
-      'ID': i.id, 'Navn': i.name, 'Land': i.country || '', 'By': i.city || '',
-      'Type': i.investor_type || '', 'Fase': i.phase || '', 'Lead': i.lead || '',
-      'Rådgiver': i.advisor || '',
-      'Ticket (MNOK)': i.target_ticket != null ? i.target_ticket : '',
-      'Sannsynlighet (%)': i.probability != null ? i.probability : '',
-      'Vektet (MNOK)': (i.target_ticket && i.probability) ? Math.round(i.target_ticket * i.probability * 10) / 10 : '',
-      'Produktinteresse': Array.isArray(i.product_interests) ? i.product_interests.map(id => prodNameById[id] || id).join(', ') : '',
-      'Sist kontakt': i.last_contact || '', 'Neste steg': i.next_steps || '', 'Kommentarer': i.comments || '',
-    }));
+    // Aggregate product_investors per investor (sum across all products)
+    const piByInv = {};
+    for (const pi of piRows) {
+      if (!piByInv[pi.investor_id]) piByInv[pi.investor_id] = { ticket: 0, weighted: 0, committed: 0 };
+      piByInv[pi.investor_id].ticket    += Number(pi.target_ticket)    || 0;
+      piByInv[pi.investor_id].committed += Number(pi.committed_amount) || 0;
+      if (pi.target_ticket != null && pi.probability != null)
+        piByInv[pi.investor_id].weighted += Number(pi.target_ticket) * Number(pi.probability);
+    }
+
+    const invRows = investors.map(i => {
+      const pi = piByInv[i.id] || {};
+      return {
+        'ID': i.id, 'Navn': i.name, 'Land': i.country || '', 'By': i.city || '',
+        'Type': i.investor_type || '', 'Fase': i.phase || '', 'Lead': i.lead || '',
+        'Rådgiver': i.advisor || '',
+        'Ticket totalt (MNOK)': pi.ticket ? Math.round(pi.ticket * 10) / 10 : '',
+        'Vektet totalt (MNOK)': pi.weighted ? Math.round(pi.weighted * 10) / 10 : '',
+        'Innbetalt (MNOK)': pi.committed ? Math.round(pi.committed * 10) / 10 : '',
+        'Produktinteresse': Array.isArray(i.product_interests) ? i.product_interests.map(id => prodNameById[id] || id).join(', ') : '',
+        'Sist kontakt': i.last_contact || '', 'Neste steg': i.next_steps || '', 'Kommentarer': i.comments || '',
+      };
+    });
     const wsInv = XLSX.utils.json_to_sheet(invRows);
-    wsInv['!cols'] = [{wch:10},{wch:36},{wch:10},{wch:16},{wch:18},{wch:14},{wch:22},{wch:18},{wch:14},{wch:18},{wch:14},{wch:50},{wch:14},{wch:28},{wch:40}];
+    wsInv['!cols'] = [{wch:10},{wch:36},{wch:10},{wch:16},{wch:18},{wch:14},{wch:22},{wch:18},{wch:16},{wch:16},{wch:14},{wch:50},{wch:14},{wch:28},{wch:40}];
     XLSX.utils.book_append_sheet(wb, wsInv, 'Investorer');
+
+    // Extra sheet: pipeline per produkt
+    const piSheetRows = piRows
+      .filter(pi => pi.target_ticket != null || pi.committed_amount != null)
+      .map(pi => {
+        const inv = investors.find(i => i.id === pi.investor_id);
+        const weighted = (pi.target_ticket != null && pi.probability != null)
+          ? Math.round(Number(pi.target_ticket) * Number(pi.probability) * 10) / 10 : '';
+        return {
+          'Produkt': prodNameById[pi.product_id] || pi.product_id,
+          'Investor': inv?.name || pi.investor_id,
+          'Fase': inv?.phase || '',
+          'Ticket (MNOK)': pi.target_ticket != null ? Number(pi.target_ticket) : '',
+          'Sannsynlighet (%)': pi.probability != null ? Math.round(Number(pi.probability) * 100) : '',
+          'Vektet (MNOK)': weighted,
+          'Innbetalt (MNOK)': pi.committed_amount != null ? Number(pi.committed_amount) : '',
+          'Avslagsgrunn': pi.decline_reason || '',
+        };
+      })
+      .sort((a, b) => String(a['Produkt']).localeCompare(String(b['Produkt'])) || String(a['Investor']).localeCompare(String(b['Investor'])));
+    const wsPi = XLSX.utils.json_to_sheet(piSheetRows);
+    wsPi['!cols'] = [{wch:36},{wch:36},{wch:14},{wch:14},{wch:16},{wch:14},{wch:14},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, wsPi, 'Pipeline per produkt');
 
     const invMap = Object.fromEntries(investors.map(i => [i.id, i.name]));
     const ctRows = contacts.map(c => ({
