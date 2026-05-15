@@ -5,16 +5,16 @@
 ### Avslåtte tilbud — ny `declined_offers`-tabell
 
 - [x] Velg løsning (alternativ B: egen tabell)
-- [ ] `schema.sql` — legg til `declined_offers`-tabell
-- [ ] `server.js` — backup og restore inkluderer ny tabell
-- [ ] `server.js` — GET `/api/declined-offers?productId=X`
-- [ ] `server.js` — POST `/api/declined-offers`
-- [ ] `server.js` — DELETE `/api/declined-offers/:id`
-- [ ] `public/js/api.js` — 3 nye metoder
-- [ ] `prosjekt-detalj.js` — last `_declinedOffers` i `loadData()`
-- [ ] `prosjekt-detalj.js` — erstatt eksisterende "Takket nei"-seksjon med ny datakilde
-- [ ] `prosjekt-detalj.js` — "Registrer avslag"-knapp per investorrad (modal med grunn + dato)
-- [ ] `prosjekt-detalj.js` — slett-knapp i avslåtte-seksjonen
+- [x] `schema.sql` — legg til `declined_offers`-tabell
+- [x] `server.js` — backup og restore inkluderer ny tabell
+- [x] `server.js` — GET `/api/declined-offers?productId=X`
+- [x] `server.js` — POST `/api/declined-offers`
+- [x] `server.js` — DELETE `/api/declined-offers/:id`
+- [x] `public/js/api.js` — 3 nye metoder
+- [x] `prosjekt-detalj.js` — last `_declinedOffers` i `loadData()`
+- [x] `prosjekt-detalj.js` — erstatt eksisterende "Takket nei"-seksjon med ny datakilde
+- [x] `prosjekt-detalj.js` — "Registrer avslag"-knapp per investorrad (modal med grunn + dato)
+- [x] `prosjekt-detalj.js` — slett-knapp i avslåtte-seksjonen
 
 ---
 
