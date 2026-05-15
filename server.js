@@ -26,7 +26,7 @@ function fmtInvestor(row) {
     city:              row.city,
     investor_type:     row.investor_type,
     fund_vehicle:      row.fund_vehicle,
-    product_interests: row.product_interests || [],
+    product_interests: row.product_interests || [],  // populated by caller from product_investors
     phase:             row.phase,
     lead:              row.lead,
     advisor:           row.advisor,
@@ -351,11 +351,12 @@ app.get('/api/analyse', async (req, res) => {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
-    const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }] = await Promise.all([
+    const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
       query('SELECT * FROM investors'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
       query('SELECT investor_id, target_ticket, probability FROM product_investors WHERE target_ticket IS NOT NULL'),
       query('SELECT * FROM products'),
+      query('SELECT product_id, investor_id FROM product_investors'),
     ]);
 
     const total = investors.length;
@@ -395,9 +396,14 @@ app.get('/api/dashboard', async (req, res) => {
     });
     const byType = Object.values(typeMap).sort((a, b) => b.count - a.count);
 
+    const invsByProduct = {};
+    piAllRows.forEach(pi => {
+      if (!invsByProduct[pi.product_id]) invsByProduct[pi.product_id] = new Set();
+      invsByProduct[pi.product_id].add(pi.investor_id);
+    });
     const products = productList.map(p => ({
       _id: p.id, name: p.name,
-      count: investors.filter(i => Array.isArray(i.product_interests) && i.product_interests.includes(p.id)).length,
+      count: (invsByProduct[p.id] || new Set()).size,
     }));
 
     const top10 = investors
@@ -455,6 +461,19 @@ app.get('/api/investors', async (req, res) => {
       });
     }
 
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      const { rows: piAll } = await query(
+        'SELECT investor_id, product_id FROM product_investors WHERE investor_id = ANY($1)', [ids]
+      );
+      const piMap = {};
+      piAll.forEach(pi => {
+        if (!piMap[pi.investor_id]) piMap[pi.investor_id] = [];
+        piMap[pi.investor_id].push(pi.product_id);
+      });
+      rows = rows.map(r => ({ ...r, product_interests: (piMap[r.id] || []).sort((a, b) => a - b) }));
+    }
+
     rows.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
     res.json(rows.map(fmtInvestor));
   } catch (e) {
@@ -484,18 +503,23 @@ app.post('/api/investors', async (req, res) => {
 
     const { rows: [inv] } = await query(`
       INSERT INTO investors
-        (id, name, country, city, investor_type, fund_vehicle, product_interests,
+        (id, name, country, city, investor_type, fund_vehicle,
          phase, lead, advisor, first_close, next_steps, comments, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
       RETURNING *
     `, [
       id, String(req.body.name).trim(), req.body.country || 'Norge', req.body.city || null,
       req.body.investor_type || null, null,
-      JSON.stringify(Array.isArray(req.body.product_interests) ? req.body.product_interests : []),
       req.body.phase || 'Prospekt', req.body.lead || null, req.body.advisor || null, 0,
       req.body.next_steps || null, req.body.comments || null,
     ]);
-    res.json(fmtInvestor(inv));
+    const interests = Array.isArray(req.body.product_interests) ? req.body.product_interests : [];
+    if (interests.length > 0) {
+      await Promise.all(interests.map(pid =>
+        query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, id])
+      ));
+    }
+    res.json({ ...fmtInvestor(inv), product_interests: interests });
   } catch (e) {
     console.error('[POST /investors]', e.message);
     res.status(500).json({ error: e.message });
@@ -506,11 +530,13 @@ app.get('/api/investors/:id', async (req, res) => {
   try {
     const { rows: invRows } = await query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
     if (!invRows[0]) return res.status(404).json({ error: 'Not found' });
-    const [{ rows: contacts }, { rows: log }] = await Promise.all([
+    const [{ rows: contacts }, { rows: log }, { rows: piRows }] = await Promise.all([
       query('SELECT * FROM contacts WHERE investor_id = $1 ORDER BY is_primary DESC', [req.params.id]),
       query('SELECT * FROM contact_log WHERE investor_id = $1 ORDER BY date DESC', [req.params.id]),
+      query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]),
     ]);
-    res.json({ ...fmtInvestor(invRows[0]), contacts: contacts.map(fmtRow), log: log.map(fmtRow) });
+    const inv = { ...invRows[0], product_interests: piRows.map(r => r.product_id).sort((a, b) => a - b) };
+    res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -530,21 +556,40 @@ app.put('/api/investors/:id', async (req, res) => {
     const { rows: [updated] } = await query(`
       UPDATE investors SET
         name=$2, country=$3, city=$4, investor_type=$5, fund_vehicle=$6,
-        product_interests=$7, phase=$8, lead=$9, advisor=$10,
-        first_close=$11, source=$12,
-        next_steps=$13, last_contact=$14, doc_shared=$15, meeting_date=$16,
-        comments=$17, docs=$18, updated_at=NOW()
+        phase=$7, lead=$8, advisor=$9,
+        first_close=$10, source=$11,
+        next_steps=$12, last_contact=$13, doc_shared=$14, meeting_date=$15,
+        comments=$16, docs=$17, updated_at=NOW()
       WHERE id=$1 RETURNING *
     `, [
       req.params.id,
       v('name'), v('country'), vNull('city'), vNull('investor_type'), vNull('fund_vehicle'),
-      JSON.stringify('product_interests' in b ? (b.product_interests || []) : (cur.product_interests || [])),
       v('phase'), vNull('lead'), vNull('advisor'),
       v('first_close') || 0, vNull('source'), vNull('next_steps'),
       vNull('last_contact'), vNull('doc_shared'), vNull('meeting_date'), vNull('comments'),
       JSON.stringify('docs' in b ? (b.docs || {}) : (cur.docs || {})),
     ]);
-    res.json(fmtInvestor(updated));
+
+    let newInterests = null;
+    if ('product_interests' in b) {
+      const newIds = (Array.isArray(b.product_interests) ? b.product_interests : []).map(Number);
+      const { rows: existing } = await query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
+      const existingIds = existing.map(r => r.product_id);
+      const toAdd    = newIds.filter(id => !existingIds.includes(id));
+      const toRemove = existingIds.filter(id => !newIds.includes(id));
+      if (toAdd.length > 0)
+        await Promise.all(toAdd.map(pid =>
+          query('INSERT INTO product_investors (product_id, investor_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, req.params.id])
+        ));
+      if (toRemove.length > 0)
+        await query('DELETE FROM product_investors WHERE investor_id=$1 AND product_id=ANY($2)', [req.params.id, toRemove]);
+      newInterests = newIds;
+    } else {
+      const { rows: piRows } = await query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]);
+      newInterests = piRows.map(r => r.product_id).sort((a, b) => a - b);
+    }
+
+    res.json({ ...fmtInvestor(updated), product_interests: newInterests });
   } catch (e) {
     console.error('[PUT /investors]', e.message);
     res.status(500).json({ error: e.message });
@@ -660,28 +705,31 @@ app.post('/api/merge', async (req, res) => {
         if (drop[key] != null && drop[key] !== '' && drop[key] !== 0) merged[key] = drop[key];
       }
     }
-    const keepInts = Array.isArray(keep.product_interests) ? keep.product_interests : [];
-    const dropInts = Array.isArray(drop.product_interests) ? drop.product_interests : [];
-    merged.product_interests = [...new Set([...keepInts, ...dropInts])].sort((a, b) => a - b);
     if (keep.comments && drop.comments && keep.comments !== drop.comments)
       merged.comments = keep.comments + ' | ' + drop.comments;
 
     await client.query('BEGIN');
     await client.query(`
       UPDATE investors SET name=$2, country=$3, city=$4, investor_type=$5, phase=$6, lead=$7,
-        advisor=$8, comments=$9, product_interests=$10, updated_at=NOW()
+        advisor=$8, comments=$9, updated_at=NOW()
       WHERE id=$1
     `, [keep_id, merged.name, merged.country, merged.city, merged.investor_type, merged.phase,
-        merged.lead, merged.advisor, merged.comments, JSON.stringify(merged.product_interests)]);
+        merged.lead, merged.advisor, merged.comments]);
     await client.query('UPDATE contacts SET investor_id=$1 WHERE investor_id=$2', [keep_id, drop_id]);
     await client.query('UPDATE contact_log SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
     await client.query('UPDATE tasks SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
-    await client.query('DELETE FROM product_investors WHERE investor_id=$1', [drop_id]);
+    // Kopier drop's produktkoblinger til keep (ON CONFLICT = keep beholder sine egne verdier)
+    await client.query(`
+      INSERT INTO product_investors (product_id, investor_id)
+      SELECT product_id, $1 FROM product_investors WHERE investor_id = $2
+      ON CONFLICT DO NOTHING
+    `, [keep_id, drop_id]);
     await client.query('DELETE FROM investors WHERE id=$1', [drop_id]);
     await client.query('COMMIT');
 
     const { rows: [final] } = await client.query('SELECT * FROM investors WHERE id=$1', [keep_id]);
-    res.json({ ok: true, merged: fmtInvestor(final) });
+    const { rows: finalPi } = await client.query('SELECT product_id FROM product_investors WHERE investor_id=$1', [keep_id]);
+    res.json({ ok: true, merged: { ...fmtInvestor(final), product_interests: finalPi.map(r => r.product_id).sort((a, b) => a - b) } });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[merge]', e.message);
@@ -1330,12 +1378,15 @@ app.get('/api/export/excel', async (req, res) => {
 
     // Aggregate product_investors per investor (sum across all products)
     const piByInv = {};
+    const prodsByInv = {};
     for (const pi of piRows) {
       if (!piByInv[pi.investor_id]) piByInv[pi.investor_id] = { ticket: 0, weighted: 0, committed: 0 };
       piByInv[pi.investor_id].ticket    += Number(pi.target_ticket)    || 0;
       piByInv[pi.investor_id].committed += Number(pi.committed_amount) || 0;
       if (pi.target_ticket != null && pi.probability != null)
         piByInv[pi.investor_id].weighted += Number(pi.target_ticket) * Number(pi.probability);
+      if (!prodsByInv[pi.investor_id]) prodsByInv[pi.investor_id] = [];
+      prodsByInv[pi.investor_id].push(pi.product_id);
     }
 
     const invRows = investors.map(i => {
@@ -1347,7 +1398,7 @@ app.get('/api/export/excel', async (req, res) => {
         'Ticket totalt (MNOK)': pi.ticket ? Math.round(pi.ticket * 10) / 10 : '',
         'Vektet totalt (MNOK)': pi.weighted ? Math.round(pi.weighted * 10) / 10 : '',
         'Innbetalt (MNOK)': pi.committed ? Math.round(pi.committed * 10) / 10 : '',
-        'Produktinteresse': Array.isArray(i.product_interests) ? i.product_interests.map(id => prodNameById[id] || id).join(', ') : '',
+        'Produktinteresse': (prodsByInv[i.id] || []).map(id => prodNameById[id] || id).join(', '),
         'Sist kontakt': i.last_contact || '', 'Neste steg': i.next_steps || '', 'Kommentarer': i.comments || '',
       };
     });

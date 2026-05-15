@@ -169,3 +169,15 @@ DO $$ BEGIN
     ALTER TABLE investors DROP COLUMN probability;
   END IF;
 END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='product_interests') THEN
+    INSERT INTO product_investors (product_id, investor_id)
+    SELECT (elem::text)::integer, id
+    FROM investors, jsonb_array_elements(product_interests) AS elem
+    WHERE product_interests IS NOT NULL AND jsonb_array_length(product_interests) > 0
+    ON CONFLICT (product_id, investor_id) DO NOTHING;
+    ALTER TABLE investors DROP COLUMN product_interests;
+  END IF;
+END $$;
