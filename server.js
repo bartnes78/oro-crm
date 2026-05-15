@@ -1435,7 +1435,11 @@ app.get('/api/export/excel', async (req, res) => {
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// BUILD_STAMP endres ved kvar Railway-deploy — tvinger browser til å hente ny JS
+const BUILD_STAMP = Date.now();
+const _indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+  .replace('src="/js/app.js"', `src="/js/app.js?v=${BUILD_STAMP}"`);
+app.get('*', (req, res) => res.type('html').send(_indexHtml));
 
 // ── Oppstart ──────────────────────────────────────────────────────────────────
 async function init() {
