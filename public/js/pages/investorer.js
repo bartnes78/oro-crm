@@ -295,7 +295,7 @@ function setupEvents(el) {
   const nyBtn = el.querySelector('#inv-ny-btn');
   if (nyBtn) {
     nyBtn.addEventListener('click', () => {
-      if (_state) openNyInvestorModal(_state.lookups, _state.products);
+      if (_state) openNyInvestorModal(_state.lookups);
     });
   }
 
