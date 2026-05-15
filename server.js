@@ -12,10 +12,6 @@ const { query, pool } = require('./db');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-// ── Backup-mappe ──────────────────────────────────────────────────────────────
-const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
-if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-
 // ── Formathjelpere ────────────────────────────────────────────────────────────
 function fmtInvestor(row) {
   if (!row) return null;
@@ -67,27 +63,21 @@ function weighted(inv) {
 async function runBackup() {
   const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
   const tables = [
-    { name: 'investors',         sql: 'SELECT * FROM investors' },
-    { name: 'contacts',          sql: 'SELECT * FROM contacts' },
-    { name: 'contact_log',       sql: 'SELECT * FROM contact_log' },
-    { name: 'tasks',             sql: 'SELECT * FROM tasks' },
-    { name: 'products',          sql: 'SELECT * FROM products' },
-    { name: 'product_investors', sql: 'SELECT * FROM product_investors' },
-    { name: 'declined_offers',   sql: 'SELECT * FROM declined_offers' },
-    { name: 'users',             sql: 'SELECT * FROM users' },
+    'investors', 'contacts', 'contact_log', 'tasks',
+    'products', 'product_investors', 'declined_offers', 'users',
   ];
   try {
-    for (const t of tables) {
-      const { rows } = await query(t.sql);
-      fs.writeFileSync(path.join(BACKUP_DIR, `${stamp}_${t.name}.json`), JSON.stringify(rows, null, 2));
-    }
-    const files  = fs.readdirSync(BACKUP_DIR).sort();
-    const stamps = [...new Set(files.map(f => f.slice(0, 19)))];
-    if (stamps.length > 10) {
-      stamps.slice(0, stamps.length - 10).forEach(old =>
-        files.filter(f => f.startsWith(old)).forEach(f => fs.unlinkSync(path.join(BACKUP_DIR, f)))
+    for (const name of tables) {
+      const { rows } = await query(`SELECT * FROM ${name}`);
+      await query(
+        'INSERT INTO backups (stamp, table_name, data) VALUES ($1,$2,$3) ON CONFLICT (stamp, table_name) DO UPDATE SET data = EXCLUDED.data',
+        [stamp, name, JSON.stringify(rows)]
       );
     }
+    const { rows: allStamps } = await query('SELECT DISTINCT stamp FROM backups ORDER BY stamp DESC');
+    const toDelete = allStamps.slice(10).map(r => r.stamp);
+    if (toDelete.length > 0)
+      await query('DELETE FROM backups WHERE stamp = ANY($1)', [toDelete]);
     console.log(`[backup] ${stamp}`);
   } catch (e) {
     console.error('[backup] Feilet:', e.message);
@@ -1118,66 +1108,24 @@ app.delete('/api/products/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Admin: migrer ticket/prob fra backup til product_investors ────────────────
-app.post('/api/admin/migrate-tickets', requireAdmin, async (req, res) => {
-  // Finn nyeste backup-fil som har investors med target_ticket != null
-  let backupInvestors = null;
-  let usedStamp = null;
-  if (fs.existsSync(BACKUP_DIR)) {
-    const files  = fs.readdirSync(BACKUP_DIR).sort().reverse();
-    const stamps = [...new Set(files.map(f => f.slice(0, 19)))];
-    for (const stamp of stamps) {
-      const src = path.join(BACKUP_DIR, `${stamp}_investors.json`);
-      if (!fs.existsSync(src)) continue;
-      const rows = JSON.parse(fs.readFileSync(src, 'utf8'));
-      const withData = rows.filter(r => r.target_ticket != null || r.probability != null);
-      if (withData.length > 0) {
-        backupInvestors = rows;
-        usedStamp = stamp;
-        break;
-      }
-    }
-  }
-  if (!backupInvestors) {
-    return res.status(404).json({ error: 'Ingen backup med ticket/prob-data funnet. Data kan ikke gjenopprettes automatisk.' });
-  }
-
-  const toMigrate = backupInvestors.filter(r => r.target_ticket != null || r.probability != null);
-  let inserted = 0, skipped = 0;
-
-  for (const inv of toMigrate) {
-    const interests = Array.isArray(inv.product_interests) ? inv.product_interests : [];
-    if (interests.length === 0) { skipped++; continue; }
-    for (const pid of interests) {
-      try {
-        const { rowCount } = await query(`
-          INSERT INTO product_investors (product_id, investor_id, target_ticket, probability)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (product_id, investor_id) DO NOTHING
-        `, [parseInt(pid), inv.id, inv.target_ticket ?? null, inv.probability ?? null]);
-        if (rowCount > 0) inserted++;
-      } catch (e) {
-        console.error(`[migrate-tickets] ${inv.id} pid=${pid}: ${e.message}`);
-      }
-    }
-  }
-
-  res.json({ ok: true, stamp: usedStamp, investors: toMigrate.length, inserted, skipped });
-});
-
 // ── Backup API ────────────────────────────────────────────────────────────────
-app.get('/api/backups', (req, res) => {
+app.get('/api/backups', requireAdmin, async (req, res) => {
   try {
-    const files  = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).sort().reverse() : [];
-    const stamps = [...new Set(files.map(f => f.slice(0, 19)))];
-    res.json(stamps.map(s => ({ stamp: s, label: s.replace('_', ' ').replace(/-/g, ':').replace(':', '-').replace(':', '-') })));
+    const { rows } = await query('SELECT DISTINCT stamp FROM backups ORDER BY stamp DESC');
+    res.json(rows.map(r => ({
+      stamp: r.stamp,
+      label: r.stamp.replace('_', ' ').replace(/-/g, ':').replace(':', '-').replace(':', '-'),
+    })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/backups/restore/:stamp', async (req, res) => {
+app.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
   const { stamp } = req.params;
   if (!/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(stamp))
     return res.status(400).json({ error: 'Ugyldig backup-tidsstempel' });
+
+  const { rows: exists } = await query('SELECT 1 FROM backups WHERE stamp = $1 LIMIT 1', [stamp]);
+  if (!exists.length) return res.status(404).json({ error: 'Backup ikke funnet' });
 
   const client = await pool.connect();
   try {
@@ -1185,13 +1133,13 @@ app.post('/api/backups/restore/:stamp', async (req, res) => {
     await client.query('BEGIN');
 
     const tableMap = [
-      { file: 'investors',         table: 'investors',         isText: true },
-      { file: 'contacts',          table: 'contacts',          isText: false },
-      { file: 'contact_log',       table: 'contact_log',       isText: false },
-      { file: 'tasks',             table: 'tasks',             isText: false },
-      { file: 'products',          table: 'products',          isText: false },
-      { file: 'product_investors', table: 'product_investors', isText: false },
-      { file: 'declined_offers',   table: 'declined_offers',   isText: false },
+      { name: 'investors',         isText: true },
+      { name: 'contacts',          isText: false },
+      { name: 'contact_log',       isText: false },
+      { name: 'tasks',             isText: false },
+      { name: 'products',          isText: false },
+      { name: 'product_investors', isText: false },
+      { name: 'declined_offers',   isText: false },
     ];
 
     await client.query('TRUNCATE declined_offers, product_investors, contact_log, tasks, products RESTART IDENTITY CASCADE');
@@ -1199,20 +1147,23 @@ app.post('/api/backups/restore/:stamp', async (req, res) => {
     await client.query('DELETE FROM investors');
 
     let restored = 0;
+    const SKIP_COLS = new Set(['product_interests']); // fjernet kolonne — backups tatt før migrering
     for (const t of tableMap) {
-      const src = path.resolve(BACKUP_DIR, `${stamp}_${t.file}.json`);
-      if (!src.startsWith(BACKUP_DIR) || !fs.existsSync(src)) continue;
-      const rows = JSON.parse(fs.readFileSync(src, 'utf8'));
-      for (const row of rows) {
-        const keys = Object.keys(row);
+      const { rows: bRows } = await client.query(
+        'SELECT data FROM backups WHERE stamp = $1 AND table_name = $2', [stamp, t.name]
+      );
+      if (!bRows.length) continue;
+      for (const row of bRows[0].data) {
+        const keys = Object.keys(row).filter(k => !SKIP_COLS.has(k));
         const cols = keys.join(', ');
         const vals = keys.map((_, i) => `$${i + 1}`).join(', ');
         const data = keys.map(k => {
-          if (k === 'product_interests' && typeof row[k] === 'object') return JSON.stringify(row[k]);
-          return row[k];
+          const v = row[k];
+          if (v !== null && typeof v === 'object') return JSON.stringify(v);
+          return v;
         });
         const overriding = t.isText ? '' : 'OVERRIDING SYSTEM VALUE';
-        await client.query(`INSERT INTO ${t.table} (${cols}) ${overriding} VALUES (${vals}) ON CONFLICT DO NOTHING`, data);
+        await client.query(`INSERT INTO ${t.name} (${cols}) ${overriding} VALUES (${vals}) ON CONFLICT DO NOTHING`, data);
       }
       restored++;
     }

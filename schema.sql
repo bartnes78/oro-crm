@@ -181,3 +181,12 @@ DO $$ BEGIN
     ALTER TABLE investors DROP COLUMN product_interests;
   END IF;
 END $$;
+
+CREATE TABLE IF NOT EXISTS backups (
+  id          SERIAL PRIMARY KEY,
+  stamp       TEXT NOT NULL,
+  table_name  TEXT NOT NULL,
+  data        JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(stamp, table_name)
+);
