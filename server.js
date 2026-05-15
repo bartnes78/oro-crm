@@ -53,12 +53,6 @@ function fmtUser(row) {
   return { _id: row.id, username: row.username, displayName: row.display_name, role: row.role };
 }
 
-function weighted(inv) {
-  return (inv.target_ticket != null && inv.probability != null)
-    ? Math.round(inv.target_ticket * inv.probability * 10) / 10
-    : null;
-}
-
 // ── Backup ────────────────────────────────────────────────────────────────────
 async function runBackup() {
   const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
@@ -342,7 +336,7 @@ app.get('/api/analyse', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
-      query('SELECT * FROM investors'),
+      query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
       query('SELECT investor_id, target_ticket, probability FROM product_investors WHERE target_ticket IS NOT NULL'),
       query('SELECT * FROM products'),
