@@ -259,7 +259,7 @@ function validateInvestorBody(body, requireName = true) {
 }
 
 // ── Analyse ───────────────────────────────────────────────────────────────────
-app.get('/api/analyse', requireAuth, async (req, res) => {
+app.get('/api/analyse', async (req, res) => {
   try {
     const [{ rows: products }, { rows: piRows }, { rows: investors }, { rows: logRows }] = await Promise.all([
       query('SELECT * FROM products ORDER BY id'),
