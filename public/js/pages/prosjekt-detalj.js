@@ -324,13 +324,7 @@ function renderTable() {
     const lastContactText  = inv.last_contact
       ? (stale ? `${days} dager siden` : inv.last_contact) : '—';
 
-    const declineContent = inv.phase === 'Ikke relevant nå'
-      ? (inv.decline_reason
-          ? `<span style="color:#c0392b;">${esc(inv.decline_reason)}</span>`
-          : `<span style="opacity:.35;">Sett årsak</span>`)
-      : `<span style="color:var(--muted);">—</span>`;
-
-    const declineCursor = inv.phase === 'Ikke relevant nå' ? 'cursor:pointer;' : '';
+    const alreadyDeclined = _declinedOffers.some(d => d.investor_id === inv.id);
 
     return `<tr data-inv-id="${esc(String(inv.id))}" style="${status === 'saving' ? 'opacity:.6;' : ''}">
       ${statusCell}
@@ -361,14 +355,7 @@ function renderTable() {
       <td class="text-right" style="font-weight:600;">
         ${fmtVal(weighted, 1) ?? '—'}
       </td>
-      <td class="decline-cell" data-inv-id="${esc(String(inv.id))}"
-        data-phase="${esc(inv.phase || '')}"
-        style="${declineCursor}font-size:12px;white-space:nowrap;"
-        title="${inv.phase === 'Ikke relevant nå' ? 'Klikk for å endre avlagsårsak' : ''}">
-        ${declineContent}
-        ${inv.phase === 'Ikke relevant nå'
-          ? `<span style="margin-left:3px;opacity:.2;font-size:10px;">✎</span>` : ''}
-      </td>
+      <td style="font-size:12px;color:var(--muted);">—</td>
       <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         ${esc(inv.next_steps || '—')}
       </td>
@@ -378,11 +365,13 @@ function renderTable() {
         ${esc(lastContactText)}
       </td>
       <td style="text-align:right;white-space:nowrap;">
-        <button class="register-decline-btn"
-          data-inv-id="${esc(String(inv.id))}"
-          data-inv-name="${esc(inv.name || '')}"
-          style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #c0392b;background:none;color:#c0392b;cursor:pointer;opacity:.6;"
-          title="Registrer avslag for dette prosjektet">Avslag</button>
+        ${alreadyDeclined
+          ? `<span style="font-size:11px;color:#c0392b;opacity:.5;">Avslått ✓</span>`
+          : `<button class="register-decline-btn"
+              data-inv-id="${esc(String(inv.id))}"
+              data-inv-name="${esc(inv.name || '')}"
+              style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #c0392b;background:none;color:#c0392b;cursor:pointer;opacity:.6;"
+              title="Registrer avslag for dette prosjektet">Avslag</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -597,48 +586,6 @@ function attachTableEvents() {
     btn.addEventListener('click', () => openDeclineModal(btn.dataset.invId, btn.dataset.invName));
   });
 
-  // Decline cells
-  wrap.querySelectorAll('.decline-cell').forEach(td => {
-    if (td.dataset.phase !== 'Ikke relevant nå') return;
-    td.addEventListener('click', () => {
-      if (td.querySelector('select')) return;
-      const invId = td.dataset.invId;
-      const inv   = _investors.find(i => String(i.id) === invId);
-      if (!inv) return;
-      const sel = document.createElement('select');
-      sel.style.cssText = 'font-size:12px;padding:3px 6px;border-radius:5px;border:2px solid var(--blue);outline:none;';
-      const blank = document.createElement('option');
-      blank.value = ''; blank.textContent = '— Velg årsak —';
-      sel.appendChild(blank);
-      DECLINE_REASONS.forEach(r => {
-        const opt = document.createElement('option');
-        opt.value = r; opt.textContent = r;
-        if (r === inv.decline_reason) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      td.innerHTML = '';
-      td.appendChild(sel);
-      sel.focus();
-
-      const commit = async (newVal) => {
-        const val = newVal || null;
-        if (val === inv.decline_reason) { refreshTable(); return; }
-        setSaving(inv.id, 'saving');
-        try {
-          await api.updateProductInvestor(_productId, inv.id, { decline_reason: val });
-          _investors = _investors.map(i => i.id === inv.id ? { ...i, decline_reason: val } : i);
-          setSaving(inv.id, 'ok');
-          scheduleOkClear(inv.id);
-        } catch {
-          setSaving(inv.id, 'err');
-        }
-        refreshTable();
-      };
-
-      sel.addEventListener('change', () => commit(sel.value));
-      sel.addEventListener('blur',   () => commit(sel.value));
-    });
-  });
 }
 
 // ── Saving state helpers ──────────────────────────────────────────────────────
@@ -763,28 +710,28 @@ function openDeclineModal(invId, invName) {
         <button id="decline-cancel-btn" class="btn btn-ghost btn-sm">Avbryt</button>
         <button id="decline-save-btn" class="btn btn-sm" style="background:#c0392b;color:#fff;border:none;">Registrer avslag</button>
       </div>
-    </div>`, (modal) => {
-    modal.querySelector('#decline-cancel-btn').addEventListener('click', window.closeModal);
-    modal.querySelector('#decline-save-btn').addEventListener('click', async () => {
-      const reason = modal.querySelector('#decline-reason-sel').value;
-      const date   = modal.querySelector('#decline-date-inp').value;
-      const errEl  = modal.querySelector('#decline-err');
-      if (!reason) { errEl.textContent = 'Velg en årsak.'; errEl.style.display = ''; return; }
-      try {
-        const result = await api.addDeclinedOffer({
-          product_id: _productId, investor_id: invId,
-          decline_reason: reason, declined_at: date || null,
-        });
-        const existing = _declinedOffers.findIndex(d => d.investor_id === invId);
-        if (existing >= 0) _declinedOffers[existing] = result;
-        else _declinedOffers.unshift(result);
-        window.closeModal();
-        renderContent();
-      } catch (e) {
-        errEl.textContent = e.message || 'Lagring feilet.';
-        errEl.style.display = '';
-      }
-    });
+    </div>`);
+
+  document.getElementById('decline-cancel-btn').addEventListener('click', window.closeModal);
+  document.getElementById('decline-save-btn').addEventListener('click', async () => {
+    const reason = document.getElementById('decline-reason-sel').value;
+    const date   = document.getElementById('decline-date-inp').value;
+    const errEl  = document.getElementById('decline-err');
+    if (!reason) { errEl.textContent = 'Velg en årsak.'; errEl.style.display = ''; return; }
+    try {
+      const result = await api.addDeclinedOffer({
+        product_id: _productId, investor_id: invId,
+        decline_reason: reason, declined_at: date || null,
+      });
+      const existing = _declinedOffers.findIndex(d => d.investor_id === invId);
+      if (existing >= 0) _declinedOffers[existing] = result;
+      else _declinedOffers.unshift(result);
+      window.closeModal();
+      renderContent();
+    } catch (e) {
+      errEl.textContent = e.message || 'Lagring feilet.';
+      errEl.style.display = '';
+    }
   });
 }
 
