@@ -32,6 +32,8 @@ function fmtInvestor(row) {
     advisor:           row.advisor,
     target_ticket:     row.target_ticket,
     probability:       row.probability,
+    committed_amount:  row.committed_amount  ?? null,
+    decline_reason:    row.decline_reason    ?? null,
     first_close:       row.first_close || 0,
     source:            row.source,
     next_steps:        row.next_steps,
