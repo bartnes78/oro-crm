@@ -31,7 +31,10 @@ function buildFundStats(fundStats) {
     return `
       <div style="padding:12px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-          <span style="font-weight:600;font-size:14px">${esc(f.name)}</span>
+          <button class="fund-nav-btn" data-id="${esc(String(f.id))}"
+            style="background:none;border:none;padding:0;cursor:pointer;font-weight:600;font-size:14px;color:var(--blue);text-align:left">
+            ${esc(f.name)}
+          </button>
           <span style="font-size:12px;color:var(--muted)">${f.investorCount} investorer</span>
         </div>
         ${f.target_size ? `
@@ -55,7 +58,7 @@ function buildFundStats(fundStats) {
   }).join('');
   return `
     <div class="card" style="margin-bottom:20px">
-      <div class="card-title">Fondsstatus</div>
+      <div class="card-title">Status fond og prosjekt</div>
       ${rows}
     </div>`;
 }
@@ -196,6 +199,10 @@ export async function render(el) {
         </div>
         ${buildActivity(data.monthly, data.byResponsible)}
       </div>`;
+
+    el.querySelectorAll('.fund-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.id));
+    });
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:red">Feil: ${esc(e.message)}</p></div>`;
   }

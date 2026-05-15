@@ -91,10 +91,10 @@ const NAV_MAIN = [
   { id:'epost',      icon:'✉', label:'Importer fra Outlook' },
   { id:'oppfolging', icon:'⏱', label:'Oppfølging' },
   { id:'oppgaver',   icon:'☑', label:'Oppgaver' },
-  { id:'prosjekter', icon:'◧', label:'Prosjekter' },
   { id:'analyse',    icon:'📊', label:'Analyse' },
 ];
 const NAV_ADMIN = [
+  { id:'prosjekter',   icon:'◧', label:'Prosjekter' },
   { id:'bulk',         icon:'⊞',  label:'Bulkredigering' },
   { id:'duplikater',   icon:'⧉',  label:'Duplikater' },
   { id:'dupkontakter', icon:'👥', label:'Duplikate kontakter', iconColor:'#E67E22' },
@@ -107,9 +107,9 @@ function buildSidebar() {
 
   let html = NAV_MAIN.map(i => navItem(i)).join('');
   html += `<button class="nav-group-header" id="admin-toggle">
-    <span class="nav-icon" style="font-size:10px">▾</span> Administrasjon
+    <span class="nav-icon" id="admin-arrow" style="font-size:10px">▸</span> Administrasjon
   </button>
-  <div id="admin-items">
+  <div id="admin-items" style="display:none">
     ${NAV_ADMIN.map(i => navItem(i)).join('')}
     ${isAdmin ? navItem({ id:'brukere', icon:'👤', label:'Brukere', iconColor:'#8E44AD' }) : ''}
   </div>`;
@@ -119,8 +119,11 @@ function buildSidebar() {
     btn.addEventListener('click', () => window.navigate(btn.dataset.page));
   });
   document.getElementById('admin-toggle').addEventListener('click', () => {
-    const d = document.getElementById('admin-items');
-    d.style.display = d.style.display === 'none' ? '' : 'none';
+    const d     = document.getElementById('admin-items');
+    const arrow = document.getElementById('admin-arrow');
+    const open  = d.style.display === 'none';
+    d.style.display  = open ? '' : 'none';
+    arrow.textContent = open ? '▾' : '▸';
   });
 
   updateSidebarActive();
@@ -133,6 +136,8 @@ function navItem(i) {
   </button>`;
 }
 
+const ADMIN_PAGES = new Set(['prosjekter','prosjektDetalj','bulk','duplikater','dupkontakter','backup','brukere']);
+
 function updateSidebarActive() {
   const cur = state.page === 'detalj' ? 'investorer'
             : state.page === 'prosjektDetalj' ? 'prosjekter'
@@ -140,6 +145,16 @@ function updateSidebarActive() {
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.page === cur);
   });
+
+  // Auto-expand admin section when navigating to an admin page
+  if (ADMIN_PAGES.has(state.page)) {
+    const d     = document.getElementById('admin-items');
+    const arrow = document.getElementById('admin-arrow');
+    if (d && d.style.display === 'none') {
+      d.style.display   = '';
+      if (arrow) arrow.textContent = '▾';
+    }
+  }
 
   const userSpan = document.getElementById('sidebar-user');
   if (userSpan && state.currentUser) {
