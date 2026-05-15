@@ -37,17 +37,17 @@ function buildFundStats(fundStats) {
         ${f.target_size ? `
         <div style="background:var(--border);border-radius:4px;height:8px;margin-bottom:6px;position:relative;overflow:hidden">
           <div style="position:absolute;left:0;top:0;height:100%;width:${pctPipeline}%;background:rgba(180,140,60,.35);border-radius:4px"></div>
-          <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:#1E8449;border-radius:4px"></div>
+          <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:var(--color-signed);border-radius:4px"></div>
         </div>
         <div style="display:flex;gap:20px;font-size:12px">
-          <span style="color:#1E8449"><b>${fmt(f.signedTicket, 0)} MNOK</b> tegnet (${pct}% av mål)</span>
+          <span style="color:var(--color-signed)"><b>${fmt(f.signedTicket, 0)} MNOK</b> tegnet (${pct}% av mål)</span>
           <span style="color:var(--muted)">Vektet pipeline: ${fmt(f.weighted, 0)} MNOK (${pctPipeline}%)</span>
           <span style="color:var(--muted)">Mål: ${fmt(f.target_size, 0)} MNOK</span>
         </div>
         ` : `
         <div style="font-size:12px;color:var(--muted)">
           Vektet: <b style="color:var(--text)">${fmt(f.weighted, 0)} MNOK</b> &nbsp;·&nbsp;
-          Tegnet: <b style="color:#1E8449">${fmt(f.signedTicket, 0)} MNOK</b>
+          Tegnet: <b style="color:var(--color-signed)">${fmt(f.signedTicket, 0)} MNOK</b>
           &nbsp;(${f.signedCount} inv.)
         </div>
         `}
@@ -65,7 +65,7 @@ function buildPhaseChart(byPhase) {
   const COLORS = {
     'Prospekt':'#1A5276','Ny kontakt':'#0F4949','Intro sendt':'#1A7A5E',
     'Møte avtalt':'#9A6A1E','Aktiv dialog':'#2155A3',
-    'Tegnet':'#1E8449','Ikke relevant nå':'#717D87','Onboardet':'#1A5C1A',
+    'Tegnet':'var(--color-signed)','Ikke relevant nå':'#717D87','Onboardet':'#1A5C1A',
   };
   const max = Math.max(...byPhase.map(p => p.count), 1);
   const rows = byPhase.map(p => {
@@ -178,7 +178,7 @@ function buildKPIs(fundStats) {
         <div class="kpi-value">${fmt(totalWeighted, 0)}</div>
         <div class="kpi-sub">MNOK (ticket × sanns.)</div>
       </div>
-      <div class="kpi-card" style="border-top-color:#1E8449">
+      <div class="kpi-card" style="border-top-color:var(--color-signed)">
         <div class="kpi-label">Tegnet</div>
         <div class="kpi-value">${fmt(totalSigned, 0)}</div>
         <div class="kpi-sub">MNOK</div>

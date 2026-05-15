@@ -44,6 +44,10 @@
       --border:#D8E3E2; --text:#333333; --muted:#6A7A7A;
       --blue:#267777; --blue-l:#E0EFEC;
       --red:#5C1522; --burgundy:#5C1522; --amber:#C0772A;
+      --color-signed:#1A7A5E;
+      --color-pipeline:#2155A3;
+      --color-warning:#9A6A1E;
+      --color-declined:#717D87;
     }
 
     *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -80,7 +84,7 @@
     @media(max-width:640px){ .topbar { height:auto; padding:8px 12px; flex-wrap:wrap; gap:6px; } .topbar-title { font-size:14px; } }
 
     /* ── Content ── */
-    .content { padding:20px; }
+    .content { padding:20px; max-width:1400px; margin:0 auto; }
     @media(max-width:640px){ .content { padding:12px; } }
 
     /* ── KPI cards ── */
@@ -91,7 +95,7 @@
     .kpi-sub   { font-size:11px; color:var(--muted); margin-top:2px; }
 
     /* ── Cards ── */
-    .card { background:var(--card); border-radius:8px; border:1px solid var(--border); padding:18px; margin-bottom:16px; }
+    .card { background:var(--card); border-radius:8px; border:1px solid var(--border); padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     .card-title { font-size:10px; font-weight:700; color:var(--muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:.7px; }
 
     /* ── Grid ── */
@@ -190,6 +194,16 @@
     /* ── Product pills ── */
     .prod-pills { display:flex; gap:4px; flex-wrap:wrap; }
     .prod-pill  { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:var(--green-20); color:var(--green); white-space:nowrap; }
+
+    /* ── Icon buttons (replace onmouseenter/leave) ── */
+    .icon-btn { background:none; border:none; cursor:pointer; padding:0 4px; line-height:1; opacity:.45; min-width:28px; min-height:28px; display:inline-flex; align-items:center; justify-content:center; transition:opacity .15s; font-size:13px; color:var(--muted); border-radius:4px; }
+    .icon-btn:hover { opacity:1; }
+    .icon-btn-danger { color:#c0392b; }
+    .icon-btn-sm { min-width:22px; min-height:22px; font-size:11px; }
+
+    /* ── Editable table cells ── */
+    .editable-cell { cursor:text; }
+    .editable-cell:hover { background:var(--bg) !important; }
 
     /* ── Misc ── */
     .text-muted { color:var(--muted); }

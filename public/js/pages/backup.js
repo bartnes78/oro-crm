@@ -35,7 +35,7 @@ export async function render(el, state) {
       const isRestored  = b.stamp === restoredStamp;
       const isRestoring = b.stamp === restoringStamp;
       const btnText = isRestoring ? 'Gjenoppretter…' : isRestored ? '✓ Gjenopprettet' : 'Gjenopprett';
-      const btnColor = isRestored ? 'color:#1A8A6A' : '';
+      const btnColor = isRestored ? 'color:var(--color-signed)' : '';
 
       return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
         <span style="font-size:13px;flex:1">📦 ${window.escHtml(formatStamp(b.stamp))}</span>
@@ -61,7 +61,7 @@ export async function render(el, state) {
           </p>
 
           ${restoredStamp ? `
-            <div style="padding:10px 14px;background:rgba(26,138,106,.1);border:1px solid #1A8A6A;border-radius:7px;margin-bottom:16px;font-size:13px;color:#1A8A6A;font-weight:600">
+            <div style="padding:10px 14px;background:rgba(26,138,106,.1);border:1px solid var(--color-signed);border-radius:7px;margin-bottom:16px;font-size:13px;color:var(--color-signed);font-weight:600">
               ✓ Gjenopprettet fra ${window.escHtml(formatStamp(restoredStamp))} — last inn siden på nytt for å se endringene.
             </div>` : ''}
 

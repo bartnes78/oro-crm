@@ -5,7 +5,7 @@ const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];
 
 const STATUS_COLOR = {
   'Fundraising': '#D4AC0D',
-  'Aktiv':       '#1A8A6A',
+  'Aktiv':       'var(--color-signed)',
   'Avsluttet':   '#717D87',
   'Pipeline':    '#2471A3',
 };

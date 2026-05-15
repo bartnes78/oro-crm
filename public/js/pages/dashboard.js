@@ -6,7 +6,7 @@ const PHASE_COLORS = {
   'Intro sendt':      '#1A7A5E',
   'Møte avtalt':      '#9A6A1E',
   'Aktiv dialog':     '#2155A3',
-  'Tegnet':           '#1E8449',
+  'Tegnet':           'var(--color-signed)',
   'Ikke relevant nå': '#717D87',
   'Onboardet':        '#1A5C1A',
 };
@@ -63,7 +63,7 @@ function buildKPIs(data) {
         <div class="kpi-label">Investorer totalt</div>
         <div class="kpi-value">${fmt(data.total)}</div>
       </div>
-      <div class="kpi-card" style="border-top-color:#1E8449">
+      <div class="kpi-card" style="border-top-color:var(--color-signed)">
         <div class="kpi-label">Aggregert volum</div>
         <div class="kpi-value">${fmt(data.ticket)}</div>
         <div class="kpi-sub">MNOK målticket</div>

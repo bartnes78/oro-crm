@@ -199,7 +199,7 @@ function matchCardHtml(inv, score, via, checked) {
   const scoreC  = score > 0.85 ? 'var(--green)' : score > 0.5 ? '#9A6A1E' : '#888';
   const phaseBadge = inv.phase ? `<span class="badge">${window.escHtml(inv.phase)}</span>` : '';
   const leadStr = inv.lead ? `<span style="font-size:11px;color:#888">· ${window.escHtml(inv.lead)}</span>` : '';
-  const viaStr  = via ? `<span style="font-size:10px;color:var(--green,#1A8A6A);margin-left:auto">↳ ${window.escHtml(via)}</span>` : '';
+  const viaStr  = via ? `<span style="font-size:10px;color:var(--green,var(--color-signed));margin-left:auto">↳ ${window.escHtml(via)}</span>` : '';
   const scoreTag = score != null
     ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${scoreBg};color:${scoreC};flex-shrink:0">${Math.round(score * 100)}%</span>` : '';
 
@@ -228,7 +228,7 @@ function dropZoneHtml() {
       style="border:2px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;background:#fafbfa;transition:all .15s;margin-bottom:16px">
       <input id="file-input" type="file" accept=".msg,.ics" style="display:none">
       <div style="font-size:40px;margin-bottom:12px;opacity:.5">✉</div>
-      <p style="font-weight:700;font-size:15px;color:var(--green,#1A8A6A);margin-bottom:4px">Dra .msg eller .ics hit</p>
+      <p style="font-weight:700;font-size:15px;color:var(--green,var(--color-signed));margin-bottom:4px">Dra .msg eller .ics hit</p>
       <p style="font-size:13px;color:#888">eller klikk for å velge fil</p>
       <p style="font-size:11px;color:#bbb;margin-top:8px">E-post og møteforespørsler (.msg) · Kalenderinvitasjoner (.ics)</p>
     </div>
@@ -257,7 +257,7 @@ function logFormHtml(form, lookups, selectedCount, isCalendar) {
   const logTypeOpts = logTypes.map(t => `<option value="${window.escHtml(t)}"${t === form.log_type ? ' selected' : ''}>${window.escHtml(t)}</option>`).join('');
   const leadOpts    = `<option value="">—</option>` + leads.map(l => `<option value="${window.escHtml(l)}"${l === form.responsible ? ' selected' : ''}>${window.escHtml(l)}</option>`).join('');
 
-  const statusAvholdt  = form.status === 'avholdt'  ? 'border-color:#1A8A6A;background:rgba(26,138,106,.1);color:#1A8A6A;font-weight:600' : 'border-color:var(--border);color:var(--muted)';
+  const statusAvholdt  = form.status === 'avholdt'  ? 'border-color:var(--color-signed);background:rgba(26,138,106,.1);color:var(--color-signed);font-weight:600' : 'border-color:var(--border);color:var(--muted)';
   const statusPlanlagt = form.status === 'planlagt' ? 'border-color:var(--blue);background:rgba(52,152,219,.1);color:var(--blue);font-weight:600' : 'border-color:var(--border);color:var(--muted)';
 
   const locationField = isCalendar ? `

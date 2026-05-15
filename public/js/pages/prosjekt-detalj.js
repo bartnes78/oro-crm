@@ -17,7 +17,7 @@ const DECLINE_REASONS = [
 const TYPES    = ['Fond', 'Prosjekt', 'Co-invest', 'Annet'];
 const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];
 const STATUS_COLOR = {
-  'Fundraising': '#D4AC0D', 'Aktiv': '#1A8A6A', 'Avsluttet': '#717D87', 'Pipeline': '#2471A3',
+  'Fundraising': '#D4AC0D', 'Aktiv': 'var(--color-signed)', 'Avsluttet': '#717D87', 'Pipeline': '#2471A3',
 };
 
 // ── Module state ──────────────────────────────────────────────────────────────
@@ -111,9 +111,9 @@ function renderContent() {
           <div style="text-align:right;">
             <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Tegnet av mål</div>
             <div style="width:180px;height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
-              <div style="width:${Math.min(fillPct, 100)}%;height:100%;background:#1E8449;border-radius:4px;"></div>
+              <div style="width:${Math.min(fillPct, 100)}%;height:100%;background:var(--color-signed);border-radius:4px;"></div>
             </div>
-            <div style="font-size:12px;font-weight:700;color:#1E8449;margin-top:4px;">
+            <div style="font-size:12px;font-weight:700;color:var(--color-signed);margin-top:4px;">
               ${fmt(signedTicket)} / ${fmt(_product.target_size)} MNOK (${fillPct}%)
             </div>
           </div>` : ''}
@@ -135,10 +135,10 @@ function renderContent() {
       ${_showPct && _product.target_size
         ? kpiCard('Estimert volum', `${fmt(totalWeighted / _product.target_size * 100, 1)} %`, 'av målet', '#D35400')
         : kpiCard('Estimert volum', `${fmt(totalWeighted, 1)} M`, 'ticket × sanns.', '#D35400')}
-      <div class="kpi-card" style="border-top-color:#1E8449;">
+      <div class="kpi-card" style="border-top-color:var(--color-signed);">
         <div class="kpi-label">Tegnet</div>
         <div class="kpi-value">${signed.length} inv.</div>
-        ${signedTicket ? `<div class="kpi-value" style="font-size:1.35rem;color:#1E8449;">
+        ${signedTicket ? `<div class="kpi-value" style="font-size:1.35rem;color:var(--color-signed);">
           ${_showPct && _product.target_size
             ? fmt(signedTicket / _product.target_size * 100, 1) + ' %'
             : fmt(signedTicket, 0) + ' MNOK'}
@@ -322,21 +322,21 @@ function renderTable() {
         <span class="inv-link" data-inv-id="${esc(String(inv.id))}"
           style="cursor:pointer;color:var(--blue);">${esc(inv.name || '')}</span>
       </td>
-      <td class="phase-cell" data-inv-id="${esc(String(inv.id))}" data-phase="${esc(inv.phase || '')}"
-        style="cursor:pointer;white-space:nowrap;" title="Klikk for å endre fase">
+      <td class="phase-cell editable-cell" data-inv-id="${esc(String(inv.id))}" data-phase="${esc(inv.phase || '')}"
+        style="white-space:nowrap;" title="Klikk for å endre fase">
         <span class="badge badge-${phaseClass}">${esc(inv.phase || '—')}</span>
         <span style="margin-left:4px;opacity:.25;font-size:10px;">✎</span>
       </td>
       <td style="font-size:12px;color:var(--muted);">${esc(inv.lead || '—')}</td>
-      <td class="ticket-cell text-right" data-inv-id="${esc(String(inv.id))}"
+      <td class="ticket-cell editable-cell text-right" data-inv-id="${esc(String(inv.id))}"
         data-val="${inv.target_ticket != null ? inv.target_ticket : ''}"
-        style="cursor:pointer;" title="Klikk for å endre">
+        title="Klikk for å endre">
         ${fmtVal(inv.target_ticket, 1) ?? `<span style="opacity:.25;">—</span>`}
         <span style="margin-left:3px;opacity:.2;font-size:10px;">✎</span>
       </td>
-      <td class="prob-cell text-right" data-inv-id="${esc(String(inv.id))}"
+      <td class="prob-cell editable-cell text-right" data-inv-id="${esc(String(inv.id))}"
         data-val="${inv.probability != null ? inv.probability : ''}"
-        style="cursor:pointer;" title="Klikk for å endre">
+        title="Klikk for å endre">
         ${inv.probability != null
           ? Math.round(inv.probability * 100) + '%'
           : `<span style="opacity:.25;">—</span>`}
@@ -393,7 +393,7 @@ function renderTable() {
             <td class="text-right" style="font-size:13px;padding-top:8px;padding-bottom:8px;">
               ${fmtVal(sumTicket, 1) ?? '—'}
               ${!pctBase && _product?.target_size && sumTicket > 0
-                ? `<div style="font-size:10px;font-weight:400;color:${sumTicket / _product.target_size > 1 ? '#e07000' : '#1A8A6A'};">
+                ? `<div style="font-size:10px;font-weight:400;color:${sumTicket / _product.target_size > 1 ? '#e07000' : 'var(--color-signed)'};">
                     ${fmt(sumTicket / _product.target_size * 100, 0)} % av mål
                    </div>`
                 : ''}

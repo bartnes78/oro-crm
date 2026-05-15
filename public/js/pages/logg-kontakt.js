@@ -116,7 +116,7 @@ function buildHTML(lookups, currentUserName) {
             <label>Status</label>
             <div style="display:flex;gap:8px;margin-top:4px;" id="lk-status-wrap">
               <button type="button" class="lk-status-btn" data-status="avholdt"
-                style="flex:1;padding:8px 0;border-radius:7px;border:2px solid #1A8A6A;background:rgba(26,138,106,.1);color:#1A8A6A;font-weight:600;font-size:13px;cursor:pointer;min-height:44px;">
+                style="flex:1;padding:8px 0;border-radius:7px;border:2px solid var(--color-signed);background:rgba(26,138,106,.1);color:var(--color-signed);font-weight:600;font-size:13px;cursor:pointer;min-height:44px;">
                 &#10003; Avholdt
               </button>
               <button type="button" class="lk-status-btn" data-status="planlagt"
@@ -193,9 +193,9 @@ function setupEvents(el, state) {
       statusWrap.querySelectorAll('.lk-status-btn').forEach(b => {
         const active = b.dataset.status === s;
         const isPlan = b.dataset.status === 'planlagt';
-        b.style.borderColor = active ? (isPlan ? 'var(--blue)' : '#1A8A6A') : 'var(--border)';
+        b.style.borderColor = active ? (isPlan ? 'var(--blue)' : 'var(--color-signed)') : 'var(--border)';
         b.style.background  = active ? (isPlan ? 'rgba(52,152,219,.1)' : 'rgba(26,138,106,.1)') : 'transparent';
-        b.style.color       = active ? (isPlan ? 'var(--blue)' : '#1A8A6A') : 'var(--muted)';
+        b.style.color       = active ? (isPlan ? 'var(--blue)' : 'var(--color-signed)') : 'var(--muted)';
       });
     });
   });
@@ -368,9 +368,9 @@ function setupEvents(el, state) {
       // Reset status buttons
       statusWrap.querySelectorAll('.lk-status-btn').forEach(b => {
         const isAvholdt = b.dataset.status === 'avholdt';
-        b.style.borderColor = isAvholdt ? '#1A8A6A' : 'var(--border)';
+        b.style.borderColor = isAvholdt ? 'var(--color-signed)' : 'var(--border)';
         b.style.background  = isAvholdt ? 'rgba(26,138,106,.1)' : 'transparent';
-        b.style.color       = isAvholdt ? '#1A8A6A' : 'var(--muted)';
+        b.style.color       = isAvholdt ? 'var(--color-signed)' : 'var(--muted)';
       });
 
     } catch (e) {

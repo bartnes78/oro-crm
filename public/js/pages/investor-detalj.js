@@ -20,12 +20,9 @@ function buildDetailHeader(inv, products) {
     <span style="display:inline-flex;align-items:center;gap:4px;">
       <span>&#9733; ${window.escHtml(p.name)}</span>
       <button
-        class="btn-quick-decline"
+        class="icon-btn icon-btn-danger icon-btn-sm btn-quick-decline"
         data-product-id="${window.escHtml(String(p._id))}"
         title="Registrer avslag"
-        style="background:none;border:none;cursor:pointer;color:#e74c3c;font-size:13px;padding:0 2px;line-height:1;opacity:.5;min-width:24px;min-height:24px;display:inline-flex;align-items:center;justify-content:center;"
-        onmouseenter="this.style.opacity=1"
-        onmouseleave="this.style.opacity=.5"
       >&#x2715;</button>
     </span>
   `).join('');
@@ -149,7 +146,7 @@ function buildDocsCard(inv, products) {
       <details ${!archived ? 'open' : ''} style="margin-bottom:8px;opacity:${archived ? .65 : 1};">
         <summary style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);cursor:pointer;padding-bottom:8px;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
           ${window.escHtml(p.name)}
-          ${doneCount > 0 ? `<span style="color:${archived ? 'var(--muted)' : '#1A8A6A'};font-size:11px;">&#10003; ${doneCount}/${docItems.length}</span>` : ''}
+          ${doneCount > 0 ? `<span style="color:${archived ? 'var(--muted)' : 'var(--color-signed)'};font-size:11px;">&#10003; ${doneCount}/${docItems.length}</span>` : ''}
           ${archived ? '<span style="font-size:10px;color:var(--muted);font-style:italic;">arkivert</span>' : ''}
         </summary>
         <div style="display:flex;flex-direction:column;padding-left:4px;padding-bottom:8px;">
@@ -190,7 +187,7 @@ function buildContactsCard(inv, visInaktive) {
               </div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 ${!inaktiv ? `<button class="btn btn-ghost btn-sm contact-edit-btn" data-contact-id="${window.escHtml(String(c._id))}" style="font-size:11px;padding:2px 8px;min-height:32px;">Rediger</button>` : ''}
-                <button class="btn btn-ghost btn-sm contact-toggle-btn" data-contact-id="${window.escHtml(String(c._id))}" data-active="${inaktiv ? 0 : 1}" style="font-size:11px;padding:2px 8px;color:${inaktiv ? '#1A8A6A' : '#e07000'};min-height:32px;">${inaktiv ? 'Aktiver' : 'Deaktiver'}</button>
+                <button class="btn btn-ghost btn-sm contact-toggle-btn" data-contact-id="${window.escHtml(String(c._id))}" data-active="${inaktiv ? 0 : 1}" style="font-size:11px;padding:2px 8px;color:${inaktiv ? 'var(--color-signed)' : '#e07000'};min-height:32px;">${inaktiv ? 'Aktiver' : 'Deaktiver'}</button>
                 <button class="btn btn-ghost btn-sm contact-delete-btn" data-contact-id="${window.escHtml(String(c._id))}" style="font-size:11px;padding:2px 8px;color:#e74c3c;min-height:32px;">Slett</button>
               </div>
             </div>
@@ -264,13 +261,13 @@ function buildProductCard(inv, products, piData) {
             <span style="font-size:12px;color:var(--muted);">%</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
-            ${isTegnet ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(26,138,106,.12);color:#1A8A6A;font-weight:700;">&#10003; Tegnet${pi.committed_amount ? ' ' + pi.committed_amount + 'M' : ''}</span>` : ''}
+            ${isTegnet ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(26,138,106,.12);color:var(--color-signed);font-weight:700;">&#10003; Tegnet${pi.committed_amount ? ' ' + pi.committed_amount + 'M' : ''}</span>` : ''}
             ${isDeclined ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(231,76,60,.08);color:#e74c3c;font-weight:600;">Avsl&aring;tt</span>` : ''}
             <button class="pi-tegnet-btn btn btn-ghost btn-sm"
               data-pid="${window.escHtml(String(p._id))}"
               data-pname="${window.escHtml(p.name)}"
               data-committed="${pi.committed_amount != null ? pi.committed_amount : ''}"
-              style="font-size:11px;color:#1A8A6A;border-color:#1A8A6A;min-height:28px;padding:2px 8px;">
+              style="font-size:11px;color:var(--color-signed);border-color:var(--color-signed);min-height:28px;padding:2px 8px;">
               ${isTegnet ? 'Endre tegning' : '+ Tegnet'}
             </button>
             <button class="btn-quick-decline btn btn-ghost btn-sm"
@@ -292,7 +289,7 @@ function buildProductCard(inv, products, piData) {
       ${totalCommitted > 0 ? `
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Totalt tegnet</div>
-          <div style="font-size:18px;font-weight:700;color:#1A8A6A;">${window.fmt(totalCommitted, 1)} MNOK</div>
+          <div style="font-size:18px;font-weight:700;color:var(--color-signed);">${window.fmt(totalCommitted, 1)} MNOK</div>
         </div>` : ''}
     </div>
   ` : '';
@@ -332,15 +329,11 @@ function buildLogCard(inv, products) {
           ${l.contact_person ? `<span style="font-size:12px;color:#555;">${window.escHtml(l.contact_person)}</span>` : ''}
           <span class="log-who" style="font-size:12px;color:var(--muted);">${window.escHtml(l.responsible || '')}</span>
           ${isPlanlagt ? `
-            <button class="btn log-marker-avholdt" data-log-id="${window.escHtml(String(l._id))}" style="margin-left:4px;font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid #1A8A6A;background:rgba(26,138,106,.08);color:#1A8A6A;cursor:pointer;font-weight:600;min-height:28px;">
+            <button class="btn log-marker-avholdt" data-log-id="${window.escHtml(String(l._id))}" style="margin-left:4px;font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid var(--color-signed);background:rgba(26,138,106,.08);color:var(--color-signed);cursor:pointer;font-weight:600;min-height:28px;">
               &#10003; Marker avholdt
             </button>` : ''}
-          <button class="btn log-edit-btn" data-log-id="${window.escHtml(String(l._id))}" title="Rediger"
-            style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 4px;line-height:1;opacity:.5;min-width:28px;min-height:28px;"
-            onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.5">&#9998;</button>
-          <button class="btn log-delete-btn" data-log-id="${window.escHtml(String(l._id))}" title="Slett"
-            style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;line-height:1;opacity:.5;min-width:28px;min-height:28px;"
-            onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.5">&#x2715;</button>
+          <button class="icon-btn log-edit-btn" data-log-id="${window.escHtml(String(l._id))}" title="Rediger" style="margin-left:auto;">&#9998;</button>
+          <button class="icon-btn icon-btn-danger log-delete-btn" data-log-id="${window.escHtml(String(l._id))}" title="Slett">&#x2715;</button>
         </div>
         ${l.subject ? `<div class="log-subject" style="font-size:13px;font-weight:600;margin-top:4px;">${window.escHtml(l.subject)}</div>` : ''}
         ${l.outcome ? `<div class="log-outcome" style="font-size:12px;color:#555;margin-top:2px;">${window.escHtml(l.outcome)}</div>` : ''}
@@ -384,9 +377,7 @@ function buildTasksCard(tasks) {
             ${t.responsible ? `<span>&#128100; ${window.escHtml(t.responsible)}</span>` : ''}
           </div>
         </div>
-        <button class="task-delete-btn" data-task-id="${window.escHtml(String(t._id))}"
-          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;opacity:.4;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;"
-          onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.4">&#x2715;</button>
+        <button class="icon-btn icon-btn-danger task-delete-btn" data-task-id="${window.escHtml(String(t._id))}">&#x2715;</button>
       </div>
     `).join('');
 
@@ -443,9 +434,9 @@ function buildStatusToggle(currentStatus) {
   return ['avholdt', 'planlagt'].map(s => `
     <button type="button" class="status-toggle-btn" data-status="${s}"
       style="flex:1;padding:8px 0;border-radius:7px;border:2px solid;min-height:44px;
-        border-color:${currentStatus === s ? (s === 'planlagt' ? 'var(--blue)' : '#1A8A6A') : 'var(--border)'};
+        border-color:${currentStatus === s ? (s === 'planlagt' ? 'var(--blue)' : 'var(--color-signed)') : 'var(--border)'};
         background:${currentStatus === s ? (s === 'planlagt' ? 'rgba(52,152,219,.1)' : 'rgba(26,138,106,.1)') : 'transparent'};
-        color:${currentStatus === s ? (s === 'planlagt' ? 'var(--blue)' : '#1A8A6A') : 'var(--muted)'};
+        color:${currentStatus === s ? (s === 'planlagt' ? 'var(--blue)' : 'var(--color-signed)') : 'var(--muted)'};
         font-weight:600;font-size:13px;cursor:pointer;">
       ${s === 'planlagt' ? '&#128197; Planlagt' : '&#10003; Avholdt'}
     </button>
@@ -1065,9 +1056,9 @@ function setupStatusToggle(wrapId, hiddenId) {
       wrap.querySelectorAll('.status-toggle-btn').forEach(b => {
         const active = b.dataset.status === s;
         const isPlan = b.dataset.status === 'planlagt';
-        b.style.borderColor = active ? (isPlan ? 'var(--blue)' : '#1A8A6A') : 'var(--border)';
+        b.style.borderColor = active ? (isPlan ? 'var(--blue)' : 'var(--color-signed)') : 'var(--border)';
         b.style.background  = active ? (isPlan ? 'rgba(52,152,219,.1)' : 'rgba(26,138,106,.1)') : 'transparent';
-        b.style.color       = active ? (isPlan ? 'var(--blue)' : '#1A8A6A') : 'var(--muted)';
+        b.style.color       = active ? (isPlan ? 'var(--blue)' : 'var(--color-signed)') : 'var(--muted)';
       });
     });
   });
