@@ -228,7 +228,7 @@ app.use('/api', async (req, res, next) => {
 });
 
 app.use('/api', (req, res, next) => {
-  if (req.headers['x-requested-with'] !== 'XMLHttpRequest')
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-requested-with'] !== 'XMLHttpRequest')
     return res.status(403).json({ error: 'Ugyldig forespørsel' });
   next();
 });
