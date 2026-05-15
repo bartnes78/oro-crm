@@ -175,7 +175,13 @@ const authLimiter = rateLimit({
 });
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -1435,11 +1441,7 @@ app.get('/api/export/excel', async (req, res) => {
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────
-// BUILD_STAMP endres ved kvar Railway-deploy — tvinger browser til å hente ny JS
-const BUILD_STAMP = Date.now();
-const _indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
-  .replace('src="/js/app.js"', `src="/js/app.js?v=${BUILD_STAMP}"`);
-app.get('*', (req, res) => res.type('html').send(_indexHtml));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ── Oppstart ──────────────────────────────────────────────────────────────────
 async function init() {
