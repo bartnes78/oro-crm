@@ -27,6 +27,7 @@ let _product    = null;
 let _investors  = [];
 let _sort       = { col: 'weighted', dir: 'desc' };
 let _saving     = {};   // investorId -> 'saving' | 'ok' | 'err'
+let _showPct    = false;
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 export async function render(el, state) {
@@ -34,6 +35,7 @@ export async function render(el, state) {
   _productId = state.id;
   _sort      = { col: 'weighted', dir: 'desc' };
   _saving    = {};
+  _showPct   = false;
 
   _el.innerHTML = `
     <div class="topbar">
@@ -119,14 +121,28 @@ function renderContent() {
     </div>
 
     <!-- KPIs -->
-    <div class="kpi-grid" style="margin-top:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;margin-bottom:0;">
+      <div></div>
+      ${_product.target_size ? `
+        <button id="btn-toggle-pct"
+          style="font-size:11px;padding:4px 12px;border-radius:20px;border:1.5px solid var(--border);background:${_showPct ? 'var(--blue)' : 'transparent'};color:${_showPct ? '#fff' : 'var(--muted)'};cursor:pointer;font-weight:600;transition:all .15s;">
+          ${_showPct ? '% av mål' : 'MNOK'} ⇄ ${_showPct ? 'MNOK' : '% av mål'}
+        </button>` : ''}
+    </div>
+    <div class="kpi-grid" style="margin-top:8px;">
       ${kpiCard('Totalt',         _investors.length,           null,              null)}
       ${kpiCard('Aktiv pipeline', active.length,               null,              '#2471A3')}
-      ${kpiCard('Estimert volum',  `${fmt(totalWeighted, 1)} M`, 'ticket × sanns.', '#D35400')}
+      ${_showPct && _product.target_size
+        ? kpiCard('Estimert volum', `${fmt(totalWeighted / _product.target_size * 100, 1)} %`, 'av målet', '#D35400')
+        : kpiCard('Estimert volum', `${fmt(totalWeighted, 1)} M`, 'ticket × sanns.', '#D35400')}
       <div class="kpi-card" style="border-top-color:#1E8449;">
         <div class="kpi-label">Tegnet</div>
         <div class="kpi-value">${signed.length} inv.</div>
-        ${signedTicket ? `<div class="kpi-value" style="font-size:1.35rem;color:#1E8449;">${fmt(signedTicket, 0)} MNOK</div>` : ''}
+        ${signedTicket ? `<div class="kpi-value" style="font-size:1.35rem;color:#1E8449;">
+          ${_showPct && _product.target_size
+            ? fmt(signedTicket / _product.target_size * 100, 1) + ' %'
+            : fmt(signedTicket, 0) + ' MNOK'}
+        </div>` : ''}
       </div>
       ${kpiCard('Avslått',        declined.length,             null,              '#C0392B')}
     </div>
@@ -137,6 +153,14 @@ function renderContent() {
     </div>`;
 
   attachTableEvents();
+
+  const toggleBtn = content.querySelector('#btn-toggle-pct');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      _showPct = !_showPct;
+      renderContent();
+    });
+  }
 }
 
 function kpiCard(label, value, sub, color) {
@@ -195,6 +219,11 @@ function renderTable() {
     </div>`;
   }
 
+  const pctBase = _showPct && _product?.target_size ? _product.target_size : null;
+  const fmtVal  = (v, dec = 1) => pctBase
+    ? (v != null ? fmt(v / pctBase * 100, dec) + ' %' : null)
+    : (v != null ? fmt(v, dec)                         : null);
+
   const rows = invs.map(inv => {
     const weighted = inv.target_ticket != null && inv.probability != null
       ? inv.target_ticket * inv.probability : null;
@@ -238,9 +267,7 @@ function renderTable() {
       <td class="ticket-cell text-right" data-inv-id="${esc(String(inv.id))}"
         data-val="${inv.target_ticket != null ? inv.target_ticket : ''}"
         style="cursor:pointer;" title="Klikk for å endre">
-        ${inv.target_ticket != null
-          ? fmt(inv.target_ticket)
-          : `<span style="opacity:.25;">—</span>`}
+        ${fmtVal(inv.target_ticket, 1) ?? `<span style="opacity:.25;">—</span>`}
         <span style="margin-left:3px;opacity:.2;font-size:10px;">✎</span>
       </td>
       <td class="prob-cell text-right" data-inv-id="${esc(String(inv.id))}"
@@ -252,7 +279,7 @@ function renderTable() {
         <span style="margin-left:3px;opacity:.2;font-size:10px;">✎</span>
       </td>
       <td class="text-right" style="font-weight:600;">
-        ${weighted != null ? fmt(weighted, 1) : '—'}
+        ${fmtVal(weighted, 1) ?? '—'}
       </td>
       <td class="decline-cell" data-inv-id="${esc(String(inv.id))}"
         data-phase="${esc(inv.phase || '')}"
@@ -282,9 +309,9 @@ function renderTable() {
             ${sortTh('name',          'Investor')}
             ${sortTh('phase',         'Fase')}
             ${sortTh('lead',          'Ansvarlig')}
-            ${sortTh('target_ticket', 'Ticket (M)', true)}
-            ${sortTh('probability',   'Sanns.',     true)}
-            ${sortTh('weighted',      'Vektet (M)', true)}
+            ${sortTh('target_ticket', pctBase ? 'Ticket (%)' : 'Ticket (M)', true)}
+            ${sortTh('probability',   'Sanns.',                              true)}
+            ${sortTh('weighted',      pctBase ? 'Vektet (%)' : 'Vektet (M)', true)}
             <th>Avlag</th>
             <th>Neste steg</th>
             ${sortTh('last_contact',  'Sist kontakt')}
