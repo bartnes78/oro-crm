@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path      = require('path');
 const fs        = require('fs');
 const crypto    = require('crypto');
-const XLSX      = require('xlsx');
+const ExcelJS   = require('exceljs');
 const { query, pool } = require('./db');
 
 const app  = express();
@@ -1267,7 +1267,7 @@ app.get('/api/export/excel', async (req, res) => {
       query('SELECT * FROM product_investors'),
     ]);
     const prodNameById = Object.fromEntries(products.map(p => [p.id, p.name]));
-    const wb = XLSX.utils.book_new();
+    const wb = new ExcelJS.Workbook();
 
     // Aggregate product_investors per investor (sum across all products)
     const piByInv = {};
@@ -1292,9 +1292,21 @@ app.get('/api/export/excel', async (req, res) => {
         'Sist kontakt': i.last_contact || '', 'Neste steg': i.next_steps || '', 'Kommentarer': i.comments || '',
       };
     });
-    const wsInv = XLSX.utils.json_to_sheet(invRows);
-    wsInv['!cols'] = [{wch:10},{wch:36},{wch:10},{wch:16},{wch:18},{wch:14},{wch:22},{wch:18},{wch:16},{wch:16},{wch:14},{wch:50},{wch:14},{wch:28},{wch:40}];
-    XLSX.utils.book_append_sheet(wb, wsInv, 'Investorer');
+    const wsInv = wb.addWorksheet('Investorer');
+    wsInv.columns = [
+      { header: 'ID', key: 'ID', width: 10 }, { header: 'Navn', key: 'Navn', width: 36 },
+      { header: 'Land', key: 'Land', width: 10 }, { header: 'By', key: 'By', width: 16 },
+      { header: 'Type', key: 'Type', width: 18 }, { header: 'Fase', key: 'Fase', width: 14 },
+      { header: 'Lead', key: 'Lead', width: 22 }, { header: 'Rådgiver', key: 'Rådgiver', width: 18 },
+      { header: 'Ticket totalt (MNOK)', key: 'Ticket totalt (MNOK)', width: 16 },
+      { header: 'Vektet totalt (MNOK)', key: 'Vektet totalt (MNOK)', width: 16 },
+      { header: 'Innbetalt (MNOK)', key: 'Innbetalt (MNOK)', width: 14 },
+      { header: 'Produktinteresse', key: 'Produktinteresse', width: 50 },
+      { header: 'Sist kontakt', key: 'Sist kontakt', width: 14 },
+      { header: 'Neste steg', key: 'Neste steg', width: 28 },
+      { header: 'Kommentarer', key: 'Kommentarer', width: 40 },
+    ];
+    wsInv.addRows(invRows);
 
     // Extra sheet: pipeline per produkt
     const piSheetRows = piRows
@@ -1315,9 +1327,16 @@ app.get('/api/export/excel', async (req, res) => {
         };
       })
       .sort((a, b) => String(a['Produkt']).localeCompare(String(b['Produkt'])) || String(a['Investor']).localeCompare(String(b['Investor'])));
-    const wsPi = XLSX.utils.json_to_sheet(piSheetRows);
-    wsPi['!cols'] = [{wch:36},{wch:36},{wch:14},{wch:14},{wch:16},{wch:14},{wch:14},{wch:24}];
-    XLSX.utils.book_append_sheet(wb, wsPi, 'Pipeline per produkt');
+    const wsPi = wb.addWorksheet('Pipeline per produkt');
+    wsPi.columns = [
+      { header: 'Produkt', key: 'Produkt', width: 36 }, { header: 'Investor', key: 'Investor', width: 36 },
+      { header: 'Fase', key: 'Fase', width: 14 }, { header: 'Ticket (MNOK)', key: 'Ticket (MNOK)', width: 14 },
+      { header: 'Sannsynlighet (%)', key: 'Sannsynlighet (%)', width: 16 },
+      { header: 'Vektet (MNOK)', key: 'Vektet (MNOK)', width: 14 },
+      { header: 'Innbetalt (MNOK)', key: 'Innbetalt (MNOK)', width: 14 },
+      { header: 'Avslagsgrunn', key: 'Avslagsgrunn', width: 24 },
+    ];
+    wsPi.addRows(piSheetRows);
 
     const invMap = Object.fromEntries(investors.map(i => [i.id, i.name]));
     const ctRows = contacts.map(c => ({
@@ -1325,20 +1344,31 @@ app.get('/api/export/excel', async (req, res) => {
       'Navn': c.name || '', 'Tittel': c.title || '', 'E-post': c.email || '',
       'Telefon': c.phone || '', 'Primærkontakt': c.is_primary ? 'Ja' : '', 'Notater': c.notes || '',
     }));
-    const wsCt = XLSX.utils.json_to_sheet(ctRows);
-    wsCt['!cols'] = [{wch:10},{wch:30},{wch:24},{wch:22},{wch:28},{wch:16},{wch:14},{wch:36}];
-    XLSX.utils.book_append_sheet(wb, wsCt, 'Kontakter');
+    const wsCt = wb.addWorksheet('Kontakter');
+    wsCt.columns = [
+      { header: 'Investor ID', key: 'Investor ID', width: 10 }, { header: 'Investor', key: 'Investor', width: 30 },
+      { header: 'Navn', key: 'Navn', width: 24 }, { header: 'Tittel', key: 'Tittel', width: 22 },
+      { header: 'E-post', key: 'E-post', width: 28 }, { header: 'Telefon', key: 'Telefon', width: 16 },
+      { header: 'Primærkontakt', key: 'Primærkontakt', width: 14 }, { header: 'Notater', key: 'Notater', width: 36 },
+    ];
+    wsCt.addRows(ctRows);
 
     const logRows = log.map(l => ({
       'Dato': l.date || '', 'Investor ID': l.investor_id, 'Investor': invMap[l.investor_id] || l.investor_name || '',
       'Type': l.log_type || '', 'Kontaktperson': l.contact_person || '', 'Ansvarlig': l.responsible || '',
       'Emne': l.subject || '', 'Utfall': l.outcome || '', 'Notater': l.notes || '',
     }));
-    const wsLog = XLSX.utils.json_to_sheet(logRows);
-    wsLog['!cols'] = [{wch:12},{wch:10},{wch:30},{wch:10},{wch:22},{wch:22},{wch:36},{wch:36},{wch:50}];
-    XLSX.utils.book_append_sheet(wb, wsLog, 'Kontaktlogg');
+    const wsLog = wb.addWorksheet('Kontaktlogg');
+    wsLog.columns = [
+      { header: 'Dato', key: 'Dato', width: 12 }, { header: 'Investor ID', key: 'Investor ID', width: 10 },
+      { header: 'Investor', key: 'Investor', width: 30 }, { header: 'Type', key: 'Type', width: 10 },
+      { header: 'Kontaktperson', key: 'Kontaktperson', width: 22 }, { header: 'Ansvarlig', key: 'Ansvarlig', width: 22 },
+      { header: 'Emne', key: 'Emne', width: 36 }, { header: 'Utfall', key: 'Utfall', width: 36 },
+      { header: 'Notater', key: 'Notater', width: 50 },
+    ];
+    wsLog.addRows(logRows);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Disposition', `attachment; filename="ORO_CRM_${new Date().toISOString().slice(0,10)}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
