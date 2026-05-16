@@ -408,7 +408,7 @@ export async function render(el) {
           ${buildPipelineCard(data)}
           ${buildTypeCard(data)}
         </div>
-        <div style="display:grid;grid-template-columns:${recentHtml ? '1fr 300px' : '1fr'};gap:20px;margin-top:24px;align-items:start">
+        <div class="dash-bottom-grid${recentHtml ? ' has-recent' : ''}">
           ${buildTop10Card(data, investors, filter)}
           ${recentHtml}
         </div>
