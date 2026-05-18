@@ -1,14 +1,11 @@
 import { api } from '../api.js';
 
 const PHASE_COLORS = {
-  'Prospekt':         '#1A5276',
-  'Ny kontakt':       '#0F4949',
-  'Intro sendt':      '#1A7A5E',
-  'Møte avtalt':      '#9A6A1E',
-  'Aktiv dialog':     '#2155A3',
-  'Tegnet':           'var(--color-signed)',
-  'Ikke relevant nå': '#717D87',
-  'Onboardet':        '#1A5C1A',
+  'Prospekt':           '#1A5276',
+  'Aktiv dialog':       '#2155A3',
+  'Investor':           'var(--color-signed)',
+  'Tidligere investor': '#1A5C1A',
+  'På vent':            '#9A6A1E',
 };
 
 const FILTER_KEY = 'crm_filter_dashboard';

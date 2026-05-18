@@ -202,6 +202,12 @@ CREATE TABLE IF NOT EXISTS backups (
   UNIQUE(stamp, table_name)
 );
 
+-- Fasemigrering: frikoble fase fra tegningsstatus
+UPDATE investors SET phase = 'Prospekt'           WHERE phase IN ('Ny kontakt');
+UPDATE investors SET phase = 'Aktiv dialog'       WHERE phase IN ('Intro sendt', 'Møte avtalt');
+UPDATE investors SET phase = 'Investor'           WHERE phase IN ('Tegnet', 'Onboardet');
+UPDATE investors SET phase = 'På vent'            WHERE phase IN ('Ikke relevant nå');
+
 CREATE INDEX IF NOT EXISTS idx_contact_log_investor_id  ON contact_log (investor_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_investor_id        ON tasks (investor_id);
 CREATE INDEX IF NOT EXISTS idx_product_investors_inv_id ON product_investors (investor_id);

@@ -97,8 +97,8 @@ function buildDocsCard(inv, products) {
     { key: 'im_ppm',      label: 'IM/PPM sendt',      hasVersion: false },
     { key: 'fondsvilkar', label: 'Fondsvilk&aring;r sendt', hasVersion: false },
   ];
-  const archivedPhases = ['Tegnet', 'Onboardet', 'Ikke relevant n&aring;'];
-  const isArchived = ['Tegnet', 'Onboardet', 'Ikke relevant nå'].includes(inv.phase);
+  const archivedPhases = ['Investor', 'Tidligere investor', 'P&aring; vent'];
+  const isArchived = ['Investor', 'Tidligere investor', 'På vent'].includes(inv.phase);
 
   const relevantProducts = products.filter(p => (inv.product_interests || []).includes(p._id));
   if (relevantProducts.length === 0) return '';

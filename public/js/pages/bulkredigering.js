@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 
-const PHASES = ['Prospekt','Ny kontakt','Intro sendt','Møte avtalt','Aktiv dialog','Tegnet','Ikke relevant nå','Onboardet'];
+const PHASES = ['Prospekt','Aktiv dialog','Investor','Tidligere investor','På vent'];
 const FILTER_KEY = 'crm_filter_bulk';
 
 function loadFilter() {

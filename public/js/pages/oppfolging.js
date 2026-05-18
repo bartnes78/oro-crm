@@ -1,11 +1,10 @@
 import { api } from '../api.js';
 
 const PHASE_MAP = {
-  'Prospekt': 'prospect', 'Ny kontakt': 'nykontakt', 'Intro sendt': 'introsendt',
-  'Møte avtalt': 'moteavtalt', 'Aktiv dialog': 'aktivdialog',
-  'Tegnet': 'tegnet', 'Ikke relevant nå': 'ikkerelevan', 'Onboardet': 'onboardet',
+  'Prospekt': 'prospect', 'Aktiv dialog': 'aktivdialog',
+  'Investor': 'investor', 'Tidligere investor': 'tidligereinvestor', 'På vent': 'pavent',
 };
-const ACTIVE_PHASES = ['Prospekt', 'Ny kontakt', 'Intro sendt', 'Møte avtalt', 'Aktiv dialog'];
+const ACTIVE_PHASES = ['Prospekt', 'Aktiv dialog', 'Investor', 'Tidligere investor', 'På vent'];
 
 // ── Module state ──────────────────────────────────────────────────────────────
 let _el          = null;

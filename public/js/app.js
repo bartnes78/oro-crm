@@ -50,9 +50,8 @@ window.fmt = function(n, dec = 0) {
 
 window.phaseBadge = function(phase) {
   const map = {
-    'Prospekt':'prospect','Ny kontakt':'nykontakt','Intro sendt':'introsendt',
-    'Møte avtalt':'moteavtalt','Aktiv dialog':'aktivdialog',
-    'Tegnet':'tegnet','Ikke relevant nå':'ikkerelevan','Onboardet':'onboardet',
+    'Prospekt':'prospect','Aktiv dialog':'aktivdialog',
+    'Investor':'investor','Tidligere investor':'tidligereinvestor','På vent':'pavent',
   };
   return `<span class="badge badge-${map[phase]||'default'}">${phase||'—'}</span>`;
 };

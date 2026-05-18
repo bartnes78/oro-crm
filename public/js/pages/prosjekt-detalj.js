@@ -1,15 +1,11 @@
 import { api } from '../api.js';
 
-const PHASES = [
-  'Prospekt', 'Ny kontakt', 'Intro sendt', 'Møte avtalt',
-  'Aktiv dialog', 'Tegnet', 'Ikke relevant nå', 'Onboardet',
-];
+const PHASES = ['Prospekt', 'Aktiv dialog', 'Investor', 'Tidligere investor', 'På vent'];
 const PHASE_MAP = {
-  'Prospekt': 'prospect', 'Ny kontakt': 'nykontakt', 'Intro sendt': 'introsendt',
-  'Møte avtalt': 'moteavtalt', 'Aktiv dialog': 'aktivdialog',
-  'Tegnet': 'tegnet', 'Ikke relevant nå': 'ikkerelevan', 'Onboardet': 'onboardet',
+  'Prospekt': 'prospect', 'Aktiv dialog': 'aktivdialog',
+  'Investor': 'investor', 'Tidligere investor': 'tidligereinvestor', 'På vent': 'pavent',
 };
-const ACTIVE_PHASES  = ['Prospekt', 'Ny kontakt', 'Intro sendt', 'Møte avtalt', 'Aktiv dialog'];
+const STALE_PHASES = ['Prospekt', 'Aktiv dialog'];
 const DECLINE_REASONS = [
   'For høy risiko', 'Allerede eksponert', 'Timing', 'Manglende kapital',
   'Ikke aktuelt nå', 'Ingen svar', 'Annet',
@@ -29,14 +25,16 @@ let _declinedOffers = [];
 let _sort           = { col: 'weighted', dir: 'desc' };
 let _saving         = {};   // investorId -> 'saving' | 'ok' | 'err'
 let _showPct        = false;
+let _filterPhase    = '';
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 export async function render(el, state) {
   _el        = el;
   _productId = state.id;
-  _sort      = { col: 'weighted', dir: 'desc' };
-  _saving    = {};
-  _showPct   = false;
+  _sort        = { col: 'weighted', dir: 'desc' };
+  _saving      = {};
+  _showPct     = false;
+  _filterPhase = '';
 
   _el.innerHTML = `
     <div class="topbar">
@@ -81,9 +79,9 @@ function renderContent() {
   const content = document.getElementById('pd-content');
   if (!content) return;
 
-  const active   = _investors.filter(i => ACTIVE_PHASES.includes(i.phase));
+  const active   = _investors;
   const signed   = _investors.filter(i => Number(i.committed_amount) > 0);
-  const declined = _investors.filter(i => i.phase === 'Ikke relevant nå');
+  const declined = _investors.filter(i => i.phase === 'På vent');
 
   const totalWeighted = active.reduce((s, i) =>
     s + (i.target_ticket != null && i.probability != null ? i.target_ticket * i.probability : 0), 0);
@@ -286,7 +284,9 @@ function daysSince(dateStr) {
 
 function renderTable() {
   const declinedIds = new Set(_declinedOffers.map(d => d.investor_id));
-  const invs = sortedInvestors().filter(i => i.phase !== 'Ikke relevant nå' && !declinedIds.has(i.id));
+  const invs = sortedInvestors().filter(i =>
+    !declinedIds.has(i.id) && (!_filterPhase || i.phase === _filterPhase)
+  );
   if (!invs.length) {
     return `<div class="table-wrap">
       <p style="padding:24px;color:var(--muted);font-size:13px;">Ingen investorer koblet til dette prosjektet.</p>
@@ -309,7 +309,7 @@ function renderTable() {
     const weighted = inv.target_ticket != null && inv.probability != null
       ? inv.target_ticket * inv.probability : null;
     const days   = daysSince(inv.last_contact);
-    const stale  = days != null && days >= 30 && ACTIVE_PHASES.includes(inv.phase);
+    const stale  = days != null && days >= 30 && STALE_PHASES.includes(inv.phase);
     const status = _saving[inv.id];
 
     const statusCell = `<td style="width:24px;text-align:center;font-size:13px;">
@@ -377,8 +377,23 @@ function renderTable() {
     </tr>`;
   }).join('');
 
+  const phaseFilterHtml = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--muted);">Fase:</span>
+      ${['', ...PHASES].map(p => {
+        const active = _filterPhase === p;
+        const label  = p || 'Alle';
+        const cls    = p ? (PHASE_MAP[p] || 'default') : 'default';
+        return `<button class="phase-filter-btn" data-phase="${window.escHtml(p)}"
+          style="font-size:11px;padding:3px 10px;border-radius:20px;border:2px solid ${active ? 'var(--blue)' : 'var(--border)'};
+          background:${active ? 'var(--blue)' : 'transparent'};color:${active ? '#fff' : 'var(--text)'};
+          cursor:pointer;font-weight:${active ? 700 : 400};">${window.escHtml(label)}</button>`;
+      }).join('')}
+    </div>`;
+
   return `
     <div class="table-wrap">
+      ${phaseFilterHtml}
       <table>
         <thead>
           <tr>
@@ -436,6 +451,14 @@ function refreshTable() {
 function attachTableEvents() {
   const wrap = document.getElementById('inv-table-wrap');
   if (!wrap) return;
+
+  // Phase filter buttons
+  wrap.querySelectorAll('.phase-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _filterPhase = btn.dataset.phase;
+      refreshTable();
+    });
+  });
 
   // Sort headers
   wrap.querySelectorAll('.sort-th').forEach(th => {
