@@ -121,7 +121,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.tailwindcss.com'],
+      scriptSrc:     ["'self'", "'unsafe-inline'"],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
@@ -853,12 +853,13 @@ app.post('/api/log', async (req, res) => {
     await client.query('BEGIN');
     await client.query('UPDATE investors SET last_contact=$1, updated_at=NOW() WHERE id=$2', [req.body.date, req.body.investor_id]);
     const { rows: [entry] } = await client.query(`
-      INSERT INTO contact_log (investor_id, investor_name, date, log_type, contact_person, responsible, subject, outcome, notes, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+      INSERT INTO contact_log (investor_id, investor_name, date, log_type, contact_person, responsible, subject, outcome, notes, status, declined_products)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
     `, [req.body.investor_id, req.body.investor_name || null, req.body.date, req.body.log_type || null,
         req.body.contact_person || null, req.body.responsible || null,
         req.body.subject || null, req.body.outcome || null, req.body.notes || null,
-        req.body.status || null]);
+        req.body.status || null,
+        JSON.stringify(Array.isArray(req.body.declined_products) ? req.body.declined_products : [])]);
     await client.query('COMMIT');
     res.json(fmtRow(entry));
   } catch (e) {
@@ -879,14 +880,17 @@ app.put('/api/log/:id', async (req, res) => {
     const cur = rows[0];
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
+    const declinedProducts = 'declined_products' in req.body
+      ? JSON.stringify(Array.isArray(req.body.declined_products) ? req.body.declined_products : [])
+      : JSON.stringify(cur.declined_products || []);
     const { rows: [entry] } = await query(`
       UPDATE contact_log SET investor_id=$2, investor_name=$3, date=$4, log_type=$5,
-        contact_person=$6, responsible=$7, subject=$8, outcome=$9, notes=$10, status=$11
+        contact_person=$6, responsible=$7, subject=$8, outcome=$9, notes=$10, status=$11, declined_products=$12
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id'), v('investor_name') || null, v('date'),
         v('log_type') || null, v('contact_person') || null, v('responsible') || null,
         v('subject') || null, v('outcome') || null, v('notes') || null,
-        v('status') || null]);
+        v('status') || null, declinedProducts]);
     res.json(fmtRow(entry));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

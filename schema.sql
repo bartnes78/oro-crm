@@ -161,6 +161,13 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='contact_log' AND column_name='declined_products') THEN
+    ALTER TABLE contact_log ADD COLUMN declined_products JSONB DEFAULT '[]';
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns
     WHERE table_name='investors' AND column_name='target_ticket') THEN
     ALTER TABLE investors DROP COLUMN target_ticket;

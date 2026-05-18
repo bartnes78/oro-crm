@@ -415,7 +415,7 @@ export async function render(el, state) {
       try {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await fetch('/api/email/parse-msg', { method: 'POST', body: fd });
+        const res = await fetch('/api/email/parse-msg', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Serverfeil');
         handleParsed(data);

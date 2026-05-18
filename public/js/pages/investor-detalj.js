@@ -942,7 +942,7 @@ function openQuickDeclineModal(inv, product, products, reload) {
             log_type:      'Notat',
             subject:       `Takket nei til ${product.name}`,
             outcome:       note,
-            responsible:   'Kristian Bartnes',
+            responsible:   state.currentUser?.displayName || state.currentUser?.username || 'Ukjent',
             notes:         '',
             status:        'avholdt',
           }),
