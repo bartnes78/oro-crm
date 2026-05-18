@@ -33,13 +33,13 @@ window.openModal = function(html, setupFn) {
     <div class="modal-box" onclick="event.stopPropagation()">
       ${html}
     </div>`;
-  el.classList.remove('hidden');
+  el.classList.add('open');
   el.onclick = () => window.closeModal();
   if (setupFn) setupFn();
 };
 
 window.closeModal = function() {
-  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal').classList.remove('open');
 };
 
 // ── Helpers exposed globally ──────────────────────────────────────────────────
