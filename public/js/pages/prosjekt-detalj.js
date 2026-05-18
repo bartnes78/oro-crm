@@ -82,7 +82,7 @@ function renderContent() {
   if (!content) return;
 
   const active   = _investors.filter(i => ACTIVE_PHASES.includes(i.phase));
-  const signed   = _investors.filter(i => i.phase === 'Tegnet' || Number(i.committed_amount) > 0);
+  const signed   = _investors.filter(i => Number(i.committed_amount) > 0);
   const declined = _investors.filter(i => i.phase === 'Ikke relevant nå');
 
   const totalWeighted = active.reduce((s, i) =>
