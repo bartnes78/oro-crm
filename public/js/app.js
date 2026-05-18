@@ -167,13 +167,13 @@ function updateSidebarActive() {
 window.toggleSidebar = function() {
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('sidebar-overlay');
-  const open = !sb.classList.contains('-translate-x-full');
-  sb.classList.toggle('-translate-x-full', open);
-  ov.classList.toggle('hidden', open);
+  const isOpen = sb.classList.contains('open');
+  sb.classList.toggle('open', !isOpen);
+  ov.classList.toggle('open', !isOpen);
 };
 window.closeSidebar = function() {
-  document.getElementById('sidebar').classList.add('-translate-x-full');
-  document.getElementById('sidebar-overlay').classList.add('hidden');
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
 };
 
 // ── Render ────────────────────────────────────────────────────────────────────

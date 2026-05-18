@@ -65,6 +65,44 @@
       min-height:44px;
     }
     .nav-item:hover  { background:rgba(253,252,249,.07); color:var(--offwhite); }
+
+    /* ── Shell layout (CDN-independent) ── */
+    #sidebar-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.4); z-index:40;
+    }
+    #sidebar-overlay.open { display:block; }
+
+    #sidebar {
+      position:fixed; top:0; bottom:0; left:0;
+      width:224px; display:flex; flex-direction:column;
+      z-index:50; background:#0F4949;
+      transform:translateX(-100%);
+      transition:transform .2s ease;
+    }
+    #sidebar.open { transform:translateX(0); }
+
+    #main-wrapper { margin-left:0; min-height:100vh; display:flex; flex-direction:column; }
+
+    #mobile-topbar {
+      display:flex; align-items:center; gap:12px;
+      padding:0 12px; min-height:52px;
+      background:#fff; border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:30;
+    }
+    #mobile-topbar-btn {
+      background:none; border:none; cursor:pointer;
+      color:#0F4949; min-width:44px; min-height:44px;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:8px; padding:8px; flex-shrink:0;
+    }
+    #mobile-title { font-weight:600; color:#0F4949; font-size:15px; }
+
+    @media (min-width:1024px) {
+      #sidebar { transform:translateX(0); }
+      #main-wrapper { margin-left:224px; }
+      #mobile-topbar { display:none; }
+    }
     .nav-item.active { background:rgba(253,252,249,.1); color:var(--offwhite); border-left-color:var(--gold); }
     .nav-icon { font-size:15px; width:20px; text-align:center; opacity:.7; flex-shrink:0; }
     .nav-item.active .nav-icon { opacity:1; }
@@ -226,16 +264,13 @@
     ::-webkit-scrollbar-thumb { background:var(--green-40); border-radius:3px; }
   </style>
 </head>
-<body class="bg-[#F2F4F3]">
+<body>
 
   <!-- Mobile sidebar overlay -->
-  <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-40 lg:hidden"
-       onclick="window.closeSidebar()"></div>
+  <div id="sidebar-overlay" onclick="window.closeSidebar()"></div>
 
   <!-- Sidebar -->
-  <aside id="sidebar"
-    class="fixed inset-y-0 left-0 w-56 flex flex-col z-50 -translate-x-full lg:translate-x-0 transition-transform duration-200"
-    style="background:#0F4949">
+  <aside id="sidebar">
 
     <div style="padding:20px 20px 16px; border-bottom:1px solid rgba(253,252,249,.12)">
       <svg width="787" height="265" viewBox="0 0 787 265" fill="none" xmlns="http://www.w3.org/2000/svg"
@@ -258,23 +293,20 @@
   </aside>
 
   <!-- Main wrapper -->
-  <div class="lg:ml-56 min-h-screen flex flex-col">
+  <div id="main-wrapper">
 
     <!-- Mobile topbar with hamburger -->
-    <div class="lg:hidden sticky top-0 z-30 flex items-center px-3 h-13 gap-3"
-         style="background:#fff;border-bottom:1px solid #D8E3E2;min-height:52px">
-      <button onclick="window.toggleSidebar()"
-        class="p-2 rounded-lg"
-        style="color:#0F4949;background:none;border:none;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="22" height="22">
+    <div id="mobile-topbar">
+      <button id="mobile-topbar-btn" onclick="window.toggleSidebar()" aria-label="Meny">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="22" height="22">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
       </button>
-      <span id="mobile-title" style="font-weight:600;color:#0F4949;font-size:15px">ORO CRM</span>
+      <span id="mobile-title">ORO CRM</span>
     </div>
 
     <!-- Page content -->
-    <div id="page-container" class="flex-1"></div>
+    <div id="page-container" style="flex:1"></div>
   </div>
 
   <!-- Modal -->
