@@ -44,7 +44,7 @@ Investoroppfølgings-CRM for ORO Areal Eiendomsfond IS. Node.js Express-backend 
 FASER: Prospekt | Aktiv dialog | Investor | Tidligere investor | På vent
 (Fase = kundens livssyklus. Tegning styres via committed_amount på product_investors, ikke fase.)
 TYPER: Pensjon | Stiftelse | Family Office | Forsikring | Institusjonell | Pensjonskasse | Private Banking | Rådgiver | Annet
-LOGGTYPER: Møte | Telefon | E-post mottatt | E-post sendt | Event | Video | Annet | Notat
+LOGGTYPER: Møte | Telefon | Tapt anrop | E-post mottatt | E-post sendt | Event | Video | Annet | Notat
 LEADS: (5 teamnavn) | Ekstern
 VEHICLES: IS | Feeder | Ikke avklart
 ```

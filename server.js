@@ -238,7 +238,7 @@ function requireAdmin(req, res, next) {
 // ── Validering ────────────────────────────────────────────────────────────────
 const VALID_PHASES    = ['Prospekt','Aktiv dialog','Investor','Tidligere investor','På vent'];
 const VALID_TYPES     = ['Pensjon','Stiftelse','Family Office','Forsikring','Institusjonell','Pensjonskasse','Private Banking','Rådgiver','Annet'];
-const VALID_LOG_TYPES = ['Møte','Telefon','E-post mottatt','E-post sendt','Event','Video','Annet','Notat'];
+const VALID_LOG_TYPES = ['Møte','Telefon','Tapt anrop','E-post mottatt','E-post sendt','Event','Video','Annet','Notat'];
 const VALID_LEADS     = ['Kristian Bartnes','Anders Brustad-Nilsen','Nikolai Staubo','Anders Aasand','Gunnar Vestby','Ekstern'];
 const VALID_VEHICLES  = ['IS','Feeder','Ikke avklart'];
 
