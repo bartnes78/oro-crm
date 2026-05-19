@@ -18,6 +18,7 @@ async function req(method, url, body) {
 export const api = {
   dashboard:           ()         => req('GET', '/dashboard'),
   analyse:             ()         => req('GET', '/analyse'),
+  aktivitetslogg:      ()         => req('GET', '/aktivitetslogg'),
   investors:           (params)   => req('GET', '/investors?' + new URLSearchParams(params || {})),
   investor:            (id)       => req('GET', `/investors/${id}`),
   createInvestor:      (data)     => req('POST', '/investors', data),

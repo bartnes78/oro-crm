@@ -183,11 +183,142 @@ function buildKPIs(fundStats) {
     </div>`;
 }
 
+// ── Aktivitetsfordeling ───────────────────────────────────────────────────────
+function buildActivityBreakdown(allRows, logTypes) {
+  const responsibles = [...new Set(allRows.map(r => r.responsible).filter(Boolean))].sort();
+
+  function filterRows(period, responsible, logType) {
+    const cutoff = period !== 'all'
+      ? new Date(Date.now() - parseInt(period) * 86400000)
+      : null;
+    return allRows.filter(r => {
+      if (cutoff && new Date(r.date) < cutoff) return false;
+      if (responsible && r.responsible !== responsible) return false;
+      if (logType && r.log_type !== logType) return false;
+      return true;
+    });
+  }
+
+  function renderContent(filtered) {
+    const typeCounts = {};
+    filtered.forEach(r => {
+      const t = r.log_type || 'Ukjent';
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+    });
+    const entries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+    const total = filtered.length;
+    const max = entries.length ? entries[0][1] : 1;
+
+    const bars = entries.map(([type, count]) => {
+      const pct = Math.round((count / max) * 100);
+      const pctTotal = total ? Math.round((count / total) * 100) : 0;
+      return window.ui.pipelineBar(type, pct, 'var(--gold)', count,
+        `<span style="font-size:11px;color:var(--muted);margin-left:6px">${pctTotal}%</span>`);
+    }).join('');
+
+    const tableRows = entries.map(([type, count]) => {
+      const pctTotal = total ? Math.round((count / total) * 100) : 0;
+      return `<tr><td>${esc(type)}</td><td class="text-right">${count}</td><td class="text-right">${pctTotal}%</td></tr>`;
+    }).join('');
+
+    return `
+      <div>${bars || window.ui.emptyState('Ingen aktiviteter i valgt periode')}</div>
+      ${entries.length ? `
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Andel</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot><tr><td><b>Totalt</b></td><td class="text-right"><b>${total}</b></td><td class="text-right">100%</td></tr></tfoot>
+        </table>
+      </div>` : ''}`;
+  }
+
+  const periodOpts = [
+    ['30', 'Siste 30 dager'], ['90', 'Siste 90 dager'],
+    ['365', 'Siste 12 mnd'], ['all', 'Alt'],
+  ].map(([v, l]) => `<option value="${v}" ${v === '365' ? 'selected' : ''}>${l}</option>`).join('');
+
+  const respOpts = `<option value="">Alle ansvarlige</option>` +
+    responsibles.map(r => `<option>${esc(r)}</option>`).join('');
+
+  const typeOpts = `<option value="">Alle typer</option>` +
+    logTypes.map(t => `<option>${esc(t)}</option>`).join('');
+
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Aktivitetsfordeling</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <select id="act-period" style="flex:1;min-width:140px">${periodOpts}</select>
+        <select id="act-resp"   style="flex:1;min-width:160px">${respOpts}</select>
+        <select id="act-type"   style="flex:1;min-width:140px">${typeOpts}</select>
+      </div>
+      <div id="act-content">${renderContent(filterRows('365', '', ''))}</div>
+    </div>`;
+}
+
+function setupActivityListeners(el, allRows) {
+  function update() {
+    const period     = el.querySelector('#act-period').value;
+    const responsible = el.querySelector('#act-resp').value;
+    const logType    = el.querySelector('#act-type').value;
+
+    const cutoff = period !== 'all'
+      ? new Date(Date.now() - parseInt(period) * 86400000)
+      : null;
+    const filtered = allRows.filter(r => {
+      if (cutoff && new Date(r.date) < cutoff) return false;
+      if (responsible && r.responsible !== responsible) return false;
+      if (logType && r.log_type !== logType) return false;
+      return true;
+    });
+
+    const typeCounts = {};
+    filtered.forEach(r => {
+      const t = r.log_type || 'Ukjent';
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+    });
+    const entries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+    const total = filtered.length;
+    const max = entries.length ? entries[0][1] : 1;
+
+    const bars = entries.map(([type, count]) => {
+      const pct = Math.round((count / max) * 100);
+      const pctTotal = total ? Math.round((count / total) * 100) : 0;
+      return window.ui.pipelineBar(type, pct, 'var(--gold)', count,
+        `<span style="font-size:11px;color:var(--muted);margin-left:6px">${pctTotal}%</span>`);
+    }).join('');
+
+    const tableRows = entries.map(([type, count]) => {
+      const pctTotal = total ? Math.round((count / total) * 100) : 0;
+      return `<tr><td>${esc(type)}</td><td class="text-right">${count}</td><td class="text-right">${pctTotal}%</td></tr>`;
+    }).join('');
+
+    el.querySelector('#act-content').innerHTML = `
+      <div>${bars || window.ui.emptyState('Ingen aktiviteter i valgt periode')}</div>
+      ${entries.length ? `
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Andel</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot><tr><td><b>Totalt</b></td><td class="text-right"><b>${total}</b></td><td class="text-right">100%</td></tr></tfoot>
+        </table>
+      </div>` : ''}`;
+  }
+
+  el.querySelector('#act-period')?.addEventListener('change', update);
+  el.querySelector('#act-resp')?.addEventListener('change', update);
+  el.querySelector('#act-type')?.addEventListener('change', update);
+}
+
 // ── Render entry ──────────────────────────────────────────────────────────────
 export async function render(el) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster analyse…</p></div>';
   try {
-    const data = await api.analyse();
+    const [data, actRows, lookups] = await Promise.all([
+      api.analyse(),
+      api.aktivitetslogg(),
+      api.lookups(),
+    ]);
     el.innerHTML = `
       <div class="topbar"><span class="topbar-title">Analyse</span></div>
       <div class="content">
@@ -198,11 +329,13 @@ export async function render(el) {
           ${buildTypeTable(data.byType)}
         </div>
         ${buildActivity(data.monthly, data.byResponsible)}
+        ${buildActivityBreakdown(actRows, lookups.logTypes || [])}
       </div>`;
 
     el.querySelectorAll('.fund-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.id));
     });
+    setupActivityListeners(el, actRows);
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:red">Feil: ${esc(e.message)}</p></div>`;
   }

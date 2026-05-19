@@ -340,6 +340,15 @@ app.get('/api/analyse', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/aktivitetslogg', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT date::text AS date, log_type, responsible FROM contact_log WHERE date IS NOT NULL ORDER BY date`
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
