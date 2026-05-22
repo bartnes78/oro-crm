@@ -111,14 +111,14 @@ function buildTableRows(investors, products) {
     return `
       <tr class="inv-row" data-id="${esc(String(inv.id || inv._id))}" style="cursor:pointer">
         <td style="font-weight:600;max-width:260px">${esc(inv.name || '')}</td>
-        <td style="color:#717D87;font-size:12px">${esc(inv.investor_type || '—')}</td>
+        <td class="hide-sm" style="color:#717D87;font-size:12px">${esc(inv.investor_type || '—')}</td>
         <td>${window.phaseBadge(inv.phase)}</td>
-        <td style="font-size:12px">${esc(inv.lead || '—')}</td>
-        <td class="text-right">${fmt(inv.target_ticket)}</td>
-        <td class="text-right">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>
-        <td class="text-right" style="font-weight:600">${weighted}</td>
-        <td><div class="prod-pills">${prodPills}</div></td>
-        <td style="font-size:12px;color:#717D87">${esc(inv.last_contact || '—')}</td>
+        <td class="hide-sm" style="font-size:12px">${esc(inv.lead || '—')}</td>
+        <td class="text-right hide-sm">${fmt(inv.target_ticket)}</td>
+        <td class="text-right hide-sm">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>
+        <td class="text-right hide-sm" style="font-weight:600">${weighted}</td>
+        <td class="hide-sm"><div class="prod-pills">${prodPills}</div></td>
+        <td class="hide-sm" style="font-size:12px;color:#717D87">${esc(inv.last_contact || '—')}</td>
       </tr>`;
   }).join('');
 }
@@ -358,14 +358,14 @@ export async function render(el) {
               <thead>
                 <tr>
                   <th>Investor</th>
-                  <th>Type</th>
+                  <th class="hide-sm">Type</th>
                   <th>Fase</th>
-                  <th>Lead</th>
-                  <th class="text-right">Ticket (M)</th>
-                  <th class="text-right">Sanns.</th>
-                  <th class="text-right">Vektet (M)</th>
-                  <th>Produkter</th>
-                  <th>Sist kontaktet</th>
+                  <th class="hide-sm">Lead</th>
+                  <th class="text-right hide-sm">Ticket (M)</th>
+                  <th class="text-right hide-sm">Sanns.</th>
+                  <th class="text-right hide-sm">Vektet (M)</th>
+                  <th class="hide-sm">Produkter</th>
+                  <th class="hide-sm">Sist kontaktet</th>
                 </tr>
               </thead>
               <tbody class="inv-tbody">${tableRows}</tbody>

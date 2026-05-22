@@ -1,4 +1,4 @@
-const CACHE = 'oro-crm-v6';
+const CACHE = 'oro-crm-v7';
 const SHELL = [
   '/',
   '/js/app.js',
@@ -39,29 +39,33 @@ self.addEventListener('fetch', e => {
     e.respondWith(fetch(e.request));
     return;
   }
-  // Network first for HTML (catches updates), cache first for other assets
+  // HTML: network-first so updates land immediately
   if (url.pathname === '/' || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request).then(resp => {
-        if (resp.ok) {
-          const clone = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
+        if (resp.ok) caches.open(CACHE).then(c => c.put(e.request, resp.clone()));
         return resp;
       }).catch(() => caches.match(e.request))
     );
     return;
   }
+  // JS/CSS: stale-while-revalidate — instant response, refresh cache in background
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.svg')) {
+    e.respondWith(
+      caches.open(CACHE).then(cache =>
+        cache.match(e.request).then(cached => {
+          const fetchPromise = fetch(e.request).then(resp => {
+            if (resp.ok) cache.put(e.request, resp.clone());
+            return resp;
+          });
+          return cached || fetchPromise;
+        })
+      )
+    );
+    return;
+  }
+  // Everything else: cache-first
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(resp => {
-        if (resp.ok) {
-          const clone = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return resp;
-      });
-    })
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });

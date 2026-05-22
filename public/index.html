@@ -14,25 +14,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            green:    { DEFAULT:'#0F4949', 80:'#267777', 60:'#589C97', 40:'#94C5BF', 20:'#E0EFEC' },
-            gold:     '#D49962',
-            marine:   '#003853',
-            offwhite: '#FDFCF9',
-            coal:     '#333333',
-            muted:    '#6A7A7A',
-          },
-          fontFamily: { sans: ['DM Sans','Helvetica Neue','Arial','sans-serif'] },
-        }
-      }
-    }
-  </script>
-
   <style>
     /* ── CSS variables ── */
     :root {
@@ -102,6 +83,10 @@
       #sidebar { transform:translateX(0); }
       #main-wrapper { margin-left:224px; }
       #mobile-topbar { display:none; }
+    }
+    @media (max-width:640px) {
+      .kpi-grid { grid-template-columns:1fr 1fr !important; }
+      .hide-sm  { display:none !important; }
     }
     .nav-item.active { background:rgba(253,252,249,.1); color:var(--offwhite); border-left-color:var(--gold); }
     .nav-icon { font-size:15px; width:20px; text-align:center; opacity:.7; flex-shrink:0; }

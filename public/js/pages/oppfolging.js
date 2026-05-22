@@ -29,9 +29,14 @@ export async function render(el, _state) {
       <p style="color:#aaa;padding:24px 0;">Laster…</p>
     </div>`;
 
-  _investors = await api.investors({});
-  _loading   = false;
-  renderContent();
+  try {
+    _investors = await api.investors({});
+    _loading   = false;
+    renderContent();
+  } catch (e) {
+    _el.querySelector('#of-content').innerHTML =
+      `<p style="color:red;padding:24px 0">Feil: ${window.escHtml(e.message)}</p>`;
+  }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
