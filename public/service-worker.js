@@ -1,4 +1,4 @@
-const CACHE = 'oro-crm-v7';
+const CACHE = 'oro-crm-v8';
 const SHELL = [
   '/',
   '/js/app.js',
@@ -36,8 +36,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.pathname.startsWith('/api/')) {
-    e.respondWith(fetch(e.request));
-    return;
+    return; // Let browser handle API requests directly — SW interception can drop custom headers
   }
   // HTML: network-first so updates land immediately
   if (url.pathname === '/' || url.pathname.endsWith('.html')) {
