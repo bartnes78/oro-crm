@@ -228,19 +228,26 @@ function buildProductCard(inv, products, piData) {
   const piMap = Object.fromEntries(piData.map(pi => [pi.product_id, pi]));
   const interests = new Set(inv.product_interests || []);
 
+  // Declined offers: map product_id → {decline_reason, declined_at}
+  const declinedList = inv.declined_offers || [];
+  const declinedMap  = Object.fromEntries(declinedList.map(d => [d.product_id, d]));
+  const declinedIds  = new Set(declinedList.map(d => d.product_id));
+
+  // Totals: only active interests (not declined)
   let totalWeighted = 0, totalCommitted = 0;
   for (const p of products) {
-    if (!interests.has(p._id)) continue;
+    if (!interests.has(p._id) || declinedIds.has(p._id)) continue;
     const pi = piMap[p._id] || {};
     if (pi.target_ticket != null && pi.probability != null) totalWeighted += pi.target_ticket * pi.probability;
     if (pi.committed_amount != null) totalCommitted += pi.committed_amount;
   }
 
-  const rows = products.map(p => {
+  // Active rows — skip declined products (they appear in their own section below)
+  const activeRows = products.map(p => {
+    if (declinedIds.has(p._id)) return '';
     const interested = interests.has(p._id);
     const pi = piMap[p._id] || {};
-    const isTegnet  = pi.committed_amount != null;
-    const isDeclined = !!pi.decline_reason;
+    const isTegnet = pi.committed_amount != null;
 
     return `
       <div class="pi-row" style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -272,7 +279,6 @@ function buildProductCard(inv, products, piData) {
           </div>
           <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
             ${isTegnet ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(26,138,106,.12);color:var(--color-signed);font-weight:700;">&#10003; Tegnet${pi.committed_amount ? ' ' + pi.committed_amount + 'M' : ''}</span>` : ''}
-            ${isDeclined ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(231,76,60,.08);color:#e74c3c;font-weight:600;">Avsl&aring;tt</span>` : ''}
             <button class="pi-tegnet-btn btn btn-ghost btn-sm"
               data-pid="${window.escHtml(String(p._id))}"
               data-pname="${window.escHtml(p.name)}"
@@ -289,6 +295,24 @@ function buildProductCard(inv, products, piData) {
     `;
   }).join('');
 
+  // Declined section
+  const declinedRows = products
+    .filter(p => declinedIds.has(p._id))
+    .map(p => {
+      const d = declinedMap[p._id];
+      const dateStr = d.declined_at
+        ? new Date(d.declined_at).toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:600;color:var(--muted);flex:1;min-width:160px;">${window.escHtml(p.name)}</span>
+          ${dateStr ? `<span style="font-size:12px;color:var(--muted);">${window.escHtml(dateStr)}</span>` : ''}
+          ${d.decline_reason ? `<span style="font-size:12px;color:var(--muted);font-style:italic;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
+          <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(231,76,60,.1);color:#e74c3c;font-weight:600;">Takket nei</span>
+        </div>
+      `;
+    }).join('');
+
   const aggregateHtml = (totalWeighted > 0 || totalCommitted > 0) ? `
     <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);display:flex;gap:24px;flex-wrap:wrap;">
       ${totalWeighted > 0 ? `
@@ -304,11 +328,19 @@ function buildProductCard(inv, products, piData) {
     </div>
   ` : '';
 
+  const declinedSection = declinedRows ? `
+    <div style="margin-top:16px;padding-top:10px;border-top:1px dashed var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Avsl&aring;tte muligheter</div>
+      ${declinedRows}
+    </div>
+  ` : '';
+
   return `
     <div class="card">
       <div class="card-title">Produktinteresse</div>
-      ${rows}
+      ${activeRows}
       ${aggregateHtml}
+      ${declinedSection}
     </div>
   `;
 }

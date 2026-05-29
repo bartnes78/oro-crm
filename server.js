@@ -265,7 +265,12 @@ app.get('/api/analyse', async (req, res) => {
   try {
     const [{ rows: products }, { rows: piRows }, { rows: investors }, { rows: logRows }] = await Promise.all([
       query('SELECT * FROM products ORDER BY id'),
-      query('SELECT product_id, investor_id, target_ticket, probability, committed_amount FROM product_investors'),
+      query(`SELECT pi.product_id, pi.investor_id, pi.target_ticket, pi.probability, pi.committed_amount
+             FROM product_investors pi
+             WHERE NOT EXISTS (
+               SELECT 1 FROM declined_offers d
+               WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
+             )`),
       query('SELECT id, phase, investor_type FROM investors'),
       query(`SELECT DATE_TRUNC('month', date)::date AS month, COUNT(*)::int AS count, responsible
              FROM contact_log
@@ -355,7 +360,13 @@ app.get('/api/dashboard', async (req, res) => {
     const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
       query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
-      query('SELECT investor_id, target_ticket, probability FROM product_investors WHERE target_ticket IS NOT NULL'),
+      query(`SELECT pi.investor_id, pi.target_ticket, pi.probability
+             FROM product_investors pi
+             WHERE pi.target_ticket IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM declined_offers d
+               WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
+             )`),
       query('SELECT * FROM products'),
       query('SELECT product_id, investor_id FROM product_investors'),
     ]);
@@ -537,12 +548,17 @@ app.get('/api/investors/:id', async (req, res) => {
   try {
     const { rows: invRows } = await query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
     if (!invRows[0]) return res.status(404).json({ error: 'Not found' });
-    const [{ rows: contacts }, { rows: log }, { rows: piRows }] = await Promise.all([
+    const [{ rows: contacts }, { rows: log }, { rows: piRows }, { rows: declinedRows }] = await Promise.all([
       query('SELECT * FROM contacts WHERE investor_id = $1 ORDER BY is_primary DESC', [req.params.id]),
       query('SELECT * FROM contact_log WHERE investor_id = $1 ORDER BY date DESC', [req.params.id]),
       query('SELECT product_id FROM product_investors WHERE investor_id = $1', [req.params.id]),
+      query('SELECT product_id, decline_reason, declined_at FROM declined_offers WHERE investor_id = $1 ORDER BY declined_at DESC', [req.params.id]),
     ]);
-    const inv = { ...invRows[0], product_interests: piRows.map(r => r.product_id).sort((a, b) => a - b) };
+    const inv = {
+      ...invRows[0],
+      product_interests: piRows.map(r => r.product_id).sort((a, b) => a - b),
+      declined_offers:   declinedRows,
+    };
     res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1336,7 +1352,11 @@ app.get('/api/export/excel', async (req, res) => {
       query('SELECT * FROM contacts'),
       query('SELECT * FROM contact_log ORDER BY date DESC'),
       query('SELECT * FROM products'),
-      query('SELECT * FROM product_investors'),
+      query(`SELECT pi.* FROM product_investors pi
+             WHERE NOT EXISTS (
+               SELECT 1 FROM declined_offers d
+               WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
+             )`),
     ]);
     const prodNameById = Object.fromEntries(products.map(p => [p.id, p.name]));
     const wb = new ExcelJS.Workbook();
