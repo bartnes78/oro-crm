@@ -906,7 +906,7 @@ function openPaVentModal(inv, reload) {
   });
 }
 
-function openQuickDeclineModal(inv, product, products, reload) {
+function openQuickDeclineModal(inv, product, products, reload, state) {
   const html = window.ui.modal(
     'Takket nei',
     `<p style="font-size:14px;margin-bottom:16px;">
@@ -1185,7 +1185,7 @@ export async function render(el, state) {
     el.querySelectorAll('.btn-quick-decline').forEach(btn => {
       btn.addEventListener('click', () => {
         const product = products.find(p => String(p._id) === String(btn.dataset.productId));
-        if (product) openQuickDeclineModal(inv, product, products, reload);
+        if (product) openQuickDeclineModal(inv, product, products, reload, state);
       });
     });
   }
