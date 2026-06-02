@@ -212,3 +212,12 @@ CREATE INDEX IF NOT EXISTS idx_contact_log_investor_id  ON contact_log (investor
 CREATE INDEX IF NOT EXISTS idx_tasks_investor_id        ON tasks (investor_id);
 CREATE INDEX IF NOT EXISTS idx_product_investors_inv_id ON product_investors (investor_id);
 CREATE INDEX IF NOT EXISTS idx_declined_offers_prod_id  ON declined_offers (product_id);
+
+CREATE TABLE IF NOT EXISTS feedback_reports (
+  id         SERIAL PRIMARY KEY,
+  page       TEXT,
+  comment    TEXT NOT NULL,
+  screenshot TEXT,
+  username   TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

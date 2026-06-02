@@ -215,6 +215,43 @@ function renderPage() {
   }
 }
 
+// ── Feedback ──────────────────────────────────────────────────────────────────
+window.openFeedback = async function() {
+  let screenshotDataUrl = null;
+  try {
+    const canvas = await html2canvas(document.body, { scale: 0.6, useCORS: true, logging: false });
+    screenshotDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  } catch { /* skip screenshot on error */ }
+
+  window.openModal(window.ui.modal(
+    'Rapporter feil eller foreslå forbedring',
+    `<div class="form-group">
+      <label>Hva er feil eller hva foreslår du å forbedre?</label>
+      <textarea id="fb-comment" rows="5" placeholder="Beskriv feilen eller forslaget..." style="width:100%"></textarea>
+    </div>
+    ${screenshotDataUrl
+      ? `<div style="margin-top:12px"><img src="${screenshotDataUrl}" style="width:100%;border-radius:6px;border:1px solid var(--border)" alt="Skjermbilde"></div>`
+      : '<p class="text-muted" style="font-size:12px;margin-top:8px">Skjermbilde kunne ikke tas.</p>'}`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+     <button class="btn btn-primary" id="fb-save-btn">Lagre</button>`
+  ), () => {
+    document.getElementById('fb-save-btn').addEventListener('click', async () => {
+      const comment = document.getElementById('fb-comment').value.trim();
+      if (!comment) { document.getElementById('fb-comment').focus(); return; }
+      const btn = document.getElementById('fb-save-btn');
+      btn.disabled = true; btn.textContent = 'Lagrer…';
+      try {
+        await api.submitFeedback({ page: state.page, comment, screenshot: screenshotDataUrl });
+        window.closeModal();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Lagre';
+        alert('Kunne ikke lagre: ' + e.message);
+      }
+    });
+    setTimeout(() => document.getElementById('fb-comment')?.focus(), 50);
+  });
+};
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 async function init() {
   try {

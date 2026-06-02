@@ -251,6 +251,17 @@
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width:4px; height:4px; }
     ::-webkit-scrollbar-thumb { background:var(--green-40); border-radius:3px; }
+
+    /* ── Feedback button ── */
+    #feedback-btn {
+      position:fixed; bottom:20px; right:20px; z-index:900;
+      width:44px; height:44px; border-radius:50%;
+      background:var(--gold); color:#fff; border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 2px 8px rgba(0,0,0,.25); transition:transform .15s,opacity .15s;
+      font-size:20px; line-height:1;
+    }
+    #feedback-btn:hover { transform:scale(1.08); opacity:.92; }
   </style>
 </head>
 <body>
@@ -301,6 +312,10 @@
   <!-- Modal -->
   <div id="modal"></div>
 
+  <!-- Feedback floating button -->
+  <button id="feedback-btn" title="Rapporter feil eller foreslå forbedring" onclick="window.openFeedback()">🐛</button>
+
+  <script src="/js/vendor/html2canvas.min.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

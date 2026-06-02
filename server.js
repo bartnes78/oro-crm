@@ -1473,6 +1473,47 @@ app.get('/api/export/excel', async (req, res) => {
   }
 });
 
+// ── Feedback / bugreport ──────────────────────────────────────────────────────
+app.get('/js/vendor/html2canvas.min.js', (req, res) =>
+  res.sendFile(path.join(__dirname, 'node_modules', 'html2canvas', 'dist', 'html2canvas.min.js'))
+);
+
+app.post('/api/feedback', express.json({ limit: '8mb' }), async (req, res) => {
+  try {
+    const { page, comment, screenshot } = req.body;
+    if (!comment?.trim()) return validationError(res, 'Kommentar er påkrevd');
+    const username = req.currentUser?.username || null;
+    const { rows } = await query(
+      'INSERT INTO feedback_reports (page, comment, screenshot, username) VALUES ($1,$2,$3,$4) RETURNING id',
+      [page || null, comment.trim(), screenshot || null, username]
+    );
+    res.json({ id: rows[0].id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/feedback', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT id, page, comment, username, created_at FROM feedback_reports ORDER BY created_at DESC'
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/feedback/:id/screenshot', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await query('SELECT screenshot FROM feedback_reports WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Ikke funnet' });
+    res.json({ screenshot: rows[0].screenshot });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── SPA fallback ──────────────────────────────────────────────────────────────
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
