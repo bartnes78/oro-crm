@@ -58,6 +58,7 @@ export const api = {
   getFeedback:         ()         => req('GET', '/feedback'),
   getFeedbackScreenshot: (id)    => req('GET', `/feedback/${id}/screenshot`),
   me:                  ()         => req('GET', '/me'),
+  changeMyPassword:    (password) => req('PUT', '/me/password', { password }),
   users:               ()         => req('GET', '/users'),
   createUser:          (data)     => req('POST', '/users', data),
   updateUser:          (id, data) => req('PUT', `/users/${id}`, data),

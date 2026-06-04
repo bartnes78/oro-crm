@@ -50,7 +50,7 @@ function fmtRow(row) {
 
 function fmtUser(row) {
   if (!row) return null;
-  return { _id: row.id, username: row.username, displayName: row.display_name, role: row.role };
+  return { _id: row.id, username: row.username, displayName: row.display_name, role: row.role, mustChangePassword: !!row.must_change_password };
 }
 
 // ── Backup ────────────────────────────────────────────────────────────────────
@@ -980,6 +980,19 @@ app.delete('/api/tasks/:id', async (req, res) => {
 // ── Brukere ───────────────────────────────────────────────────────────────────
 app.get('/api/me', (req, res) => res.json(req.currentUser));
 
+app.put('/api/me/password', async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.trim().length < 6)
+    return validationError(res, 'Passordet må være minst 6 tegn');
+  try {
+    const { rows: [u] } = await query(
+      'UPDATE users SET password_hash=$1, must_change_password=FALSE WHERE id=$2 RETURNING *',
+      [hashPassword(password.trim()), req.currentUser._id]
+    );
+    res.json(fmtUser(u));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/users', requireAdmin, async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM users ORDER BY id');
@@ -997,8 +1010,8 @@ app.post('/api/users', requireAdmin, async (req, res) => {
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [u] } = await query(`
-      INSERT INTO users (username, display_name, role, password_hash)
-      VALUES ($1,$2,$3,$4) RETURNING *
+      INSERT INTO users (username, display_name, role, password_hash, must_change_password)
+      VALUES ($1,$2,$3,$4,TRUE) RETURNING *
     `, [username.trim(), displayName.trim(), role, hashPassword(password)]);
     res.json(fmtUser(u));
   } catch (e) {
@@ -1016,10 +1029,12 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
     const { displayName, password, role } = req.body;
     const newDisplayName = displayName ? displayName.trim() : cur.display_name;
     const newRole        = role && ['admin','bruker'].includes(role) ? role : cur.role;
-    const newHash        = password && password.trim() ? hashPassword(password) : cur.password_hash;
+    const passwordReset  = password && password.trim();
+    const newHash        = passwordReset ? hashPassword(password) : cur.password_hash;
+    const mustChange     = passwordReset && id !== req.currentUser._id ? true : cur.must_change_password;
     const { rows: [u] } = await query(`
-      UPDATE users SET display_name=$2, role=$3, password_hash=$4 WHERE id=$1 RETURNING *
-    `, [id, newDisplayName, newRole, newHash]);
+      UPDATE users SET display_name=$2, role=$3, password_hash=$4, must_change_password=$5 WHERE id=$1 RETURNING *
+    `, [id, newDisplayName, newRole, newHash, mustChange]);
     res.json(fmtUser(u));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

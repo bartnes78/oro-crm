@@ -293,7 +293,67 @@ async function init() {
   }
 
   buildSidebar();
+
+  if (state.currentUser?.mustChangePassword) {
+    await showChangePasswordModal();
+  }
+
   renderPage();
+}
+
+function showChangePasswordModal() {
+  return new Promise(resolve => {
+    const html = `
+      <div class="modal-header">
+        <h3>Endre passord</h3>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+          Velkommen! Du må sette et nytt passord før du kan bruke CRM-et.
+        </p>
+        <div id="cp-error" style="display:none" class="alert-err"></div>
+        <div class="form-group">
+          <label>Nytt passord <span style="font-weight:400;color:var(--muted)">(minst 6 tegn)</span></label>
+          <input id="cp-pass1" type="password" placeholder="Nytt passord" style="min-height:44px">
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Gjenta passord</label>
+          <input id="cp-pass2" type="password" placeholder="Gjenta passord" style="min-height:44px">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="cp-save-btn" style="min-height:44px">Lagre passord</button>
+      </div>`;
+
+    window.openModal(html, () => {
+      document.getElementById('cp-pass1')?.focus();
+
+      document.getElementById('cp-save-btn')?.addEventListener('click', async () => {
+        const p1 = document.getElementById('cp-pass1').value;
+        const p2 = document.getElementById('cp-pass2').value;
+        const errEl = document.getElementById('cp-error');
+        const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+
+        if (p1.length < 6) { showErr('Passordet må være minst 6 tegn'); return; }
+        if (p1 !== p2)     { showErr('Passordene er ikke like'); return; }
+
+        const btn = document.getElementById('cp-save-btn');
+        btn.disabled = true; btn.textContent = 'Lagrer…';
+        try {
+          await api.changeMyPassword(p1);
+          state.currentUser.mustChangePassword = false;
+          window.closeModal();
+          resolve();
+        } catch (e) {
+          showErr(e.message);
+          btn.disabled = false; btn.textContent = 'Lagre passord';
+        }
+      });
+    });
+
+    // Prevent closing by clicking backdrop
+    document.getElementById('modal').onclick = null;
+  });
 }
 
 init();

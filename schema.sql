@@ -213,6 +213,13 @@ CREATE INDEX IF NOT EXISTS idx_tasks_investor_id        ON tasks (investor_id);
 CREATE INDEX IF NOT EXISTS idx_product_investors_inv_id ON product_investors (investor_id);
 CREATE INDEX IF NOT EXISTS idx_declined_offers_prod_id  ON declined_offers (product_id);
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='users' AND column_name='must_change_password') THEN
+    ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS feedback_reports (
   id         SERIAL PRIMARY KEY,
   page       TEXT,
