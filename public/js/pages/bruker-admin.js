@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 
-function showWelcomeModal(displayName, username, password) {
+function showWelcomeModal(displayName, username) {
   const loginUrl = window.location.origin;
   const msg = `Hei ${displayName}!
 
@@ -8,7 +8,7 @@ Du har fått tilgang til ORO CRM.
 
 🔗 Lenke: ${loginUrl}
 👤 Brukernavn: ${username}
-🔑 Passord: ${password}
+🔑 Passord: byttpassord
 
 Logg inn og endre passordet ditt ved første anledning.
 
@@ -70,11 +70,16 @@ function userModalHtml(user) {
         <div class="form-group full">
           <label>Brukernavn *</label>
           <input id="modal-username" value="${username}" placeholder="ola.nordmann" style="min-height:44px">
-        </div>` : ''}
-        <div class="form-group full">
-          <label>${isNew ? 'Passord *' : 'Nytt passord'} ${!isNew ? '<span style="font-weight:400;color:var(--muted);font-size:11px">(la stå tomt for å beholde)</span>' : ''}</label>
-          <input id="modal-password" type="password" placeholder="${isNew ? 'Minimum 6 tegn' : '••••••••'}" style="min-height:44px">
         </div>
+        <div class="form-group full">
+          <p style="font-size:12px;color:var(--muted);background:var(--bg);border-radius:6px;padding:8px 10px;">
+            🔑 Startpassord: <strong>byttpassord</strong> — brukeren blir bedt om å endre det ved første innlogging.
+          </p>
+        </div>` : `
+        <div class="form-group full">
+          <label>Nytt passord <span style="font-weight:400;color:var(--muted);font-size:11px">(la stå tomt for å beholde)</span></label>
+          <input id="modal-password" type="password" placeholder="••••••••" style="min-height:44px">
+        </div>`}
         <div class="form-group full">
           <label>Rolle</label>
           <select id="modal-role" style="min-height:44px">
@@ -222,9 +227,8 @@ export async function render(el, state) {
         }
 
         if (!displayName) { showErr('Visningsnavn er påkrevd'); return; }
-        if (isNew && !username)          { showErr('Brukernavn er påkrevd'); return; }
-        if (isNew && !password)          { showErr('Passord er påkrevd'); return; }
-        if (isNew && password.length < 6) { showErr('Passordet må være minst 6 tegn'); return; }
+        if (isNew && !username) { showErr('Brukernavn er påkrevd'); return; }
+        if (!isNew && password && password.length < 6) { showErr('Passordet må være minst 6 tegn'); return; }
 
         const saveBtn = document.getElementById('modal-save-btn');
         if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Lagrer…'; }
@@ -232,10 +236,10 @@ export async function render(el, state) {
 
         try {
           if (isNew) {
-            await api.createUser({ displayName, username, password, role });
+            await api.createUser({ displayName, username, role });
             window.closeModal();
             await load();
-            showWelcomeModal(displayName, username, password);
+            showWelcomeModal(displayName, username);
           } else {
             const patch = { displayName, role };
             if (password.trim()) patch.password = password;

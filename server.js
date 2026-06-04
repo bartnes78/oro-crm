@@ -1005,14 +1005,14 @@ app.post('/api/users', requireAdmin, async (req, res) => {
   const errors = [];
   if (!String(username    || '').trim()) errors.push('Brukernavn er påkrevd');
   if (!String(displayName || '').trim()) errors.push('Visningsnavn er påkrevd');
-  if (!String(password    || '').trim()) errors.push('Passord er påkrevd');
+  const effectivePassword = String(password || '').trim() || 'byttpassord';
   if (!['admin','bruker'].includes(role)) errors.push('Ugyldig rolle');
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [u] } = await query(`
       INSERT INTO users (username, display_name, role, password_hash, must_change_password)
       VALUES ($1,$2,$3,$4,TRUE) RETURNING *
-    `, [username.trim(), displayName.trim(), role, hashPassword(password)]);
+    `, [username.trim(), displayName.trim(), role, hashPassword(effectivePassword)]);
     res.json(fmtUser(u));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Brukernavnet er allerede i bruk' });
