@@ -4,10 +4,10 @@ const PHASES = ['Prospekt','Aktiv dialog','Investor','Tidligere investor','På v
 const FILTER_KEY = 'crm_filter_bulk';
 
 function loadFilter() {
-  try { return JSON.parse(localStorage.getItem(FILTER_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(window.lsKey(FILTER_KEY))) || {}; } catch { return {}; }
 }
 function saveFilter(f) {
-  localStorage.setItem(FILTER_KEY, JSON.stringify(f));
+  localStorage.setItem(window.lsKey(FILTER_KEY), JSON.stringify(f));
 }
 
 function selectHtml(id, value, options, emptyLabel) {
@@ -398,11 +398,11 @@ export async function render(el, state) {
   const COL_WIDTHS_KEY = 'crm_bulk_colwidths';
   function saveColWidths(table) {
     const widths = [...table.querySelectorAll('thead th')].map(th => th.offsetWidth);
-    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(widths));
+    localStorage.setItem(window.lsKey(COL_WIDTHS_KEY), JSON.stringify(widths));
   }
   function restoreColWidths(table) {
     try {
-      const widths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY));
+      const widths = JSON.parse(localStorage.getItem(window.lsKey(COL_WIDTHS_KEY)));
       if (!Array.isArray(widths)) return;
       const ths = table.querySelectorAll('thead th');
       widths.forEach((w, i) => { if (ths[i] && w > 20) ths[i].style.width = w + 'px'; });
@@ -511,7 +511,7 @@ export async function render(el, state) {
 
     el.querySelector('#clear-filters-btn')?.addEventListener('click', async () => {
       filterPhase = ''; filterLead = ''; filterType = ''; filterProduct = '';
-      localStorage.removeItem(FILTER_KEY);
+      localStorage.removeItem(window.lsKey(FILTER_KEY));
       try { await loadInvestors(); } catch {}
       buildPage();
     });

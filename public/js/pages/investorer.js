@@ -3,11 +3,11 @@ import { api } from '../api.js';
 const FILTER_KEY = 'crm_filter_investorer';
 
 function loadFilter() {
-  try { return JSON.parse(localStorage.getItem(FILTER_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(window.lsKey(FILTER_KEY))) || {}; } catch { return {}; }
 }
 
 function saveFilter(search, filter) {
-  localStorage.setItem(FILTER_KEY, JSON.stringify({ search, filter }));
+  localStorage.setItem(window.lsKey(FILTER_KEY), JSON.stringify({ search, filter }));
 }
 
 function esc(s) { return window.escHtml(s); }

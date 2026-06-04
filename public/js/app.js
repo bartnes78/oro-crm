@@ -18,6 +18,9 @@ import { render as renderAnalyse }         from './pages/analyse.js';
 // ── App state ─────────────────────────────────────────────────────────────────
 const state = { page: 'dashboard', id: null, currentUser: null };
 
+// Namespace localStorage keys per user so filters don't bleed across accounts
+window.lsKey = (key) => `${key}:${state.currentUser?.username || '_'}`;
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 window.navigate = function(page, id) {
   state.page = page;
@@ -135,8 +138,9 @@ function buildSidebar() {
       if (e.key === 'Enter') {
         const q = searchInput.value.trim();
         if (!q) return;
-        const saved = JSON.parse(localStorage.getItem('crm_filter_investorer') || '{}');
-        localStorage.setItem('crm_filter_investorer', JSON.stringify({ ...saved, search: q }));
+        const k = window.lsKey('crm_filter_investorer');
+        const saved = JSON.parse(localStorage.getItem(k) || '{}');
+        localStorage.setItem(k, JSON.stringify({ ...saved, search: q }));
         searchInput.value = '';
         window.navigate('investorer');
         window.closeSidebar();

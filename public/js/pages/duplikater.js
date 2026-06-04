@@ -13,11 +13,11 @@ const FIELDS = [
 ];
 
 function loadDismissed() {
-  try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]')); }
+  try { return new Set(JSON.parse(localStorage.getItem(window.lsKey(LS_KEY)) || '[]')); }
   catch { return new Set(); }
 }
 function saveDismissed(set) {
-  localStorage.setItem(LS_KEY, JSON.stringify([...set]));
+  localStorage.setItem(window.lsKey(LS_KEY), JSON.stringify([...set]));
 }
 
 function fmtVal(v) {

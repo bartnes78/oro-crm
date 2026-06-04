@@ -12,11 +12,11 @@ const FILTER_KEY = 'crm_filter_dashboard';
 let _productInvestors = null; // cached per-product investor list
 
 function loadFilter() {
-  try { return JSON.parse(localStorage.getItem(FILTER_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(window.lsKey(FILTER_KEY))) || {}; } catch { return {}; }
 }
 
 function saveFilter(f) {
-  localStorage.setItem(FILTER_KEY, JSON.stringify(f));
+  localStorage.setItem(window.lsKey(FILTER_KEY), JSON.stringify(f));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ function bindTop10Card(card, pageRoot, data, investors, filter) {
       filter.filterType    = '';
       filter.filterLead    = '';
       filter.filterProduct = '';
-      localStorage.removeItem(FILTER_KEY);
+      localStorage.removeItem(window.lsKey(FILTER_KEY));
       refreshTop10Card(pageRoot, data, investors, filter);
     });
   }
