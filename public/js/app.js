@@ -112,11 +112,37 @@ function buildSidebar() {
     ${NAV_ADMIN.map(i => navItem(i)).join('')}
     ${isAdmin ? navItem({ id:'brukere', icon:'👤', label:'Brukere', iconColor:'#8E44AD' }) : ''}
   </div>`;
+  // Global investor search
+  html += `
+    <div style="padding:10px 16px 4px">
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(253,252,249,.08);border:1px solid rgba(253,252,249,.12);border-radius:7px;padding:6px 10px;">
+        <span style="opacity:.5;font-size:13px;flex-shrink:0">🔍</span>
+        <input id="sidebar-search" type="search" placeholder="Søk investor…"
+          style="background:none;border:none;outline:none;color:rgba(253,252,249,.85);font-size:12.5px;font-family:inherit;width:100%;min-width:0;"
+          autocomplete="off">
+      </div>
+    </div>`;
+
   nav.innerHTML = html;
 
   nav.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => window.navigate(btn.dataset.page));
   });
+
+  const searchInput = document.getElementById('sidebar-search');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const q = searchInput.value.trim();
+        if (!q) return;
+        const saved = JSON.parse(localStorage.getItem('crm_filter_investorer') || '{}');
+        localStorage.setItem('crm_filter_investorer', JSON.stringify({ ...saved, search: q }));
+        searchInput.value = '';
+        window.navigate('investorer');
+        window.closeSidebar();
+      }
+    });
+  }
   document.getElementById('admin-toggle').addEventListener('click', () => {
     const d     = document.getElementById('admin-items');
     const arrow = document.getElementById('admin-arrow');

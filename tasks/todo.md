@@ -20,6 +20,14 @@
 
 ## Backlog
 
+### Feedback fra brukere (innrapportert via 🐛-knapp)
+
+- [x] **[detalj-side]** «Felles prosjekt»-kategorien skal ikke ha dokumenter — skjult i dokumentseksjonen *(kristian, 3. juni)*
+- [x] **[dashboard]** Global kundesøk i topbaren — søkefelt i sidemenyen, Enter navigerer til investorer *(kristian, 3. juni)*
+- [x] **[brukere]** Send velkomstmail til nye brukere — modal med ferdigskrevet velkomstmelding + kopierknapp *(kristian, 4. juni)*
+
+
+
 ### Kritisk (før ekte produksjonsdata)
 
 - [ ] Sett `CRM_PASS` til sterkt passord i Railway-miljøvariabler

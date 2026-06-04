@@ -1,5 +1,43 @@
 import { api } from '../api.js';
 
+function showWelcomeModal(displayName, username, password) {
+  const loginUrl = window.location.origin;
+  const msg = `Hei ${displayName}!
+
+Du har fått tilgang til ORO CRM.
+
+🔗 Lenke: ${loginUrl}
+👤 Brukernavn: ${username}
+🔑 Passord: ${password}
+
+Logg inn og endre passordet ditt ved første anledning.
+
+Hilsen ORO Areal`;
+
+  window.openModal(`
+    <div class="modal-header">
+      <h3>Velkomstmelding klar</h3>
+      <button class="btn-close" onclick="window.closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Kopier og send til brukeren:</p>
+      <textarea id="welcome-msg-txt" style="width:100%;height:200px;font-size:13px;font-family:inherit;resize:none" readonly>${window.escHtml(msg)}</textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="window.closeModal()">Lukk</button>
+      <button class="btn btn-primary" id="copy-welcome-btn">Kopier tekst</button>
+    </div>`, () => {
+    document.getElementById('copy-welcome-btn')?.addEventListener('click', () => {
+      const txt = document.getElementById('welcome-msg-txt');
+      txt.select();
+      navigator.clipboard.writeText(txt.value).catch(() => document.execCommand('copy'));
+      const btn = document.getElementById('copy-welcome-btn');
+      btn.textContent = '✓ Kopiert!';
+      setTimeout(() => { btn.textContent = 'Kopier tekst'; }, 2000);
+    });
+  });
+}
+
 function roleBadgeHtml(role) {
   const isAdmin = role === 'admin';
   return `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;
@@ -195,13 +233,16 @@ export async function render(el, state) {
         try {
           if (isNew) {
             await api.createUser({ displayName, username, password, role });
+            window.closeModal();
+            await load();
+            showWelcomeModal(displayName, username, password);
           } else {
             const patch = { displayName, role };
             if (password.trim()) patch.password = password;
             await api.updateUser(user._id, patch);
+            window.closeModal();
+            await load();
           }
-          window.closeModal();
-          await load();
         } catch (e) {
           showErr(e.message);
           if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = isNew ? 'Opprett' : 'Lagre'; }

@@ -100,7 +100,9 @@ function buildDocsCard(inv, products) {
   const archivedPhases = ['Investor', 'Tidligere investor', 'P&aring; vent'];
   const isArchived = ['Investor', 'Tidligere investor', 'På vent'].includes(inv.phase);
 
-  const relevantProducts = products.filter(p => (inv.product_interests || []).includes(p._id));
+  const relevantProducts = products.filter(p =>
+    (inv.product_interests || []).includes(p._id) && p.name !== 'Felles prosjekt'
+  );
   if (relevantProducts.length === 0) return '';
 
   const activeProds = isArchived
