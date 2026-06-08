@@ -207,6 +207,14 @@ function updateSidebarActive() {
     userSpan.textContent = state.currentUser.displayName +
       (state.currentUser.role === 'admin' ? ' · admin' : '');
   }
+
+  const mobileTitle = document.getElementById('mobile-title');
+  if (mobileTitle) {
+    const allNav = [...NAV_MAIN, ...NAV_ADMIN,
+      { id:'detalj', label:'Investor' }, { id:'prosjektDetalj', label:'Prosjekt' }, { id:'brukere', label:'Brukere' }];
+    const found = allNav.find(n => n.id === state.page);
+    mobileTitle.textContent = found ? found.label : 'ORO CRM';
+  }
 }
 
 // ── Mobile sidebar ────────────────────────────────────────────────────────────

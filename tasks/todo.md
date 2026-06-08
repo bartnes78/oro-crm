@@ -12,7 +12,7 @@
 - [x] `public/js/api.js` — `brregSearch`, `brregEnhet`, `brregSync`
 - [x] `investor-detalj.js` — `buildBrregCard()`: søk+koble hvis ikke koblet, vis stamdata+adresser+roller hvis koblet
 - [x] `investor-detalj.js` — event listeners for søk, kobling og synkronisering
-- [ ] Manuell test: søk, koble, synkroniser, adresser, roller → kontakter
+- [x] Manuell test: søk, koble, synkroniser, adresser, roller → kontakter
 
 ---
 

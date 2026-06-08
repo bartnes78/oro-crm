@@ -231,8 +231,8 @@ function buildGaugeCards(data) {
   return `
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
-                  letter-spacing:.6px;margin-bottom:10px">Tegnet vs. mål per fond</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>
+                  letter-spacing:.6px;margin-bottom:10px">Tegnet vs. mål per prosjekt</div>
+      <div class="gauge-cards" style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>
     </div>`;
 }
 
@@ -396,6 +396,20 @@ function setupEvents(el, data, investors, filter) {
   const loggBtn = el.querySelector('#dash-logg-btn');
   if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el));
 
+  const searchInput = el.querySelector('#dash-search');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const q = searchInput.value.trim();
+      if (!q) return;
+      const k = window.lsKey('crm_filter_investorer');
+      const saved = JSON.parse(localStorage.getItem(k) || '{}');
+      localStorage.setItem(k, JSON.stringify({ ...saved, search: q }));
+      searchInput.value = '';
+      window.navigate('investorer');
+    });
+  }
+
   // Top-10 card filters & rows
   const card = el.querySelector('.dash-top10-card');
   if (card) bindTop10Card(card, el, data, investors, filter);
@@ -437,6 +451,11 @@ export async function render(el) {
     el.innerHTML = `
       <div class="topbar">
         <span class="topbar-title">Dashboard</span>
+        <div class="search-box" style="flex:1;max-width:260px">
+          <span style="opacity:.45;font-size:13px;flex-shrink:0">🔍</span>
+          <input id="dash-search" type="search" placeholder="Søk investor…"
+            style="width:100%" autocomplete="off">
+        </div>
         <button id="dash-logg-btn" class="btn btn-green btn-sm" style="min-height:36px">+ Logg kontakt</button>
       </div>
       <div class="content">

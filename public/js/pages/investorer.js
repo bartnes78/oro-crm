@@ -161,7 +161,7 @@ function buildFilterBar(lookups, products, locations, filter) {
         value="${esc(filter.city || '')}"
         placeholder="By…"
         style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);
-               background:var(--bg);color:var(--text);width:110px;min-height:36px">
+               background:var(--bg);color:var(--text);width:90px;min-height:36px">
       ${resetBtn}
     </div>`;
 }

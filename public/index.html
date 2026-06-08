@@ -263,6 +263,20 @@
       font-size:20px; line-height:1;
     }
     #feedback-btn:hover { transform:scale(1.08); opacity:.92; }
+
+    /* ── Mobile overrides ── */
+    @media(max-width:1023px){ .topbar { display:none; } }
+    @media(max-width:640px){
+      .phase-bar-label { width:80px; font-size:11px; }
+      .modal-box { max-width:calc(100% - 16px); }
+      .inv-detail-layout { flex-direction:column !important; }
+      .inv-sidebar { width:100% !important; position:static !important; }
+      .gauge-cards > .card { flex:1 1 calc(50% - 8px); min-width:0 !important; max-width:none !important; }
+    }
+    @media(hover:none){
+      .icon-btn    { min-width:36px; min-height:36px; }
+      .icon-btn-sm { min-width:32px; min-height:32px; }
+    }
   </style>
 </head>
 <body>

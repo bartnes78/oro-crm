@@ -225,7 +225,7 @@ function buildKeyFigures(inv, products, piData, tasks) {
     : null;
 
   return `
-    <div style="width:272px;flex-shrink:0;position:sticky;top:16px;align-self:flex-start">
+    <div class="inv-sidebar" style="width:272px;flex-shrink:0;position:sticky;top:16px;align-self:flex-start">
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           ${window.phaseBadge(inv.phase)}
@@ -1286,7 +1286,7 @@ export async function render(el, state) {
       </div>
       <div class="content">
         ${buildDetailHeader(inv, products)}
-        <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+        <div class="inv-detail-layout" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
             <div class="grid-2">
               ${buildPipelineCard(inv, lookups)}
