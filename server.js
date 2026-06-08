@@ -313,7 +313,7 @@ app.get('/api/analyse', async (req, res) => {
       const signedPis = pis.filter(pi => Number(pi.committed_amount) > 0);
       const signedTicket = signedPis.reduce((s, pi) => s + (Number(pi.committed_amount) || Number(pi.target_ticket) || 0), 0);
       return {
-        id: p.id, name: p.name, target_size: p.target_size,
+        id: p.id, name: p.name, target_size: p.target_size, status: p.status,
         investorCount: pis.length,
         ticket:       Math.round(ticket * 10) / 10,
         weighted:     Math.round(weighted * 10) / 10,

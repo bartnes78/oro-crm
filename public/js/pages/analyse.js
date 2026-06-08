@@ -23,18 +23,38 @@ function sparkline(values, w = 320, h = 52) {
 }
 
 // ── Fondsstatus ───────────────────────────────────────────────────────────────
+const STATUS_STYLE = {
+  'Fundraising':  { bg: '#FEF9E7', color: '#9A6A1E', border: '#D4AC0D' },
+  'Etablert':     { bg: '#EAFAF1', color: '#1A5C1A', border: 'var(--color-signed)' },
+  'Fullført':     { bg: '#F2F3F4', color: '#555',    border: '#AAA' },
+  'Avlyst':       { bg: '#FDEDEC', color: '#922B21', border: '#C0392B' },
+  'Pipeline':     { bg: '#EBF5FB', color: '#1A5276', border: '#2471A3' },
+};
+
+function statusBadge(status) {
+  if (!status) return '';
+  const s = STATUS_STYLE[status] || { bg: '#F2F3F4', color: '#555', border: '#AAA' };
+  return `<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;
+    background:${s.bg};color:${s.color};border:1px solid ${s.border};margin-left:8px;
+    vertical-align:middle;white-space:nowrap">${esc(status)}</span>`;
+}
+
 function buildFundStats(fundStats) {
   if (!fundStats.length) return `<div class="card" style="margin-bottom:20px">${window.ui.emptyState('Ingen fondsdata')}</div>`;
   const rows = fundStats.map(f => {
     const pct = f.target_size ? Math.min(Math.round(f.signedTicket / f.target_size * 100), 100) : null;
     const pctPipeline = f.target_size ? Math.min(Math.round(f.weighted / f.target_size * 100), 100) : null;
+    const dimmed = f.status === 'Avlyst' || f.status === 'Fullført';
     return `
-      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="padding:12px 0;border-bottom:1px solid var(--border);${dimmed ? 'opacity:.55' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-          <button class="fund-nav-btn" data-id="${esc(String(f.id))}"
-            style="background:none;border:none;padding:0;cursor:pointer;font-weight:600;font-size:14px;color:var(--blue);text-align:left">
-            ${esc(f.name)}
-          </button>
+          <div>
+            <button class="fund-nav-btn" data-id="${esc(String(f.id))}"
+              style="background:none;border:none;padding:0;cursor:pointer;font-weight:600;font-size:14px;color:var(--blue);text-align:left">
+              ${esc(f.name)}
+            </button>
+            ${statusBadge(f.status)}
+          </div>
           <span style="font-size:12px;color:var(--muted)">${f.investorCount} investorer</span>
         </div>
         ${f.target_size ? `
