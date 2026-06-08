@@ -1289,11 +1289,12 @@ export async function render(el, state) {
               ${buildPipelineCard(inv, lookups)}
               ${buildProductCard(inv, products, piData)}
             </div>
+            ${inv.org_nr ? buildBrregCard(inv) : ''}
             <div class="grid-2">
               ${buildDocsCard(inv, products)}
               ${buildContactsCard(inv, visInaktive)}
             </div>
-            ${buildBrregCard(inv)}
+            ${!inv.org_nr ? buildBrregCard(inv) : ''}
             ${buildLogCard(inv, products)}
             ${buildTasksCard(tasks)}
           </div>
