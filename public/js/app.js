@@ -14,6 +14,10 @@ import { render as renderOppfolging }      from './pages/oppfolging.js';
 import { render as renderBackup }          from './pages/backup.js';
 import { render as renderBrukere }         from './pages/bruker-admin.js';
 import { render as renderAnalyse }         from './pages/analyse.js';
+import { render as renderKanban }          from './pages/kanban.js';
+import { render as renderDataKvalitet }    from './pages/data-kvalitet.js';
+import { render as renderAuditLogg }       from './pages/audit-logg.js';
+import { render as renderPapirkurv }       from './pages/papirkurv.js';
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const state = { page: 'dashboard', id: null, currentUser: null };
@@ -92,6 +96,7 @@ const NAV_MAIN = [
   { id:'investorer', icon:'◈', label:'Investorer' },
   { id:'epost',      icon:'✉', label:'Importer fra Outlook' },
   { id:'oppfolging', icon:'⏱', label:'Oppfølging' },
+  { id:'kanban',     icon:'⬛', label:'Kanban' },
   { id:'oppgaver',   icon:'☑', label:'Oppgaver' },
   { id:'analyse',    icon:'📊', label:'Analyse' },
 ];
@@ -101,6 +106,9 @@ const NAV_ADMIN = [
   { id:'duplikater',   icon:'⧉',  label:'Duplikater' },
   { id:'dupkontakter', icon:'👥', label:'Duplikate kontakter', iconColor:'#E67E22' },
   { id:'backup',       icon:'↩',  label:'Backup' },
+  { id:'papirkurv',    icon:'🗑',  label:'Papirkurv',    iconColor:'#e74c3c' },
+  { id:'datakvalitet', icon:'✓',   label:'Datakvalitet', iconColor:'#27ae60' },
+  { id:'auditlogg',    icon:'📋',  label:'Audit-logg',   iconColor:'#7f8c8d' },
 ];
 
 function buildSidebar() {
@@ -165,7 +173,7 @@ function navItem(i) {
   </button>`;
 }
 
-const ADMIN_PAGES = new Set(['prosjekter','prosjektDetalj','bulk','duplikater','dupkontakter','backup','brukere']);
+const ADMIN_PAGES = new Set(['prosjekter','prosjektDetalj','bulk','duplikater','dupkontakter','backup','brukere','papirkurv','datakvalitet','auditlogg']);
 
 function updateSidebarActive() {
   const cur = state.page === 'detalj' ? 'investorer'
@@ -220,6 +228,7 @@ function renderPage() {
     dupkontakter:'Duplikate kontakter', bulk:'Bulkredigering',
     epost:'E-post import', oppfolging:'Oppfølging', backup:'Backup',
     brukere:'Brukere', analyse:'Analyse',
+    datakvalitet:'Datakvalitet', auditlogg:'Audit-logg', papirkurv:'Papirkurv', kanban:'Pipeline Kanban',
   };
   const mobileTitle = document.getElementById('mobile-title');
   if (mobileTitle) mobileTitle.textContent = titles[page] || 'ORO CRM';
@@ -240,6 +249,10 @@ function renderPage() {
     case 'backup':         renderBackup(el, state);          break;
     case 'brukere':        renderBrukere(el, state);         break;
     case 'analyse':        renderAnalyse(el, state);         break;
+    case 'kanban':         renderKanban(el, state);           break;
+    case 'datakvalitet':   renderDataKvalitet(el, state);    break;
+    case 'auditlogg':      renderAuditLogg(el, state);       break;
+    case 'papirkurv':      renderPapirkurv(el, state);       break;
     default:
       el.innerHTML = '<div class="content"><p class="text-muted">Side ikke funnet.</p></div>';
   }

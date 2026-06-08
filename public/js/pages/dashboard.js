@@ -196,6 +196,46 @@ function buildTop10Card(data, investors, filter) {
     </div>`;
 }
 
+function buildGaugeCards(data) {
+  const prods = (data.products || []).filter(p => p.status !== 'Avlyst' && (p.target_size > 0 || p.committed > 0));
+  if (!prods.length) return '';
+
+  const ARC_LEN = Math.PI * 40; // semicircle radius 40 → ≈ 125.66
+
+  function gauge(committed, target) {
+    const pct    = target > 0 ? Math.min(committed / target, 1) : 0;
+    const offset = ARC_LEN * (1 - pct);
+    const color  = pct >= 1 ? 'var(--color-signed)' : pct >= 0.5 ? '#2155A3' : '#D35400';
+    return `
+      <svg viewBox="0 0 100 58" width="110" height="64" style="display:block;margin:0 auto 6px">
+        <path d="M 10,54 A 40,40 0 0,1 90,54"
+          fill="none" stroke="var(--border)" stroke-width="9" stroke-linecap="round"/>
+        <path d="M 10,54 A 40,40 0 0,1 90,54"
+          fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round"
+          stroke-dasharray="${ARC_LEN.toFixed(2)}"
+          stroke-dashoffset="${offset.toFixed(2)}"/>
+        <text x="50" y="50" text-anchor="middle" font-size="13" font-weight="700"
+          fill="var(--text)" font-family="inherit">${Math.round(pct * 100)}%</text>
+      </svg>`;
+  }
+
+  const cards = prods.map(p => `
+    <div class="card" style="text-align:center;flex:1;min-width:140px;max-width:220px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:10px">${esc(p.name.replace('ORO ', ''))}</div>
+      ${gauge(p.committed || 0, p.target_size || 0)}
+      <div style="font-size:15px;font-weight:700;color:var(--color-signed)">${fmt(p.committed || 0, 0)} MNOK</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">av ${fmt(p.target_size || 0, 0)} MNOK mål</div>
+    </div>`).join('');
+
+  return `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                  letter-spacing:.6px;margin-bottom:10px">Tegnet vs. mål per fond</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>
+    </div>`;
+}
+
 function buildRecentActivity(recent) {
   if (!recent || recent.length === 0) return '';
   const items = recent.map(l => `
@@ -401,6 +441,7 @@ export async function render(el) {
       </div>
       <div class="content">
         ${buildKPIs(data)}
+        ${buildGaugeCards(data)}
         <div class="grid-2">
           ${buildPipelineCard(data)}
           ${buildTypeCard(data)}

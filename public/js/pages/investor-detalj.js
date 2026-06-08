@@ -1,5 +1,17 @@
 ﻿import { api } from '../api.js';
 
+const LOG_ICONS = {
+  'Møte':           '🤝',
+  'Telefon':        '📞',
+  'Tapt anrop':     '📵',
+  'E-post mottatt': '📨',
+  'E-post sendt':   '📤',
+  'Event':          '🎯',
+  'Video':          '📹',
+  'Notat':          '📝',
+  'Annet':          '📋',
+};
+
 function addDate(months) {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
@@ -174,6 +186,96 @@ function buildDocsCard(inv, products) {
       ${productsHtml}
     </div>
   `;
+}
+
+function buildKeyFigures(inv, products, piData, tasks) {
+  const piMap      = Object.fromEntries(piData.map(pi => [pi.product_id, pi]));
+  const interests  = new Set(inv.product_interests || []);
+  const declinedIds = new Set((inv.declined_offers || []).map(d => d.product_id));
+  const activeProds = products.filter(p => interests.has(p._id) && !declinedIds.has(p._id) && p.name !== 'Felles prosjekt');
+
+  let totalWeighted = 0, totalCommitted = 0;
+  const prodRows = activeProds.map(p => {
+    const pi        = piMap[p._id] || {};
+    const ticket    = pi.target_ticket    != null ? pi.target_ticket    : null;
+    const prob      = pi.probability      != null ? Math.round(pi.probability * 100) : null;
+    const committed = pi.committed_amount != null ? pi.committed_amount : null;
+    if (ticket != null && pi.probability != null) totalWeighted += ticket * pi.probability;
+    if (committed != null) totalCommitted += committed;
+    return `
+      <div style="padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px">${window.escHtml(p.name)}</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          ${ticket != null ? `<span style="font-size:13px;font-weight:600">${window.fmt(ticket, 0)} <span style="font-size:10px;color:var(--muted)">MNOK</span></span>` : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+          ${prob  != null ? `<span style="font-size:12px;color:var(--muted)">${prob}%</span>` : ''}
+          ${committed != null ? `<span style="font-size:11px;font-weight:600;color:var(--color-signed);background:rgba(26,138,106,.08);padding:2px 7px;border-radius:10px">✓ ${window.fmt(committed, 0)}M</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const openTasks   = tasks.filter(t => !t.done);
+  const allLog      = inv.log || [];
+  const todayIso    = new Date().toISOString().slice(0, 10);
+  const planned     = allLog.filter(l => l.status === 'planlagt');
+  const overdue     = planned.filter(l => l.date < todayIso);
+  const activityCnt = allLog.filter(l => l.status !== 'planlagt').length;
+  const primaryCtct = (inv.contacts || []).find(c => c.is_primary === 1 && c.active !== 0);
+  const lastContactStr = inv.last_contact
+    ? new Date(inv.last_contact).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
+
+  return `
+    <div style="width:272px;flex-shrink:0;position:sticky;top:16px;align-self:flex-start">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          ${window.phaseBadge(inv.phase)}
+          ${lastContactStr ? `<span style="font-size:11px;color:var(--muted)">Sist: ${window.escHtml(lastContactStr)}</span>` : '<span style="font-size:11px;color:var(--muted)">Ikke kontaktet</span>'}
+        </div>
+
+        ${activeProds.length > 0 ? `
+          <div style="margin-bottom:12px">
+            ${prodRows}
+            ${totalWeighted > 0 || totalCommitted > 0 ? `
+              <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">
+                ${totalWeighted > 0 ? `<div>
+                  <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Vektet</div>
+                  <div style="font-size:17px;font-weight:700">${window.fmt(totalWeighted, 1)} M</div>
+                </div>` : ''}
+                ${totalCommitted > 0 ? `<div>
+                  <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Tegnet</div>
+                  <div style="font-size:17px;font-weight:700;color:var(--color-signed)">${window.fmt(totalCommitted, 1)} M</div>
+                </div>` : ''}
+              </div>` : ''}
+          </div>` : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Ingen produktinteresse</p>`}
+
+        <div style="display:flex;flex-direction:column;gap:9px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:12px;color:var(--muted)">📋 Aktiviteter</span>
+            <span style="font-size:13px;font-weight:600">${activityCnt}</span>
+          </div>
+          ${planned.length > 0 ? `
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:${overdue.length > 0 ? '#e74c3c' : 'var(--blue)'}">📅 Planlagte</span>
+              <span style="font-size:13px;font-weight:600;color:${overdue.length > 0 ? '#e74c3c' : 'var(--blue)'}">${planned.length}${overdue.length > 0 ? ` (${overdue.length} forfalt)` : ''}</span>
+            </div>` : ''}
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:12px;color:var(--muted)">☑ Åpne oppgaver</span>
+            <span style="font-size:13px;font-weight:600${openTasks.length > 0 ? ';color:#e67e22' : ''}">${openTasks.length}</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:12px;color:var(--muted)">👤 Kontakter</span>
+            <span style="font-size:13px;font-weight:600">${(inv.contacts || []).filter(c => c.active !== 0).length}</span>
+          </div>
+          ${primaryCtct ? `
+            <div style="background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:2px">
+              <div style="font-size:12px;font-weight:600">${window.escHtml(primaryCtct.name)}</div>
+              ${primaryCtct.title ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.title)}</div>` : ''}
+              ${primaryCtct.email ? `<a href="mailto:${window.escHtml(primaryCtct.email)}" style="font-size:11px;color:var(--blue);text-decoration:none;display:block;margin-top:2px">${window.escHtml(primaryCtct.email)}</a>` : ''}
+              ${primaryCtct.phone ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.phone)}</div>` : ''}
+            </div>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
 function buildContactsCard(inv, visInaktive) {
@@ -353,8 +455,12 @@ function buildLogCard(inv, products) {
   const avholdt  = allLog.filter(l => l.status !== 'planlagt').sort((a, b) => b.date.localeCompare(a.date));
   const prodMap = Object.fromEntries(products.map(p => [p._id, p]));
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   function buildLogRow(l) {
     const isPlanlagt = l.status === 'planlagt';
+    const isOverdue  = isPlanlagt && l.date < todayStr;
+    const icon       = LOG_ICONS[l.log_type] || '📋';
     const declinedHtml = (l.declined_products || []).length > 0 ? `
       <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;color:#e74c3c;font-weight:600;">Avsto fra:</span>
@@ -366,9 +472,10 @@ function buildLogCard(inv, products) {
     ` : '';
 
     return `
-      <div class="log-item" data-log-id="${window.escHtml(String(l._id))}" style="${isPlanlagt ? 'background:rgba(52,152,219,.04);border-radius:6px;padding:8px 10px;margin-bottom:4px;' : ''}">
+      <div class="log-item" data-log-id="${window.escHtml(String(l._id))}" style="${isOverdue ? 'background:rgba(231,76,60,.04);border-radius:6px;padding:8px 10px;margin-bottom:4px;' : isPlanlagt ? 'background:rgba(52,152,219,.04);border-radius:6px;padding:8px 10px;margin-bottom:4px;' : ''}">
         <div class="log-item-top" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="log-date" style="${isPlanlagt ? 'color:var(--blue);font-weight:600;' : ''}">${window.escHtml(l.date)}</span>
+          <span style="font-size:15px;flex-shrink:0">${icon}</span>
+          <span class="log-date" style="${isOverdue ? 'color:#e74c3c;font-weight:600;' : isPlanlagt ? 'color:var(--blue);font-weight:600;' : ''}">${window.escHtml(l.date)}${isOverdue ? ' ⚠' : ''}</span>
           <span class="badge badge-default">${window.escHtml(l.log_type || 'Kontakt')}</span>
           ${l.contact_person ? `<span style="font-size:12px;color:#555;">${window.escHtml(l.contact_person)}</span>` : ''}
           <span class="log-who" style="font-size:12px;color:var(--muted);">${window.escHtml(l.responsible || '')}</span>
@@ -1102,16 +1209,21 @@ export async function render(el, state) {
       </div>
       <div class="content">
         ${buildDetailHeader(inv, products)}
-        <div class="grid-2">
-          ${buildPipelineCard(inv, lookups)}
-          ${buildProductCard(inv, products, piData)}
+        <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div class="grid-2">
+              ${buildPipelineCard(inv, lookups)}
+              ${buildProductCard(inv, products, piData)}
+            </div>
+            <div class="grid-2">
+              ${buildDocsCard(inv, products)}
+              ${buildContactsCard(inv, visInaktive)}
+            </div>
+            ${buildLogCard(inv, products)}
+            ${buildTasksCard(tasks)}
+          </div>
+          ${buildKeyFigures(inv, products, piData, tasks)}
         </div>
-        <div class="grid-2">
-          ${buildDocsCard(inv, products)}
-          ${buildContactsCard(inv, visInaktive)}
-        </div>
-        ${buildLogCard(inv, products)}
-        ${buildTasksCard(tasks)}
       </div>
     `;
 

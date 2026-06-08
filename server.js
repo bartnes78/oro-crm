@@ -229,10 +229,35 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+app.use('/api', (req, res, next) => {
+  if (!req.currentUser?.mustChangePassword) return next();
+  const allowed =
+    (req.method === 'GET'  && req.path === '/me') ||
+    (req.method === 'PUT'  && req.path === '/me/password');
+  if (!allowed)
+    return res.status(403).json({ error: 'Passord må endres før du kan bruke CRM' });
+  next();
+});
+
 function requireAdmin(req, res, next) {
   if (req.currentUser?.role !== 'admin')
     return res.status(403).json({ error: 'Kun administratorer har tilgang' });
   next();
+}
+
+async function auditLog(userId, username, action, entityType, entityId, oldVal, newVal, description) {
+  try {
+    await query(
+      `INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, old_value, new_value, description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [userId ?? null, username ?? null, action, entityType, String(entityId ?? ''),
+       oldVal != null ? JSON.stringify(oldVal) : null,
+       newVal != null ? JSON.stringify(newVal) : null,
+       description ?? null]
+    );
+  } catch (e) {
+    console.error('[audit]', e.message);
+  }
 }
 
 // ── Validering ────────────────────────────────────────────────────────────────
@@ -271,7 +296,7 @@ app.get('/api/analyse', async (req, res) => {
                SELECT 1 FROM declined_offers d
                WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
              )`),
-      query('SELECT id, phase, investor_type FROM investors'),
+      query('SELECT id, phase, investor_type FROM investors WHERE deleted_at IS NULL'),
       query(`SELECT DATE_TRUNC('month', date)::date AS month, COUNT(*)::int AS count, responsible
              FROM contact_log
              WHERE date >= NOW() - INTERVAL '13 months'
@@ -358,7 +383,7 @@ app.get('/api/aktivitetslogg', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
-      query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors'),
+      query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors WHERE deleted_at IS NULL'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
       query(`SELECT pi.investor_id, pi.target_ticket, pi.probability
              FROM product_investors pi
@@ -368,7 +393,7 @@ app.get('/api/dashboard', async (req, res) => {
                WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
              )`),
       query('SELECT * FROM products'),
-      query('SELECT product_id, investor_id FROM product_investors'),
+      query('SELECT product_id, investor_id, committed_amount FROM product_investors'),
     ]);
 
     const total = investors.length;
@@ -409,13 +434,17 @@ app.get('/api/dashboard', async (req, res) => {
     const byType = Object.values(typeMap).sort((a, b) => b.count - a.count);
 
     const invsByProduct = {};
+    const committedByProduct = {};
     piAllRows.forEach(pi => {
       if (!invsByProduct[pi.product_id]) invsByProduct[pi.product_id] = new Set();
       invsByProduct[pi.product_id].add(pi.investor_id);
+      committedByProduct[pi.product_id] = (committedByProduct[pi.product_id] || 0) + (Number(pi.committed_amount) || 0);
     });
     const products = productList.map(p => ({
-      _id: p.id, name: p.name,
-      count: (invsByProduct[p.id] || new Set()).size,
+      _id: p.id, name: p.name, target_size: p.target_size || null,
+      count:     (invsByProduct[p.id] || new Set()).size,
+      committed: Math.round((committedByProduct[p.id] || 0) * 10) / 10,
+      status:    p.status || null,
     }));
 
     const top10 = investors
@@ -454,7 +483,8 @@ app.get('/api/investors', async (req, res) => {
     if (country) { params.push(country);                  where.push(`i.country = $${params.length}`); }
     if (city)    { params.push('%' + city + '%');          where.push(`i.city ILIKE $${params.length}`); }
 
-    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    where.push('i.deleted_at IS NULL');
+    const whereClause = 'WHERE ' + where.join(' AND ');
     let { rows } = await query(`SELECT i.* FROM investors i ${join} ${whereClause}`, params);
 
     if (product) {
@@ -496,7 +526,7 @@ app.get('/api/investors', async (req, res) => {
 
 app.get('/api/locations', async (req, res) => {
   try {
-    const { rows } = await query('SELECT DISTINCT country, city FROM investors');
+    const { rows } = await query('SELECT DISTINCT country, city FROM investors WHERE deleted_at IS NULL');
     const countries = [...new Set(rows.map(r => r.country).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     const cities    = [...new Set(rows.map(r => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     res.json({ countries, cities });
@@ -534,6 +564,7 @@ app.post('/api/investors', async (req, res) => {
       ));
     }
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'investor', inv.id, null, { name: inv.name, phase: inv.phase, lead: inv.lead }, `Opprettet investor: ${inv.name}`);
     res.json({ ...fmtInvestor(inv), product_interests: interests });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -546,7 +577,7 @@ app.post('/api/investors', async (req, res) => {
 
 app.get('/api/investors/:id', async (req, res) => {
   try {
-    const { rows: invRows } = await query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
+    const { rows: invRows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
     if (!invRows[0]) return res.status(404).json({ error: 'Not found' });
     const [{ rows: contacts }, { rows: log }, { rows: piRows }, { rows: declinedRows }] = await Promise.all([
       query('SELECT * FROM contacts WHERE investor_id = $1 ORDER BY is_primary DESC', [req.params.id]),
@@ -571,7 +602,7 @@ app.put('/api/investors/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
+    const { rows } = await client.query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const cur = rows[0];
     const b   = req.body;
@@ -615,6 +646,10 @@ app.put('/api/investors/:id', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
+      { name: cur.name, phase: cur.phase, lead: cur.lead },
+      { name: updated.name, phase: updated.phase, lead: updated.lead },
+      `Oppdaterte investor: ${updated.name}`);
     res.json({ ...fmtInvestor(updated), product_interests: newInterests });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -625,16 +660,43 @@ app.put('/api/investors/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/investors/:id', async (req, res) => {
+app.delete('/api/investors/:id', requireAdmin, async (req, res) => {
   const id = req.params.id;
   try {
-    const { rows } = await query('SELECT id FROM investors WHERE id = $1', [id]);
+    const { rows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Investor ikke funnet' });
-    await query('DELETE FROM investors WHERE id = $1', [id]); // CASCADE sletter contacts, contact_log, tasks, product_investors, declined_offers
+    const inv = rows[0];
+    await query('UPDATE investors SET deleted_at = NOW() WHERE id = $1', [id]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'investor', id, { name: inv.name, phase: inv.phase, lead: inv.lead }, null, `Flyttet til papirkurv: ${inv.name}`);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/api/investors/trash', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT i.*, COUNT(c.id)::int AS contact_count
+      FROM investors i
+      LEFT JOIN contacts c ON c.investor_id = i.id
+      WHERE i.deleted_at IS NOT NULL
+      GROUP BY i.id
+      ORDER BY i.deleted_at DESC
+    `);
+    res.json(rows.map(r => ({ ...fmtInvestor(r), deleted_at: r.deleted_at, contact_count: r.contact_count })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/investors/:id/restore', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const { rows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NOT NULL', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Investor ikke funnet i papirkurven' });
+    await query('UPDATE investors SET deleted_at = NULL WHERE id = $1', [id]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'restore', 'investor', id, null, { name: rows[0].name }, `Gjenopprettet investor: ${rows[0].name}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Duplikater ────────────────────────────────────────────────────────────────
@@ -655,7 +717,7 @@ function jaccard(a, b) {
 
 app.get('/api/duplicates', async (req, res) => {
   try {
-    const { rows: investors } = await query('SELECT * FROM investors');
+    const { rows: investors } = await query('SELECT * FROM investors WHERE deleted_at IS NULL');
     const pairs = [];
     for (let i = 0; i < investors.length; i++) {
       for (let j = i + 1; j < investors.length; j++) {
@@ -673,7 +735,7 @@ app.get('/api/duplicate-contacts', async (req, res) => {
   try {
     const [{ rows: contacts }, { rows: investors }] = await Promise.all([
       query('SELECT * FROM contacts'),
-      query('SELECT id, name FROM investors'),
+      query('SELECT id, name FROM investors WHERE deleted_at IS NULL'),
     ]);
     const invMap = Object.fromEntries(investors.map(i => [i.id, i.name]));
     const groups = [];
@@ -713,7 +775,7 @@ app.get('/api/duplicate-contacts', async (req, res) => {
   }
 });
 
-app.post('/api/merge', async (req, res) => {
+app.post('/api/merge', requireAdmin, async (req, res) => {
   const { keep_id, drop_id } = req.body;
   if (!keep_id || !drop_id) return res.status(400).json({ error: 'keep_id og drop_id er påkrevd' });
 
@@ -756,6 +818,10 @@ app.post('/api/merge', async (req, res) => {
     `, [keep_id, drop_id]);
     await client.query('DELETE FROM investors WHERE id=$1', [drop_id]);
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'merge', 'investor', keep_id,
+      { dropped_id: drop_id, dropped_name: drop.name },
+      { kept_id: keep_id, kept_name: keep.name },
+      `Slo sammen ${drop.name} (${drop_id}) inn i ${keep.name} (${keep_id})`);
 
     const { rows: [final] } = await client.query('SELECT * FROM investors WHERE id=$1', [keep_id]);
     const { rows: finalPi } = await client.query('SELECT product_id FROM product_investors WHERE investor_id=$1', [keep_id]);
@@ -793,6 +859,7 @@ app.post('/api/contacts', async (req, res) => {
     `, [req.body.investor_id, req.body.name, req.body.title || null,
         req.body.email || null, req.body.phone || null, req.body.is_primary || 0, req.body.notes || null,
         req.body.active ?? 1]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'contact', c.id, null, { name: c.name, investor_id: c.investor_id }, `Opprettet kontakt: ${c.name}`);
     res.json(fmtRow(c));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -814,9 +881,11 @@ app.put('/api/contacts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/contacts/:id', async (req, res) => {
+app.delete('/api/contacts/:id', requireAdmin, async (req, res) => {
   try {
+    const { rows } = await query('SELECT * FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
     await query('DELETE FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
+    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'contact', req.params.id, { name: rows[0].name, investor_id: rows[0].investor_id }, null, `Slettet kontakt: ${rows[0].name}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -844,6 +913,10 @@ app.post('/api/contacts/merge', async (req, res) => {
     `, [parseInt(keep_id), drop.title, drop.email, drop.phone, drop.notes]);
     await client.query('DELETE FROM contacts WHERE id = $1', [parseInt(drop_id)]);
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'merge', 'contact', keep_id,
+      { dropped_id: drop_id, dropped_name: drop.name },
+      { kept_id: keep_id, kept_name: keep.name },
+      `Slo sammen kontakter: ${drop.name} inn i ${keep.name}`);
     const { rows: [merged] } = await client.query('SELECT * FROM contacts WHERE id = $1', [parseInt(keep_id)]);
     res.json(fmtRow(merged));
   } catch (e) {
@@ -886,6 +959,7 @@ app.post('/api/log', async (req, res) => {
         req.body.status || null,
         JSON.stringify(Array.isArray(req.body.declined_products) ? req.body.declined_products : [])]);
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'log', entry.id, null, { investor_id: entry.investor_id, date: entry.date, log_type: entry.log_type }, `Ny loggføring for ${req.body.investor_name || req.body.investor_id}`);
     res.json(fmtRow(entry));
   } catch (e) {
     await client.query('ROLLBACK');
@@ -922,7 +996,9 @@ app.put('/api/log/:id', async (req, res) => {
 
 app.delete('/api/log/:id', async (req, res) => {
   try {
+    const { rows } = await query('SELECT investor_id, date, log_type FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
     await query('DELETE FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
+    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'log', req.params.id, { investor_id: rows[0].investor_id, date: rows[0].date, log_type: rows[0].log_type }, null, `Slettet loggføring`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -972,7 +1048,9 @@ app.put('/api/tasks/:id', async (req, res) => {
 
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
+    const { rows } = await query('SELECT label, investor_id FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
     await query('DELETE FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
+    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'task', req.params.id, { label: rows[0].label, investor_id: rows[0].investor_id }, null, `Slettet oppgave: ${rows[0].label}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -983,7 +1061,7 @@ app.get('/api/me', (req, res) => res.json(req.currentUser));
 app.put('/api/me/password', async (req, res) => {
   const { password } = req.body;
   if (!password || password.trim().length < 6)
-    return validationError(res, 'Passordet må være minst 6 tegn');
+    return validationError(res, ['Passordet må være minst 6 tegn']);
   try {
     const { rows: [u] } = await query(
       'UPDATE users SET password_hash=$1, must_change_password=FALSE WHERE id=$2 RETURNING *',
@@ -1013,6 +1091,7 @@ app.post('/api/users', requireAdmin, async (req, res) => {
       INSERT INTO users (username, display_name, role, password_hash, must_change_password)
       VALUES ($1,$2,$3,$4,TRUE) RETURNING *
     `, [username.trim(), displayName.trim(), role, hashPassword(effectivePassword)]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'user', u.id, null, { username: u.username, role: u.role }, `Opprettet bruker: ${u.username}`);
     res.json(fmtUser(u));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Brukernavnet er allerede i bruk' });
@@ -1035,6 +1114,14 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
     const { rows: [u] } = await query(`
       UPDATE users SET display_name=$2, role=$3, password_hash=$4, must_change_password=$5 WHERE id=$1 RETURNING *
     `, [id, newDisplayName, newRole, newHash, mustChange]);
+    const changes = [];
+    if (displayName && displayName.trim() !== cur.display_name) changes.push('navn');
+    if (role && role !== cur.role) changes.push(`rolle: ${cur.role} → ${role}`);
+    if (passwordReset) changes.push('passord tilbakestilt');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'user', id,
+      { role: cur.role, display_name: cur.display_name },
+      { role: u.role, display_name: u.display_name },
+      `Oppdaterte bruker ${u.username}${changes.length ? ': ' + changes.join(', ') : ''}`);
     res.json(fmtUser(u));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1043,10 +1130,86 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   if (id === req.currentUser._id) return res.status(400).json({ error: 'Du kan ikke slette din egen konto' });
   try {
-    const { rows } = await query('SELECT id FROM users WHERE id = $1', [id]);
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Bruker ikke funnet' });
     await query('DELETE FROM users WHERE id = $1', [id]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'user', id, { username: rows[0].username, role: rows[0].role }, null, `Slettet bruker: ${rows[0].username}`);
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Audit-logg ────────────────────────────────────────────────────────────────
+app.get('/api/audit-log', requireAdmin, async (req, res) => {
+  try {
+    const limit      = Math.min(parseInt(req.query.limit) || 200, 500);
+    const entityType = req.query.entity_type;
+    const params     = [];
+    const where      = [];
+    if (entityType) { params.push(entityType); where.push(`entity_type = $${params.length}`); }
+    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { rows } = await query(
+      `SELECT id, user_id, username, action, entity_type, entity_id, description, created_at
+       FROM audit_log ${whereClause}
+       ORDER BY created_at DESC LIMIT $${params.length + 1}`,
+      [...params, limit]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Datakvalitet ──────────────────────────────────────────────────────────────
+app.get('/api/data-quality', requireAdmin, async (req, res) => {
+  try {
+    const [{ rows: investors }, { rows: contacts }, { rows: piRows }] = await Promise.all([
+      query('SELECT id, name, phase, lead, last_contact FROM investors WHERE deleted_at IS NULL'),
+      query('SELECT investor_id, email FROM contacts WHERE active = 1'),
+      query('SELECT investor_id, target_ticket, probability FROM product_investors'),
+    ]);
+
+    const contactsByInv = {};
+    contacts.forEach(c => {
+      if (!contactsByInv[c.investor_id]) contactsByInv[c.investor_id] = [];
+      contactsByInv[c.investor_id].push(c);
+    });
+
+    const now       = Date.now();
+    const ms30      = 30 * 24 * 60 * 60 * 1000;
+    const noEmail   = [], noLead = [], noPhase = [], noLastContact = [];
+    const inactive30 = [], inactive60 = [], inactive90 = [];
+
+    investors.forEach(inv => {
+      const ctList   = contactsByInv[inv.id] || [];
+      if (!ctList.some(c => c.email)) noEmail.push({ id: inv.id, name: inv.name });
+      if (!inv.lead)                  noLead.push({ id: inv.id, name: inv.name });
+      if (!inv.phase)                 noPhase.push({ id: inv.id, name: inv.name });
+      if (!inv.last_contact) {
+        noLastContact.push({ id: inv.id, name: inv.name });
+        inactive30.push({ id: inv.id, name: inv.name, last_contact: null });
+        inactive60.push({ id: inv.id, name: inv.name, last_contact: null });
+        inactive90.push({ id: inv.id, name: inv.name, last_contact: null });
+      } else {
+        const age = now - new Date(inv.last_contact).getTime();
+        const item = { id: inv.id, name: inv.name, last_contact: inv.last_contact };
+        if (age > ms30)      inactive30.push(item);
+        if (age > ms30 * 2)  inactive60.push(item);
+        if (age > ms30 * 3)  inactive90.push(item);
+      }
+    });
+
+    const piMissing = piRows
+      .filter(pi => pi.target_ticket == null || pi.probability == null)
+      .map(pi => ({ investor_id: pi.investor_id, target_ticket: pi.target_ticket, probability: pi.probability }));
+
+    res.json({
+      noContactEmail: { count: noEmail.length,       items: noEmail },
+      noLead:         { count: noLead.length,         items: noLead },
+      noPhase:        { count: noPhase.length,        items: noPhase },
+      noLastContact:  { count: noLastContact.length,  items: noLastContact },
+      inactive30days: { count: inactive30.length,     items: inactive30 },
+      inactive60days: { count: inactive60.length,     items: inactive60 },
+      inactive90days: { count: inactive90.length,     items: inactive90 },
+      piMissingData:  { count: piMissing.length,      items: piMissing },
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1160,6 +1323,63 @@ app.put('/api/products/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
+  const id     = parseInt(req.params.id);
+  const reason = (req.body.reason || '').trim() || 'Prosjekt avlyst';
+  const client = await pool.connect();
+  try {
+    const { rows: [product] } = await client.query('SELECT * FROM products WHERE id = $1', [id]);
+    if (!product) return res.status(404).json({ error: 'Prosjekt ikke funnet' });
+
+    const { rows: committed } = await client.query(
+      'SELECT investor_id, committed_amount FROM product_investors WHERE product_id = $1 AND committed_amount > 0', [id]
+    );
+
+    await client.query('BEGIN');
+    await client.query('UPDATE products SET status = $1 WHERE id = $2', ['Avlyst', id]);
+    await client.query('UPDATE product_investors SET probability = 0 WHERE product_id = $1', [id]);
+
+    for (const pi of committed) {
+      await client.query(`
+        INSERT INTO declined_offers (product_id, investor_id, decline_reason, declined_at)
+        VALUES ($1,$2,$3,CURRENT_DATE)
+        ON CONFLICT (product_id, investor_id) DO UPDATE
+          SET decline_reason = EXCLUDED.decline_reason, declined_at = EXCLUDED.declined_at
+      `, [id, pi.investor_id, reason]);
+      await client.query(
+        'UPDATE product_investors SET committed_amount = NULL WHERE product_id = $1 AND investor_id = $2',
+        [id, pi.investor_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'cancel', 'product', id,
+      { name: product.name, status: product.status },
+      { status: 'Avlyst', committed_moved: committed.length },
+      `Avlyste prosjekt: ${product.name} — ${committed.length} tegnet investor(er) flyttet til avslått`);
+    res.json({ ok: true, committed_moved: committed.length });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/products/:id/complete', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const { rows: [product] } = await query('SELECT * FROM products WHERE id = $1', [id]);
+    if (!product) return res.status(404).json({ error: 'Prosjekt ikke funnet' });
+    await query('UPDATE products SET status = $1 WHERE id = $2', ['Fullført', id]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'complete', 'product', id,
+      { name: product.name, status: product.status },
+      { status: 'Fullført' },
+      `Merket prosjekt som fullført: ${product.name}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.delete('/api/products/:id', async (req, res) => {
   try {
     await query('DELETE FROM products WHERE id = $1', [parseInt(req.params.id)]);
@@ -1228,6 +1448,7 @@ app.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'restore', 'backup', stamp, null, { stamp }, `Gjenopprettet backup: ${stamp}`);
     res.json({ ok: true, restored });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -1363,7 +1584,7 @@ app.post('/api/email/parse-msg', (req, res, next) => {
 app.get('/api/export/excel', async (req, res) => {
   try {
     const [{ rows: investors }, { rows: contacts }, { rows: log }, { rows: products }, { rows: piRows }] = await Promise.all([
-      query('SELECT * FROM investors ORDER BY name'),
+      query('SELECT * FROM investors WHERE deleted_at IS NULL ORDER BY name'),
       query('SELECT * FROM contacts'),
       query('SELECT * FROM contact_log ORDER BY date DESC'),
       query('SELECT * FROM products'),
@@ -1496,7 +1717,7 @@ app.get('/js/vendor/html2canvas.min.js', (req, res) =>
 app.post('/api/feedback', express.json({ limit: '8mb' }), async (req, res) => {
   try {
     const { page, comment, screenshot } = req.body;
-    if (!comment?.trim()) return validationError(res, 'Kommentar er påkrevd');
+    if (!comment?.trim()) return validationError(res, ['Kommentar er påkrevd']);
     const username = req.currentUser?.username || null;
     const { rows } = await query(
       'INSERT INTO feedback_reports (page, comment, screenshot, username) VALUES ($1,$2,$3,$4) RETURNING id',

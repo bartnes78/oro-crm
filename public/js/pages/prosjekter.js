@@ -2,12 +2,15 @@ import { api } from '../api.js';
 
 const TYPES    = ['Fond', 'Prosjekt', 'Co-invest', 'Annet'];
 const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];
+const ARCHIVED_STATUSES = new Set(['Avlyst', 'Fullført']);
 
 const STATUS_COLOR = {
   'Fundraising': '#D4AC0D',
   'Aktiv':       'var(--color-signed)',
   'Avsluttet':   '#717D87',
   'Pipeline':    '#2471A3',
+  'Avlyst':      '#C0392B',
+  'Fullført':    '#1A5C1A',
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -38,6 +41,35 @@ async function loadProducts() {
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
+function productCard(p) {
+  const sc      = STATUS_COLOR[p.status] || 'var(--muted)';
+  const archived = ARCHIVED_STATUSES.has(p.status);
+  const sub     = [p.type, p.target_size ? `${Number(p.target_size).toLocaleString('nb-NO')} MNOK` : '']
+                    .filter(Boolean).join(' · ');
+  return `
+    <div class="card product-card" data-id="${escHtml(p._id)}"
+      style="padding:16px 20px;cursor:pointer;${archived ? 'opacity:.6;' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;">${escHtml(p.name)}</div>
+          ${sub ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${escHtml(sub)}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
+            background:${sc}22;color:${sc};">${escHtml(p.status || '')}</span>
+          ${!archived ? `<button class="btn btn-ghost btn-sm btn-edit-product" data-id="${escHtml(p._id)}"
+            style="min-height:36px;">Rediger</button>` : ''}
+          <button class="btn btn-ghost btn-sm btn-del-product" data-id="${escHtml(p._id)}"
+            style="color:#e74c3c;min-height:36px;">Slett</button>
+          <span style="font-size:14px;color:var(--muted);">→</span>
+        </div>
+      </div>
+      ${p.description
+        ? `<p style="font-size:13px;color:var(--muted);margin:8px 0 0;">${escHtml(p.description)}</p>`
+        : ''}
+    </div>`;
+}
+
 function renderList() {
   const list = _el.querySelector('#product-list');
   if (!_products.length) {
@@ -45,33 +77,19 @@ function renderList() {
     return;
   }
 
-  list.innerHTML = _products.map(p => {
-    const sc   = STATUS_COLOR[p.status] || 'var(--muted)';
-    const sub  = [p.type, p.target_size ? `${Number(p.target_size).toLocaleString('nb-NO')} MNOK` : '']
-                   .filter(Boolean).join(' · ');
-    return `
-      <div class="card product-card" data-id="${escHtml(p._id)}"
-        style="padding:16px 20px;cursor:pointer;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div>
-            <div style="font-weight:700;font-size:15px;">${escHtml(p.name)}</div>
-            ${sub ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${escHtml(sub)}</div>` : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
-              background:${sc}22;color:${sc};">${escHtml(p.status || '')}</span>
-            <button class="btn btn-ghost btn-sm btn-edit-product" data-id="${escHtml(p._id)}"
-              style="min-height:36px;">Rediger</button>
-            <button class="btn btn-ghost btn-sm btn-del-product" data-id="${escHtml(p._id)}"
-              style="color:#e74c3c;min-height:36px;">Slett</button>
-            <span style="font-size:14px;color:var(--muted);">→</span>
-          </div>
-        </div>
-        ${p.description
-          ? `<p style="font-size:13px;color:var(--muted);margin:8px 0 0;">${escHtml(p.description)}</p>`
-          : ''}
+  const active   = _products.filter(p => !ARCHIVED_STATUSES.has(p.status));
+  const archived = _products.filter(p =>  ARCHIVED_STATUSES.has(p.status));
+
+  let html = active.map(productCard).join('');
+  if (archived.length) {
+    html += `
+      <div style="margin-top:24px;padding-top:16px;border-top:1px dashed var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.6px;margin-bottom:12px;">Arkivert</div>
+        ${archived.map(productCard).join('')}
       </div>`;
-  }).join('');
+  }
+  list.innerHTML = html;
 
   // Navigate on card click (not on button clicks)
   list.querySelectorAll('.product-card').forEach(card => {

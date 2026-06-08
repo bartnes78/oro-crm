@@ -14,12 +14,15 @@ const TYPES    = ['Fond', 'Prosjekt', 'Co-invest', 'Annet'];
 const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];
 const STATUS_COLOR = {
   'Fundraising': '#D4AC0D', 'Aktiv': 'var(--color-signed)', 'Avsluttet': '#717D87', 'Pipeline': '#2471A3',
+  'Avlyst': '#C0392B', 'Fullført': '#1A5C1A',
 };
+const ARCHIVED_STATUSES = new Set(['Avlyst', 'Fullført']);
 
 // ── Module state ──────────────────────────────────────────────────────────────
 let _el             = null;
 let _productId      = null;
 let _product        = null;
+let _currentUser    = null;
 let _investors      = [];
 let _declinedOffers = [];
 let _sort           = { col: 'weighted', dir: 'desc' };
@@ -29,8 +32,9 @@ let _filterPhase    = '';
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 export async function render(el, state) {
-  _el        = el;
-  _productId = state.id;
+  _el          = el;
+  _productId   = state.id;
+  _currentUser = state.currentUser;
   _sort        = { col: 'weighted', dir: 'desc' };
   _saving      = {};
   _showPct     = false;
@@ -89,9 +93,34 @@ function renderContent() {
   const fillPct      = _product.target_size
     ? Math.round((signedTicket / _product.target_size) * 100) : null;
 
-  const sc = STATUS_COLOR[_product.status] || 'var(--muted)';
+  const sc       = STATUS_COLOR[_product.status] || 'var(--muted)';
+  const isAdmin  = _currentUser?.role === 'admin';
+  const archived = ARCHIVED_STATUSES.has(_product.status);
+
+  const committedCount = _investors.filter(i => Number(i.committed_amount) > 0).length;
+
+  const actionButtons = isAdmin && !archived ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <button class="btn btn-ghost btn-sm" id="btn-complete-prod"
+        style="font-size:12px;color:var(--color-signed);border-color:var(--color-signed);min-height:36px;">
+        ✓ Merk som fullført
+      </button>
+      <button class="btn btn-ghost btn-sm" id="btn-cancel-prod"
+        style="font-size:12px;color:#C0392B;border-color:#C0392B;min-height:36px;">
+        ✕ Avlys prosjekt
+      </button>
+    </div>` : '';
+
+  const archivedBanner = archived ? `
+    <div style="padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600;
+      background:${sc}18;border:1px solid ${sc};color:${sc}">
+      ${_product.status === 'Avlyst' ? '✕ Prosjekt avlyst' : '✓ Prosjekt fullført'}
+      ${isAdmin ? `<button id="btn-reactivate-prod" class="btn btn-ghost btn-sm"
+        style="margin-left:12px;font-size:11px;min-height:28px;color:var(--muted)">Gjenåpne</button>` : ''}
+    </div>` : '';
 
   content.innerHTML = `
+    ${archivedBanner}
     <!-- Product header card -->
     <div class="card" style="padding:16px 20px;margin-bottom:0;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
@@ -119,6 +148,7 @@ function renderContent() {
             </div>
           </div>` : ''}
       </div>
+      ${actionButtons}
     </div>
 
     <!-- KPIs -->
@@ -449,6 +479,65 @@ function refreshTable() {
 }
 
 function attachTableEvents() {
+  // ── Prosjekt-handlinger ───────────────────────────────────────────────────
+  document.getElementById('btn-complete-prod')?.addEventListener('click', async () => {
+    if (!confirm(`Merk "${_product.name}" som fullført?`)) return;
+    try {
+      await api.completeProduct(_productId);
+      await loadData();
+    } catch (e) { alert('Feil: ' + e.message); }
+  });
+
+  document.getElementById('btn-cancel-prod')?.addEventListener('click', () => {
+    const committedCount = _investors.filter(i => Number(i.committed_amount) > 0).length;
+    const modal = window.ui.modal(
+      'Avlys prosjekt',
+      `<div class="alert-err" style="display:none;margin-bottom:12px;" id="cancel-err"></div>
+      ${committedCount > 0 ? `
+        <div style="padding:10px 14px;background:rgba(192,57,43,.08);border:1px solid #C0392B;
+          border-radius:8px;margin-bottom:16px;font-size:13px;color:#C0392B;">
+          <b>${committedCount} investor${committedCount !== 1 ? 'er' : ''}</b> er tegnet og vil bli
+          markert som avslått med begrunnelsen under.
+        </div>` : `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+          Ingen tegnede investorer — kun status settes til Avlyst.
+        </p>`}
+      <div class="form-group">
+        <label>Begrunnelse</label>
+        <input id="cancel-reason" value="Prosjekt avlyst"
+          style="font-size:13px;" />
+      </div>`,
+      `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+       <button class="btn btn-primary" id="cancel-confirm-btn"
+         style="background:#C0392B;border-color:#C0392B;">Avlys prosjekt</button>`
+    );
+    window.openModal(modal, () => {
+      document.getElementById('cancel-confirm-btn').addEventListener('click', async () => {
+        const reason = document.getElementById('cancel-reason').value.trim() || 'Prosjekt avlyst';
+        const btn = document.getElementById('cancel-confirm-btn');
+        btn.disabled = true; btn.textContent = 'Avlyser…';
+        try {
+          await api.cancelProduct(_productId, { reason });
+          window.closeModal();
+          await loadData();
+        } catch (e) {
+          const errEl = document.getElementById('cancel-err');
+          if (errEl) { errEl.textContent = e.message; errEl.style.display = ''; }
+          btn.disabled = false; btn.textContent = 'Avlys prosjekt';
+        }
+      });
+    });
+  });
+
+  document.getElementById('btn-reactivate-prod')?.addEventListener('click', async () => {
+    if (!confirm(`Gjenåpne "${_product.name}" og sette status til Fundraising?`)) return;
+    try {
+      await api.updateProduct(_productId, { status: 'Fundraising' });
+      await loadData();
+    } catch (e) { alert('Feil: ' + e.message); }
+  });
+
+  // ── Tabellhendelser ───────────────────────────────────────────────────────
   const wrap = document.getElementById('inv-table-wrap');
   if (!wrap) return;
 

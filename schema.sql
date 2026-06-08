@@ -228,3 +228,28 @@ CREATE TABLE IF NOT EXISTS feedback_reports (
   username   TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER,
+  username    TEXT,
+  action      TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   TEXT,
+  old_value   JSONB,
+  new_value   JSONB,
+  description TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity     ON audit_log (entity_type, entity_id);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='deleted_at') THEN
+    ALTER TABLE investors ADD COLUMN deleted_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_investors_deleted_at ON investors (deleted_at) WHERE deleted_at IS NOT NULL;
