@@ -40,11 +40,14 @@ function statusBadge(status) {
 }
 
 function buildFundStats(fundStats) {
-  if (!fundStats.length) return `<div class="card" style="margin-bottom:20px">${window.ui.emptyState('Ingen fondsdata')}</div>`;
-  const rows = fundStats.map(f => {
+  const active = fundStats
+    .filter(f => f.status === 'Fundraising' || f.status === 'Pipeline')
+    .sort((a, b) => (a.status === b.status ? 0 : a.status === 'Fundraising' ? -1 : 1));
+  if (!active.length) return `<div class="card" style="margin-bottom:20px">${window.ui.emptyState('Ingen fondsdata')}</div>`;
+  const rows = active.map(f => {
     const pct = f.target_size ? Math.min(Math.round(f.signedTicket / f.target_size * 100), 100) : null;
     const pctPipeline = f.target_size ? Math.min(Math.round(f.weighted / f.target_size * 100), 100) : null;
-    const dimmed = f.status === 'Avlyst' || f.status === 'Fullført';
+    const dimmed = false;
     return `
       <div style="padding:12px 0;border-bottom:1px solid var(--border);${dimmed ? 'opacity:.55' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
