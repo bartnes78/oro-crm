@@ -527,31 +527,35 @@ app.get('/api/brreg/enhet/:orgnr', async (req, res) => {
       adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
     }
 
+    const SKIP_ROLLER = new Set(['REVI', 'REGN']);
     const roller = [];
     for (const rollegruppe of (rollerBody.rollegrupper || [])) {
+      if (SKIP_ROLLER.has(rollegruppe.type?.kode)) continue;
       for (const rolle of (rollegruppe.roller || [])) {
+        if (rolle.fratredelsesdato) continue;
         const p = rolle.person || rolle.enhet;
         if (!p) continue;
         const navn = p.navn
           ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
           : p.navn;
+        if (!navn) continue;
         roller.push({
-          type:  rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
-          navn:  navn || null,
-          fratr: rolle.fratredelsesdato || null,
+          gruppe: rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
+          type:   rolle.type?.beskrivelse       || rollegruppe.type?.beskrivelse || '',
+          navn,
         });
       }
     }
 
     res.json({
       orgnr,
-      navn:      e.navn,
-      orgform:   e.organisasjonsform?.beskrivelse || null,
-      naeringskode: e.naeringskode1?.beskrivelse  || null,
-      stiftet:   e.stiftelsesdato                 || null,
-      ansatte:   e.antallAnsatte                  ?? null,
+      navn:         e.navn,
+      orgform:      e.organisasjonsform?.beskrivelse || null,
+      naeringskode: e.naeringskode1?.beskrivelse     || null,
+      stiftet:      e.stiftelsesdato                 || null,
+      ansatte:      e.antallAnsatte                  ?? null,
       adresser,
-      roller: roller.filter(r => !r.fratr),
+      roller,
     });
   } catch (e) {
     res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
@@ -587,16 +591,23 @@ app.post('/api/investors/:id/brreg-sync', async (req, res) => {
     if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed)
       adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
 
+    const SKIP_ROLLER = new Set(['REVI', 'REGN']);
     const roller = [];
     for (const rollegruppe of (rollerBody.rollegrupper || [])) {
+      if (SKIP_ROLLER.has(rollegruppe.type?.kode)) continue;
       for (const rolle of (rollegruppe.roller || [])) {
+        if (rolle.fratredelsesdato) continue;
         const p = rolle.person || rolle.enhet;
-        if (!p || rolle.fratredelsesdato) continue;
+        if (!p) continue;
         const navn = p.navn
           ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
           : null;
         if (!navn) continue;
-        roller.push({ type: rollegruppe.type?.beskrivelse || '', navn });
+        roller.push({
+          gruppe: rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
+          type:   rolle.type?.beskrivelse       || rollegruppe.type?.beskrivelse || '',
+          navn,
+        });
       }
     }
 

@@ -110,7 +110,7 @@ function buildTableRows(investors, products) {
 
     return `
       <tr class="inv-row" data-id="${esc(String(inv.id || inv._id))}" style="cursor:pointer">
-        <td style="font-weight:600;max-width:260px">${esc(inv.name || '')}</td>
+        <td style="font-weight:600;max-width:260px">${esc(inv.name || '')}${window.brregBadge(inv)}</td>
         <td class="hide-sm" style="color:#717D87;font-size:12px">${esc(inv.investor_type || '—')}</td>
         <td>${window.phaseBadge(inv.phase)}</td>
         <td class="hide-sm" style="font-size:12px">${esc(inv.lead || '—')}</td>

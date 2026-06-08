@@ -63,6 +63,15 @@ window.phaseBadge = function(phase) {
   return `<span class="badge badge-${map[phase]||'default'}">${phase||'—'}</span>`;
 };
 
+window.brregBadge = function(inv) {
+  if (!inv || !inv.org_nr) return '';
+  return `<span title="Verifisert mot Brønnøysundregistrene (${inv.org_nr})"
+    style="display:inline-flex;align-items:center;justify-content:center;
+           width:16px;height:16px;border-radius:50%;
+           background:#1a8a6a;color:#fff;font-size:9px;font-weight:700;
+           margin-left:5px;flex-shrink:0;vertical-align:middle;line-height:1;">✓</span>`;
+};
+
 window.escHtml = function(s) {
   return String(s||'')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')

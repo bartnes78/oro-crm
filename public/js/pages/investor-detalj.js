@@ -49,7 +49,7 @@ function buildDetailHeader(inv, products) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
           <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${window.escHtml(String(inv.id))}</div>
-          <h2 style="margin:0;">${window.escHtml(inv.name)}</h2>
+          <h2 style="margin:0;display:flex;align-items:center;">${window.escHtml(inv.name)}${window.brregBadge(inv)}</h2>
         </div>
         ${window.phaseBadge(inv.phase)}
       </div>
@@ -529,7 +529,10 @@ function buildBrregCard(inv) {
         <div style="flex:1;">
           <span style="font-size:13px;font-weight:600;">${window.escHtml(r.navn)}</span>
         </div>
-        <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${window.escHtml(r.type)}</span>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:11px;font-weight:600;color:var(--text);">${window.escHtml(r.type)}</div>
+          ${r.gruppe && r.gruppe !== r.type ? `<div style="font-size:10px;color:var(--muted);">${window.escHtml(r.gruppe)}</div>` : ''}
+        </div>
       </div>`).join('');
 
     const syncedAt = bd.synced_at

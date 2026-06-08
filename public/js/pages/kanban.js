@@ -32,7 +32,9 @@ function buildCard(inv) {
              padding:12px 14px;margin-bottom:10px;cursor:pointer;
              transition:box-shadow .15s,border-color .15s">
       <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:8px;
-                  line-height:1.3">${window.escHtml(inv.name)}</div>
+                  line-height:1.3;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+        ${window.escHtml(inv.name)}${window.brregBadge(inv)}
+      </div>
       <div style="display:flex;flex-direction:column;gap:4px">
         ${inv.investor_type ? `
           <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px">
