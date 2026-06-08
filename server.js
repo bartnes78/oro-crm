@@ -39,6 +39,9 @@ function fmtInvestor(row) {
     comments:          row.comments,
     docs:              row.docs              || {},
     updated_at:        row.updated_at,
+    org_nr:            row.org_nr            || null,
+    brreg_navn:        row.brreg_navn        || null,
+    brreg_data:        row.brreg_data        || {},
   };
 }
 
@@ -461,6 +464,189 @@ app.get('/api/dashboard', async (req, res) => {
   } catch (e) {
     console.error('[dashboard]', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Brønnøysundregistrene ─────────────────────────────────────────────────────
+const https = require('https');
+
+function brregGet(path) {
+  return new Promise((resolve, reject) => {
+    const url = `https://data.brreg.no/enhetsregisteret/api${path}`;
+    const req = https.get(url, { headers: { Accept: 'application/json' } }, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: {} }); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('Brreg timeout')); });
+  });
+}
+
+// Søk på navn → returnerer liste med treff
+app.get('/api/brreg/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  try {
+    const { body } = await brregGet(`/enheter?navn=${encodeURIComponent(q)}&size=10`);
+    const enheter = body._embedded?.enheter || [];
+    res.json(enheter.map(e => ({
+      orgnr:     e.organisasjonsnummer,
+      navn:      e.navn,
+      orgform:   e.organisasjonsform?.beskrivelse || null,
+      poststed:  e.forretningsadresse?.poststed   || e.postadresse?.poststed || null,
+      slettet:   !!e.slettedato,
+    })));
+  } catch (e) {
+    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
+  }
+});
+
+// Hent stamdata for ett org.nr
+app.get('/api/brreg/enhet/:orgnr', async (req, res) => {
+  const orgnr = req.params.orgnr.replace(/\s/g, '');
+  if (!/^\d{9}$/.test(orgnr)) return res.status(400).json({ error: 'Ugyldig org.nr (må være 9 siffer)' });
+  try {
+    const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
+      brregGet(`/enheter/${orgnr}`),
+      brregGet(`/roller/${orgnr}`),
+    ]);
+    if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
+
+    const adresser = [];
+    if (e.forretningsadresse) {
+      adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
+    }
+    if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed) {
+      adresser.push({ type: 'Postadresse', ...e.postadresse });
+    }
+    if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed) {
+      adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
+    }
+
+    const roller = [];
+    for (const rollegruppe of (rollerBody.rollegrupper || [])) {
+      for (const rolle of (rollegruppe.roller || [])) {
+        const p = rolle.person || rolle.enhet;
+        if (!p) continue;
+        const navn = p.navn
+          ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
+          : p.navn;
+        roller.push({
+          type:  rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
+          navn:  navn || null,
+          fratr: rolle.fratredelsesdato || null,
+        });
+      }
+    }
+
+    res.json({
+      orgnr,
+      navn:      e.navn,
+      orgform:   e.organisasjonsform?.beskrivelse || null,
+      naeringskode: e.naeringskode1?.beskrivelse  || null,
+      stiftet:   e.stiftelsesdato                 || null,
+      ansatte:   e.antallAnsatte                  ?? null,
+      adresser,
+      roller: roller.filter(r => !r.fratr),
+    });
+  } catch (e) {
+    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
+  }
+});
+
+// Koble org.nr til investor og synkroniser data
+app.post('/api/investors/:id/brreg-sync', async (req, res) => {
+  const { org_nr, city } = req.body;
+  const orgnr = (org_nr || '').replace(/\s/g, '');
+  if (!/^\d{9}$/.test(orgnr)) return validationError(res, ['Ugyldig org.nr (må være 9 siffer)']);
+
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query('SELECT * FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
+
+    // Sjekk at org.nr ikke er i bruk av en annen investor
+    const { rows: existing } = await client.query('SELECT id FROM investors WHERE org_nr=$1 AND id<>$2', [orgnr, req.params.id]);
+    if (existing.length) return validationError(res, [`Org.nr ${orgnr} er allerede koblet til investor ${existing[0].id}`]);
+
+    // Hent data fra Brreg
+    const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
+      brregGet(`/enheter/${orgnr}`),
+      brregGet(`/roller/${orgnr}`),
+    ]);
+    if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
+
+    const adresser = [];
+    if (e.forretningsadresse) adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
+    if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed)
+      adresser.push({ type: 'Postadresse', ...e.postadresse });
+    if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed)
+      adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
+
+    const roller = [];
+    for (const rollegruppe of (rollerBody.rollegrupper || [])) {
+      for (const rolle of (rollegruppe.roller || [])) {
+        const p = rolle.person || rolle.enhet;
+        if (!p || rolle.fratredelsesdato) continue;
+        const navn = p.navn
+          ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
+          : null;
+        if (!navn) continue;
+        roller.push({ type: rollegruppe.type?.beskrivelse || '', navn });
+      }
+    }
+
+    const brregData = {
+      orgform:      e.organisasjonsform?.beskrivelse || null,
+      naeringskode: e.naeringskode1?.beskrivelse     || null,
+      stiftet:      e.stiftelsesdato                 || null,
+      ansatte:      e.antallAnsatte                  ?? null,
+      adresser,
+      roller,
+      synced_at:    new Date().toISOString(),
+    };
+
+    await client.query('BEGIN');
+
+    // Oppdater investor
+    await client.query(
+      `UPDATE investors SET org_nr=$2, brreg_navn=$3, brreg_data=$4, city=COALESCE($5, city), updated_at=NOW() WHERE id=$1`,
+      [req.params.id, orgnr, e.navn, JSON.stringify(brregData), city || null]
+    );
+
+    // Importer roller som kontakter (hopper over eksisterende med source='brreg' og samme navn)
+    let importedCount = 0;
+    for (const r of roller) {
+      const { rows: exists } = await client.query(
+        `SELECT id FROM contacts WHERE investor_id=$1 AND LOWER(name)=LOWER($2)`,
+        [req.params.id, r.navn]
+      );
+      if (exists.length === 0) {
+        await client.query(
+          `INSERT INTO contacts (investor_id, name, title, source, active) VALUES ($1,$2,$3,'brreg',1)`,
+          [req.params.id, r.navn, r.type]
+        );
+        importedCount++;
+      }
+    }
+
+    await client.query('COMMIT');
+
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
+      { org_nr: null }, { org_nr: orgnr, brreg_navn: e.navn },
+      `Koblet Brreg org.nr ${orgnr} til investor`);
+
+    res.json({ ok: true, brreg_navn: e.navn, importedContacts: importedCount, adresser, roller });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[POST /investors/:id/brreg-sync]', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 });
 

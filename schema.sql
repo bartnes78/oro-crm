@@ -253,3 +253,33 @@ DO $$ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_investors_deleted_at ON investors (deleted_at) WHERE deleted_at IS NOT NULL;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='org_nr') THEN
+    ALTER TABLE investors ADD COLUMN org_nr TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='brreg_navn') THEN
+    ALTER TABLE investors ADD COLUMN brreg_navn TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='brreg_data') THEN
+    ALTER TABLE investors ADD COLUMN brreg_data JSONB DEFAULT '{}';
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='contacts' AND column_name='source') THEN
+    ALTER TABLE contacts ADD COLUMN source TEXT;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_investors_org_nr ON investors (org_nr) WHERE org_nr IS NOT NULL;

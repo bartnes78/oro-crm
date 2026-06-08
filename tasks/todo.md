@@ -2,6 +2,22 @@
 
 ## Pågående
 
+### Brreg-integrasjon
+
+- [x] `schema.sql` — legg til `org_nr`, `brreg_navn`, `brreg_data` (idempotent DO-blokker)
+- [x] `server.js` — oppdater `fmtInvestor` med nye felter
+- [x] `server.js` — `GET /api/brreg/search?q=...` (proxy til Brreg navnesøk)
+- [x] `server.js` — `GET /api/brreg/enhet/:orgnr` (hent stamdata)
+- [x] `server.js` — `POST /api/investors/:id/brreg-sync` (koble orgnr + sync data + importer roller som kontakter)
+- [x] `public/js/api.js` — `brregSearch`, `brregEnhet`, `brregSync`
+- [x] `investor-detalj.js` — `buildBrregCard()`: søk+koble hvis ikke koblet, vis stamdata+adresser+roller hvis koblet
+- [x] `investor-detalj.js` — event listeners for søk, kobling og synkronisering
+- [ ] Manuell test: søk, koble, synkroniser, adresser, roller → kontakter
+
+---
+
+## Pågående (tidligere)
+
 ### Avslåtte tilbud — ny `declined_offers`-tabell
 
 - [x] Velg løsning (alternativ B: egen tabell)

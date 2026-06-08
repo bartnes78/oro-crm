@@ -511,6 +511,80 @@ function buildLogCard(inv, products) {
   `;
 }
 
+function buildBrregCard(inv) {
+  if (inv.org_nr) {
+    // ── Koblet: vis stamdata + adresser + roller ──────────────────────────────
+    const bd = inv.brreg_data || {};
+    const adresser = (bd.adresser || []).map(a => {
+      const linje = [a.adresse ? a.adresse.join(', ') : null, a.postnummer && a.poststed ? `${a.postnummer} ${a.poststed}` : a.poststed, a.land !== 'Norge' ? a.land : null].filter(Boolean).join(' · ');
+      return `
+        <div style="margin-bottom:4px;">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-right:6px;">${window.escHtml(a.type)}</span>
+          <span style="font-size:13px;">${window.escHtml(linje)}</span>
+        </div>`;
+    }).join('');
+
+    const roller = (bd.roller || []).map(r => `
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;">
+          <span style="font-size:13px;font-weight:600;">${window.escHtml(r.navn)}</span>
+        </div>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${window.escHtml(r.type)}</span>
+      </div>`).join('');
+
+    const syncedAt = bd.synced_at
+      ? new Date(bd.synced_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
+      : null;
+
+    return `
+      <div class="card" id="brreg-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin:0;">
+            Brønnøysund
+            <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">${window.escHtml(inv.org_nr)}</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="brreg-sync-btn" style="font-size:11px;min-height:32px;">&#8635; Synkroniser</button>
+        </div>
+
+        ${inv.brreg_navn ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Registrert navn: <b style="color:var(--text);">${window.escHtml(inv.brreg_navn)}</b></div>` : ''}
+
+        <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted);margin-bottom:12px;">
+          ${bd.orgform      ? `<span>&#127970; ${window.escHtml(bd.orgform)}</span>`      : ''}
+          ${bd.naeringskode ? `<span>&#128200; ${window.escHtml(bd.naeringskode)}</span>` : ''}
+          ${bd.stiftet      ? `<span>&#128197; Stiftet ${window.escHtml(bd.stiftet)}</span>` : ''}
+          ${bd.ansatte != null ? `<span>&#128101; ${bd.ansatte} ansatte</span>` : ''}
+        </div>
+
+        ${adresser ? `<div style="margin-bottom:12px;">${adresser}</div>` : ''}
+
+        ${roller ? `
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Roller</div>
+            ${roller}
+          </div>` : ''}
+
+        ${syncedAt ? `<div style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">Synkronisert ${window.escHtml(syncedAt)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  // ── Ikke koblet: søkeskjema ───────────────────────────────────────────────
+  return `
+    <div class="card" id="brreg-card">
+      <div class="card-title">Brønnøysund</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Koble investor til Brønnøysundregistrene for å hente stamdata, adresser og roller.</p>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="brreg-search-input" type="text"
+          placeholder="Søk på navn eller skriv inn org.nr (9 siffer)&hellip;"
+          style="flex:1;font-size:13px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);" />
+        <button class="btn btn-ghost btn-sm" id="brreg-search-btn" style="min-height:36px;white-space:nowrap;">Søk</button>
+      </div>
+      <div id="brreg-search-results" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:6px;"></div>
+      <div id="brreg-search-error" style="display:none;font-size:12px;color:#e74c3c;margin-top:4px;"></div>
+    </div>
+  `;
+}
+
 function buildTasksCard(tasks) {
   const tasksHtml = tasks.length === 0
     ? '<p class="text-muted" style="font-size:13px;">Ingen oppgaver.</p>'
@@ -1219,6 +1293,7 @@ export async function render(el, state) {
               ${buildDocsCard(inv, products)}
               ${buildContactsCard(inv, visInaktive)}
             </div>
+            ${buildBrregCard(inv)}
             ${buildLogCard(inv, products)}
             ${buildTasksCard(tasks)}
           </div>
@@ -1508,6 +1583,111 @@ export async function render(el, state) {
     });
   }
 
+  function bindBrreg() {
+    // ── Synkroniser-knapp (koblet investor) ───────────────────────────────────
+    const syncBtn = el.querySelector('#brreg-sync-btn');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Synkroniserer…';
+        try {
+          const result = await api.brregSync(inv.id, { org_nr: inv.org_nr });
+          const msg = result.importedContacts > 0
+            ? `Synkronisert! ${result.importedContacts} ny(e) kontakt(er) importert fra Brreg.`
+            : 'Synkronisert!';
+          window.ui.toast?.(msg) || alert(msg);
+          await reload();
+        } catch (e) {
+          alert('Feil: ' + e.message);
+          syncBtn.disabled = false;
+          syncBtn.textContent = '↻ Synkroniser';
+        }
+      });
+      return;
+    }
+
+    // ── Søk (ikke koblet investor) ────────────────────────────────────────────
+    const searchInput  = el.querySelector('#brreg-search-input');
+    const searchBtn    = el.querySelector('#brreg-search-btn');
+    const resultsEl    = el.querySelector('#brreg-search-results');
+    const errorEl      = el.querySelector('#brreg-search-error');
+    if (!searchInput) return;
+
+    async function doSearch() {
+      const q = searchInput.value.trim();
+      if (!q) return;
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Søker…';
+      errorEl.style.display = 'none';
+      resultsEl.style.display = 'none';
+      resultsEl.innerHTML = '';
+      try {
+        // Direkte org.nr-oppslag hvis 9 siffer
+        const hits = /^\d{9}$/.test(q.replace(/\s/g, ''))
+          ? await api.brregEnhet(q.replace(/\s/g, '')).then(e => [{ orgnr: e.orgnr, navn: e.navn, orgform: e.orgform, poststed: (e.adresser[0] || {}).poststed || null }]).catch(() => [])
+          : await api.brregSearch(q);
+
+        if (hits.length === 0) {
+          errorEl.textContent = 'Ingen treff i Brønnøysundregistrene.';
+          errorEl.style.display = '';
+        } else {
+          resultsEl.innerHTML = hits.filter(h => !h.slettet).map(h => `
+            <div class="brreg-hit" data-orgnr="${window.escHtml(h.orgnr)}"
+              style="display:flex;align-items:center;justify-content:space-between;gap:10px;
+                     padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+                     transition:background .15s;"
+              onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+              <div>
+                <div style="font-size:13px;font-weight:600;">${window.escHtml(h.navn)}</div>
+                <div style="font-size:11px;color:var(--muted);">
+                  ${window.escHtml(h.orgnr)}
+                  ${h.orgform  ? ' · ' + window.escHtml(h.orgform)  : ''}
+                  ${h.poststed ? ' · ' + window.escHtml(h.poststed) : ''}
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm brreg-koble-btn" data-orgnr="${window.escHtml(h.orgnr)}" data-poststed="${window.escHtml(h.poststed || '')}"
+                style="font-size:11px;min-height:28px;padding:2px 10px;white-space:nowrap;">Koble</button>
+            </div>
+          `).join('');
+          resultsEl.style.display = '';
+
+          resultsEl.querySelectorAll('.brreg-koble-btn').forEach(btn => {
+            btn.addEventListener('click', async e => {
+              e.stopPropagation();
+              const orgnr    = btn.dataset.orgnr;
+              const poststed = btn.dataset.poststed;
+              btn.disabled = true;
+              btn.textContent = 'Kobler…';
+              try {
+                // Bruk poststed fra Brreg som city hvis CRM-city er tom
+                const cityPayload = !inv.city && poststed ? poststed : undefined;
+                const result = await api.brregSync(inv.id, { org_nr: orgnr, city: cityPayload });
+                const msg = result.importedContacts > 0
+                  ? `Koblet! ${result.importedContacts} kontakt(er) importert fra roller.`
+                  : 'Investor koblet til Brreg!';
+                window.ui.toast?.(msg) || alert(msg);
+                await reload();
+              } catch (err) {
+                alert('Feil: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Koble';
+              }
+            });
+          });
+        }
+      } catch (err) {
+        errorEl.textContent = 'Feil: ' + err.message;
+        errorEl.style.display = '';
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Søk';
+      }
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  }
+
   function bindEvents() {
     bindTopbar();
     bindPipeline();
@@ -1516,6 +1696,7 @@ export async function render(el, state) {
     bindContacts();
     bindLog();
     bindTasks();
+    bindBrreg();
   }
 
   buildPage();
