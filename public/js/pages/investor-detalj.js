@@ -1686,6 +1686,10 @@ export async function render(el, state) {
 
     searchBtn.addEventListener('click', doSearch);
     searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+    // Auto-søk med investornavnet ved innlasting
+    searchInput.value = inv.name;
+    doSearch();
   }
 
   function bindEvents() {
