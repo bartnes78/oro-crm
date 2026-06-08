@@ -7,6 +7,7 @@ const path      = require('path');
 const fs        = require('fs');
 const crypto    = require('crypto');
 const ExcelJS   = require('exceljs');
+const cron      = require('node-cron');
 const { query, pool } = require('./db');
 
 const app  = express();
@@ -1950,12 +1951,114 @@ app.get('/api/feedback/:id/screenshot', requireAdmin, async (req, res) => {
 // ── SPA fallback ──────────────────────────────────────────────────────────────
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+// ── Brreg ukentlig synkronisering ─────────────────────────────────────────────
+const SKIP_ROLLER_SYNC = new Set(['REVI', 'REGN']);
+
+async function brregSyncAll() {
+  const { rows: investors } = await query(
+    `SELECT id FROM investors WHERE org_nr IS NOT NULL AND deleted_at IS NULL`
+  );
+  if (investors.length === 0) return;
+
+  console.log(`[brreg-sync] Starter ukentlig synk for ${investors.length} investorer`);
+  let oppdatert = 0, feilet = 0;
+
+  for (const { id } of investors) {
+    try {
+      const { rows } = await query('SELECT org_nr FROM investors WHERE id=$1', [id]);
+      const orgnr = rows[0]?.org_nr;
+      if (!orgnr) continue;
+
+      const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
+        brregGet(`/enheter/${orgnr}`),
+        brregGet(`/enheter/${orgnr}/roller`),
+      ]);
+      if (status !== 200) { feilet++; continue; }
+
+      const adresser = [];
+      if (e.forretningsadresse) adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
+      if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed)
+        adresser.push({ type: 'Postadresse', ...e.postadresse });
+      if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed)
+        adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
+
+      const roller = [];
+      for (const rg of (rollerBody.rollegrupper || [])) {
+        if (SKIP_ROLLER_SYNC.has(rg.type?.kode)) continue;
+        for (const rolle of (rg.roller || [])) {
+          if (rolle.fratredelsesdato) continue;
+          const p = rolle.person || rolle.enhet;
+          if (!p) continue;
+          const navn = p.navn
+            ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
+            : null;
+          if (!navn) continue;
+          roller.push({ gruppe: rg.type?.beskrivelse || '', type: rolle.type?.beskrivelse || rg.type?.beskrivelse || '', navn });
+        }
+      }
+
+      const brregData = {
+        orgform:      e.organisasjonsform?.beskrivelse || null,
+        naeringskode: e.naeringskode1?.beskrivelse     || null,
+        stiftet:      e.stiftelsesdato                 || null,
+        ansatte:      e.antallAnsatte                  ?? null,
+        adresser,
+        roller,
+        synced_at:    new Date().toISOString(),
+      };
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE investors SET brreg_navn=$2, brreg_data=$3, updated_at=NOW() WHERE id=$1`,
+          [id, e.navn, JSON.stringify(brregData)]
+        );
+        for (const r of roller) {
+          const { rows: exists } = await client.query(
+            `SELECT id FROM contacts WHERE investor_id=$1 AND LOWER(name)=LOWER($2)`,
+            [id, r.navn]
+          );
+          if (exists.length === 0) {
+            await client.query(
+              `INSERT INTO contacts (investor_id, name, title, source, active) VALUES ($1,$2,$3,'brreg',1)`,
+              [id, r.navn, r.type]
+            );
+          }
+        }
+        await client.query('COMMIT');
+        oppdatert++;
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error(`[brreg-sync] Feil ved ${id}:`, err.message);
+        feilet++;
+      } finally {
+        client.release();
+      }
+
+      // Liten pause mellom kall for å ikke overbelaste Brreg
+      await new Promise(r => setTimeout(r, 300));
+    } catch (err) {
+      console.error(`[brreg-sync] Feil ved ${id}:`, err.message);
+      feilet++;
+    }
+  }
+
+  console.log(`[brreg-sync] Ferdig — ${oppdatert} oppdatert, ${feilet} feilet`);
+}
+
 // ── Oppstart ──────────────────────────────────────────────────────────────────
 async function init() {
   await initSchema();
   await bootstrapUsers();
   runBackup().catch(e => console.error('[backup] Oppstart-backup feilet:', e.message));
   setInterval(runBackup, 24 * 60 * 60 * 1000);
+
+  // Ukentlig Brreg-synk: mandag kl. 03:00
+  cron.schedule('0 3 * * 1', () => {
+    brregSyncAll().catch(e => console.error('[brreg-sync] Uventet feil:', e.message));
+  }, { timezone: 'Europe/Oslo' });
+
   app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
 }
 
