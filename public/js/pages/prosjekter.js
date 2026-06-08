@@ -5,13 +5,21 @@ const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];
 const ARCHIVED_STATUSES = new Set(['Avlyst', 'Fullført']);
 
 const STATUS_COLOR = {
+  'Pipeline':    '#2471A3',
   'Fundraising': '#D4AC0D',
+  'Etablert':    'var(--color-signed)',
   'Aktiv':       'var(--color-signed)',
   'Avsluttet':   '#717D87',
-  'Pipeline':    '#2471A3',
   'Avlyst':      '#C0392B',
   'Fullført':    '#1A5C1A',
 };
+
+const STATUS_ORDER = ['Pipeline', 'Fundraising', 'Etablert', 'Aktiv', 'Avsluttet', 'Fullført', 'Avlyst'];
+function statusSort(a, b) {
+  const ai = STATUS_ORDER.indexOf(a.status ?? '');
+  const bi = STATUS_ORDER.indexOf(b.status ?? '');
+  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _el        = null;
@@ -77,8 +85,8 @@ function renderList() {
     return;
   }
 
-  const active   = _products.filter(p => !ARCHIVED_STATUSES.has(p.status));
-  const archived = _products.filter(p =>  ARCHIVED_STATUSES.has(p.status));
+  const active   = _products.filter(p => !ARCHIVED_STATUSES.has(p.status)).sort(statusSort);
+  const archived = _products.filter(p =>  ARCHIVED_STATUSES.has(p.status)).sort(statusSort);
 
   let html = active.map(productCard).join('');
   if (archived.length) {
