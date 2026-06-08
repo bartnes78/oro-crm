@@ -512,7 +512,7 @@ app.get('/api/brreg/enhet/:orgnr', async (req, res) => {
   try {
     const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
       brregGet(`/enheter/${orgnr}`),
-      brregGet(`/roller/${orgnr}`),
+      brregGet(`/enheter/${orgnr}/roller`),
     ]);
     if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
 
@@ -576,7 +576,7 @@ app.post('/api/investors/:id/brreg-sync', async (req, res) => {
     // Hent data fra Brreg
     const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
       brregGet(`/enheter/${orgnr}`),
-      brregGet(`/roller/${orgnr}`),
+      brregGet(`/enheter/${orgnr}/roller`),
     ]);
     if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
 
