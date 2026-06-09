@@ -292,6 +292,7 @@ function buildContactsCard(inv, visInaktive) {
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-weight:600;font-size:14px;text-decoration:${inaktiv ? 'line-through' : 'none'};">${window.escHtml(c.name)}</span>
                 ${c.is_primary === 1 && !inaktiv ? '<span class="badge badge-prospect" style="font-size:10px;">Prim&aelig;r</span>' : ''}
+                ${c.source === 'brreg' ? '<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(26,138,106,.1);color:#1a8a6a;font-weight:600;">Brreg</span>' : ''}
                 ${inaktiv ? '<span style="font-size:10px;color:var(--muted);font-style:italic;">inaktiv</span>' : ''}
               </div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -1596,9 +1597,10 @@ export async function render(el, state) {
         syncBtn.textContent = 'Synkroniserer…';
         try {
           const result = await api.brregSync(inv.id, { org_nr: inv.org_nr });
-          const msg = result.importedContacts > 0
-            ? `Synkronisert! ${result.importedContacts} ny(e) kontakt(er) importert fra Brreg.`
-            : 'Synkronisert!';
+          const parts = [];
+          if (result.importedContacts > 0) parts.push(`${result.importedContacts} ny(e) lagt til`);
+          if (result.removedContacts > 0) parts.push(`${result.removedContacts} fjernet`);
+          const msg = parts.length > 0 ? `Synkronisert! ${parts.join(', ')}.` : 'Synkronisert — ingen endringer.';
           window.ui.toast?.(msg) || alert(msg);
           await reload();
         } catch (e) {
