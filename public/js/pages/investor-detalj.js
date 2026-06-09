@@ -349,14 +349,32 @@ function buildProductCard(inv, products, piData) {
     if (pi.committed_amount != null) totalCommitted += pi.committed_amount;
   }
 
-  // Active rows — only Pipeline/Fundraise products; skip declined
+  // Rows — only Pipeline/Fundraise products; declined shown inline with red styling
   const ACTIVE_STATUSES = new Set(['Pipeline', 'Fundraise', 'Fundraising']);
-  const activeRows = products.map(p => {
-    if (declinedIds.has(p._id)) return '';
+  const allRows = products.map(p => {
     if (!ACTIVE_STATUSES.has(p.status)) return '';
-    const interested = interests.has(p._id);
-    const pi = piMap[p._id] || {};
-    const isTegnet = pi.committed_amount != null;
+
+    const isDeclined = declinedIds.has(p._id);
+    const interested  = interests.has(p._id);
+    const pi          = piMap[p._id] || {};
+    const isTegnet    = pi.committed_amount != null;
+
+    if (isDeclined) {
+      const d = declinedMap[p._id];
+      const dateStr = d.declined_at
+        ? new Date(d.declined_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })
+        : '';
+      return `
+        <div style="padding:8px 0 8px 10px;border-bottom:1px solid var(--border);border-left:3px solid #e74c3c;
+                    display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(231,76,60,.03);">
+          <span style="flex:1;min-width:160px;font-size:13px;font-weight:600;
+                       text-decoration:line-through;color:var(--muted);">${window.escHtml(p.name)}</span>
+          <span style="font-size:11px;padding:2px 10px;border-radius:20px;
+                       background:#e74c3c;color:#fff;font-weight:700;white-space:nowrap;">&#x2715; Takket nei</span>
+          ${dateStr ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap;">${window.escHtml(dateStr)}</span>` : ''}
+          ${d.decline_reason ? `<span style="font-size:11px;color:var(--muted);font-style:italic;flex-basis:100%;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
+        </div>`;
+    }
 
     return `
       <div class="pi-row" style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -404,24 +422,6 @@ function buildProductCard(inv, products, piData) {
     `;
   }).join('');
 
-  // Declined section
-  const declinedRows = products
-    .filter(p => declinedIds.has(p._id))
-    .map(p => {
-      const d = declinedMap[p._id];
-      const dateStr = d.declined_at
-        ? new Date(d.declined_at).toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : '';
-      return `
-        <div style="display:flex;align-items:center;gap:8px;padding:7px 0 7px 10px;border-bottom:1px solid var(--border);border-left:3px solid #e74c3c;flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:160px;text-decoration:line-through;opacity:.7;">${window.escHtml(p.name)}</span>
-          ${dateStr ? `<span style="font-size:11px;color:var(--muted);">${window.escHtml(dateStr)}</span>` : ''}
-          ${d.decline_reason ? `<span style="font-size:11px;color:#e74c3c;font-style:italic;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
-          <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:#e74c3c;color:#fff;font-weight:700;">Takket nei</span>
-        </div>
-      `;
-    }).join('');
-
   const aggregateHtml = (totalWeighted > 0 || totalCommitted > 0) ? `
     <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);display:flex;gap:24px;flex-wrap:wrap;">
       ${totalWeighted > 0 ? `
@@ -437,19 +437,11 @@ function buildProductCard(inv, products, piData) {
     </div>
   ` : '';
 
-  const declinedSection = declinedRows ? `
-    <div style="margin-top:16px;padding-top:10px;border-top:1px dashed var(--border);">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Avsl&aring;tte muligheter</div>
-      ${declinedRows}
-    </div>
-  ` : '';
-
   return `
     <div class="card">
       <div class="card-title">Produktinteresse</div>
-      ${activeRows}
+      ${allRows}
       ${aggregateHtml}
-      ${declinedSection}
     </div>
   `;
 }
