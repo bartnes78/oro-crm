@@ -279,7 +279,9 @@ function buildKeyFigures(inv, products, piData, tasks) {
 }
 
 function buildContactsCard(inv, visInaktive) {
-  const contacts = (inv.contacts || []).filter(c => c.active !== 0 || visInaktive);
+  const contacts = (inv.contacts || [])
+    .filter(c => c.active !== 0 || visInaktive)
+    .sort((a, b) => (a.source === 'brreg' ? 1 : 0) - (b.source === 'brreg' ? 1 : 0));
   const inaktiveCount = (inv.contacts || []).filter(c => c.active === 0).length;
 
   const contactsHtml = contacts.length === 0
@@ -347,15 +349,17 @@ function buildProductCard(inv, products, piData) {
     if (pi.committed_amount != null) totalCommitted += pi.committed_amount;
   }
 
-  // Active rows — skip declined products (they appear in their own section below)
+  // Active rows — only Pipeline/Fundraise products; skip declined
+  const ACTIVE_STATUSES = new Set(['Pipeline', 'Fundraise', 'Fundraising']);
   const activeRows = products.map(p => {
     if (declinedIds.has(p._id)) return '';
+    if (!ACTIVE_STATUSES.has(p.status)) return '';
     const interested = interests.has(p._id);
     const pi = piMap[p._id] || {};
     const isTegnet = pi.committed_amount != null;
 
     return `
-      <div class="pi-row" style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div class="pi-row" style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
         <div style="display:flex;align-items:center;gap:8px;min-width:180px;">
           <label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;">
             <input type="checkbox" class="pi-toggle" data-pid="${window.escHtml(String(p._id))}"
@@ -364,7 +368,7 @@ function buildProductCard(inv, products, piData) {
           </label>
           <button class="pi-name-nav" data-pid="${window.escHtml(String(p._id))}"
             style="background:none;border:none;padding:0;cursor:pointer;text-align:left;
-                   font-weight:${interested ? 600 : 400};font-size:15px;
+                   font-weight:${interested ? 600 : 400};font-size:13px;
                    color:${interested ? 'var(--blue)' : 'var(--muted)'};">
             ${window.escHtml(p.name)}
           </button>
@@ -409,11 +413,11 @@ function buildProductCard(inv, products, piData) {
         ? new Date(d.declined_at).toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : '';
       return `
-        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
-          <span style="font-size:14px;font-weight:600;color:var(--muted);flex:1;min-width:160px;">${window.escHtml(p.name)}</span>
-          ${dateStr ? `<span style="font-size:12px;color:var(--muted);">${window.escHtml(dateStr)}</span>` : ''}
-          ${d.decline_reason ? `<span style="font-size:12px;color:var(--muted);font-style:italic;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
-          <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(231,76,60,.1);color:#e74c3c;font-weight:600;">Takket nei</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0 7px 10px;border-bottom:1px solid var(--border);border-left:3px solid #e74c3c;flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:160px;text-decoration:line-through;opacity:.7;">${window.escHtml(p.name)}</span>
+          ${dateStr ? `<span style="font-size:11px;color:var(--muted);">${window.escHtml(dateStr)}</span>` : ''}
+          ${d.decline_reason ? `<span style="font-size:11px;color:#e74c3c;font-style:italic;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
+          <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:#e74c3c;color:#fff;font-weight:700;">Takket nei</span>
         </div>
       `;
     }).join('');
