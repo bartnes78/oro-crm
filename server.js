@@ -178,7 +178,7 @@ const authLimiter = rateLimit({
   message: { error: 'For mange innloggingsforsøk. Prøv igjen om 15 minutter.' },
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.js') || filePath.endsWith('.html')) {
