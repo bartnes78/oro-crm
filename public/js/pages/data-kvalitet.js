@@ -59,6 +59,7 @@ export async function render(el, state) {
         ${card('👤', 'Mangler ansvarlig (lead)',          data.noLead.count,         data.noLead.items)}
         ${card('🏷', 'Mangler fase',                      data.noPhase.count,        data.noPhase.items)}
         ${card('📅', 'Ingen sist-kontakt registrert',     data.noLastContact.count,  data.noLastContact.items)}
+        ${card('🏢', 'Ikke koblet til Brreg',             data.noBrreg.count,        data.noBrreg.items)}
         ${card('⏱', 'Ingen aktivitet siste 30 dager',    data.inactive30days.count, data.inactive30days.items)}
         ${card('⏱', 'Ingen aktivitet siste 60 dager',    data.inactive60days.count, data.inactive60days.items)}
         ${card('⏱', 'Ingen aktivitet siste 90 dager',    data.inactive90days.count, data.inactive90days.items)}

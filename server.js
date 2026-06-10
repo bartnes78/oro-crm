@@ -1351,7 +1351,7 @@ app.get('/api/audit-log', requireAdmin, async (req, res) => {
 app.get('/api/data-quality', requireAdmin, async (req, res) => {
   try {
     const [{ rows: investors }, { rows: contacts }, { rows: piRows }] = await Promise.all([
-      query('SELECT id, name, phase, lead, last_contact FROM investors WHERE deleted_at IS NULL'),
+      query('SELECT id, name, phase, lead, last_contact, org_nr FROM investors WHERE deleted_at IS NULL'),
       query('SELECT investor_id, email FROM contacts WHERE active = 1'),
       query('SELECT investor_id, target_ticket, probability FROM product_investors'),
     ]);
@@ -1364,7 +1364,7 @@ app.get('/api/data-quality', requireAdmin, async (req, res) => {
 
     const now       = Date.now();
     const ms30      = 30 * 24 * 60 * 60 * 1000;
-    const noEmail   = [], noLead = [], noPhase = [], noLastContact = [];
+    const noEmail   = [], noLead = [], noPhase = [], noLastContact = [], noBrreg = [];
     const inactive30 = [], inactive60 = [], inactive90 = [];
 
     investors.forEach(inv => {
@@ -1372,6 +1372,7 @@ app.get('/api/data-quality', requireAdmin, async (req, res) => {
       if (!ctList.some(c => c.email)) noEmail.push({ id: inv.id, name: inv.name });
       if (!inv.lead)                  noLead.push({ id: inv.id, name: inv.name });
       if (!inv.phase)                 noPhase.push({ id: inv.id, name: inv.name });
+      if (!inv.org_nr)                noBrreg.push({ id: inv.id, name: inv.name });
       if (!inv.last_contact) {
         noLastContact.push({ id: inv.id, name: inv.name });
         inactive30.push({ id: inv.id, name: inv.name, last_contact: null });
@@ -1395,6 +1396,7 @@ app.get('/api/data-quality', requireAdmin, async (req, res) => {
       noLead:         { count: noLead.length,         items: noLead },
       noPhase:        { count: noPhase.length,        items: noPhase },
       noLastContact:  { count: noLastContact.length,  items: noLastContact },
+      noBrreg:        { count: noBrreg.length,        items: noBrreg },
       inactive30days: { count: inactive30.length,     items: inactive30 },
       inactive60days: { count: inactive60.length,     items: inactive60 },
       inactive90days: { count: inactive90.length,     items: inactive90 },
