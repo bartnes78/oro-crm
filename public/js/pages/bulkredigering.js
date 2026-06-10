@@ -16,6 +16,23 @@ function selectHtml(id, value, options, emptyLabel) {
   return `<select id="${id}" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);min-height:44px">${opts}</select>`;
 }
 
+// ── Brreg-matching ─────────────────────────────────────────────────────────────
+
+function normalizeBrregName(name) {
+  return (name || '').toLowerCase()
+    .replace(/[.,()/-]/g, ' ')
+    .replace(/\b(as|asa|is|sa|ans|pk|ab|spk)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function pickBestBrregMatch(invName, results) {
+  const aktive = (results || []).filter(r => !r.slettet);
+  if (!aktive.length) return null;
+  const norm = normalizeBrregName(invName);
+  const exact = aktive.find(r => normalizeBrregName(r.navn) === norm);
+  return { match: exact || aktive[0], strong: !!exact };
+}
+
 function statusIcon(status) {
   if (status === 'ok')      return '<span style="color:var(--green)">✓</span>';
   if (status === 'saving')  return '<span style="color:#aaa">…</span>';
@@ -56,7 +73,7 @@ function buildRow(inv, savedStatus, leads, phases, types, selectedSet, showTicke
       <input type="checkbox" class="row-check" data-id="${window.escHtml(inv.id)}" ${checked} style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue)">
     </td>
     <td style="padding:8px 12px;font-weight:600;max-width:240px">
-      <span class="inv-link" data-id="${window.escHtml(inv.id)}" style="cursor:pointer;color:var(--blue)">${window.escHtml(inv.name)}</span>
+      <span class="inv-link" data-id="${window.escHtml(inv.id)}" style="cursor:pointer;color:var(--blue)">${window.escHtml(inv.name)}</span>${window.brregBadge(inv)}
     </td>
     <td style="padding:6px 8px;width:140px">
       <select class="edit-cell" data-id="${window.escHtml(inv.id)}" data-field="phase"
@@ -226,6 +243,9 @@ export async function render(el, state) {
     const count = selectedIds.size;
     if (!count) return '';
     const phaseOptions = phases.map(p => `<option value="${window.escHtml(p)}">${window.escHtml(p)}</option>`).join('');
+    const unlinkedCount = [...selectedIds]
+      .map(id => investors.find(i => i.id === id))
+      .filter(i => i && !i.org_nr).length;
     return `<div id="bulk-bar" style="background:var(--blue);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span style="font-weight:600;font-size:13px">${count} rad${count > 1 ? 'er' : ''} valgt</span>
       <select id="bulk-phase-select" style="font-size:12px;padding:5px 8px;border-radius:6px;border:none;min-height:36px">
@@ -233,6 +253,7 @@ export async function render(el, state) {
         ${phaseOptions}
       </select>
       <button id="bulk-phase-btn" class="btn btn-sm" style="background:#fff;color:var(--blue);font-weight:600;min-height:36px">Lagre fase</button>
+      ${unlinkedCount > 0 ? `<button id="bulk-brreg-btn" class="btn btn-sm" style="background:#fff;color:var(--blue);font-weight:600;min-height:36px">🔍 Sjekk Brreg-treff (${unlinkedCount})</button>` : ''}
       <button id="deselect-all-btn" class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.4);min-height:36px">Fjern valg</button>
     </div>`;
   }
@@ -324,6 +345,115 @@ export async function render(el, state) {
       for (const id of [...selectedIds]) await saveOne(id, 'phase', phase);
       selectedIds.clear();
       rebuildTable();
+    });
+
+    el.querySelector('#bulk-brreg-btn')?.addEventListener('click', () => runBrregCheck());
+  }
+
+  // ── Brreg-sjekk for valgte rader ──────────────────────────────────────────────
+
+  async function runBrregCheck() {
+    const targets = [...selectedIds]
+      .map(id => investors.find(i => i.id === id))
+      .filter(i => i && !i.org_nr);
+    if (!targets.length) return;
+
+    const progressHtml = window.ui.modal(
+      'Sjekker Brreg-treff…',
+      `<div id="brreg-progress" style="padding:8px 0;font-size:13px;color:var(--muted)">Starter…</div>`,
+      '',
+    );
+    window.openModal(progressHtml, () => {});
+
+    const results = [];
+    for (let i = 0; i < targets.length; i++) {
+      const inv = targets[i];
+      const progressEl = document.getElementById('brreg-progress');
+      if (progressEl) progressEl.textContent = `Søker (${i + 1}/${targets.length}): ${inv.name}…`;
+      try {
+        const hits = await api.brregSearch(inv.name);
+        const best = pickBestBrregMatch(inv.name, hits);
+        results.push({ inv, match: best?.match || null, strong: !!best?.strong });
+      } catch {
+        results.push({ inv, match: null, strong: false });
+      }
+      if (i < targets.length - 1) await new Promise(r => setTimeout(r, 300));
+    }
+
+    openBrregResultsModal(results);
+  }
+
+  function brregResultRow(r, idx) {
+    const m = r.match;
+    const matchHtml = m
+      ? `<div style="font-size:12px">
+           <span style="font-weight:600">${window.escHtml(m.navn)}</span>
+           <span style="color:var(--muted)"> · ${window.escHtml(m.orgnr)}${m.poststed ? ' · ' + window.escHtml(m.poststed) : ''}</span>
+           ${r.strong ? '<span style="margin-left:6px;font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(26,138,106,.1);color:#1a8a6a;font-weight:600;">Treff</span>'
+                       : '<span style="margin-left:6px;font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(230,126,34,.12);color:#e67e22;font-weight:600;">Usikker</span>'}
+         </div>`
+      : `<span style="font-size:12px;color:var(--muted);font-style:italic">Ingen treff</span>`;
+
+    return `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:8px 10px;text-align:center;width:28px">
+          ${m ? `<input type="checkbox" class="brreg-row-check" data-idx="${idx}" ${r.strong ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue)">` : ''}
+        </td>
+        <td style="padding:8px 10px;font-weight:600;font-size:13px">${window.escHtml(r.inv.name)}</td>
+        <td style="padding:8px 10px">${matchHtml}</td>
+      </tr>`;
+  }
+
+  function openBrregResultsModal(results) {
+    const rows = results.map((r, idx) => brregResultRow(r, idx)).join('');
+    const matchCount = results.filter(r => r.match).length;
+
+    const html = window.ui.modal(
+      'Brreg-treff',
+      `<p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        ${matchCount} av ${results.length} fikk forslag. Forhåndskryssede rader er eksakte navnetreff —
+        sjekk «Usikker»-rader før du kobler.
+      </p>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f8f9fa;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.4px">
+              <th style="padding:8px 10px;width:28px"></th>
+              <th style="padding:8px 10px;text-align:left">Investor</th>
+              <th style="padding:8px 10px;text-align:left">Brreg-forslag</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`,
+      `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+      <button class="btn btn-primary" id="brreg-link-btn" ${matchCount ? '' : 'disabled'}>Koble valgte</button>`,
+    );
+
+    window.openModal(html, () => {
+      document.getElementById('brreg-link-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('brreg-link-btn');
+        const checked = [...document.querySelectorAll('.brreg-row-check:checked')]
+          .map(chk => results[parseInt(chk.dataset.idx, 10)])
+          .filter(r => r.match);
+        if (!checked.length) { window.closeModal(); return; }
+
+        btn.disabled = true;
+        for (let i = 0; i < checked.length; i++) {
+          const r = checked[i];
+          btn.textContent = `Kobler (${i + 1}/${checked.length})…`;
+          try {
+            await api.brregSync(r.inv.id, { org_nr: r.match.orgnr });
+            const idx = investors.findIndex(iv => iv.id === r.inv.id);
+            if (idx !== -1) investors[idx] = { ...investors[idx], org_nr: r.match.orgnr, brreg_navn: r.match.navn };
+          } catch { /* fortsett med neste */ }
+          if (i < checked.length - 1) await new Promise(res => setTimeout(res, 300));
+        }
+        window.closeModal();
+        selectedIds.clear();
+        rebuildTable();
+        window.ui.toast?.(`Koblet ${checked.length} investor${checked.length > 1 ? 'er' : ''} til Brreg`);
+      });
     });
   }
 

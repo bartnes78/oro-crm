@@ -2,6 +2,15 @@
 
 ## Pågående
 
+### Bulkredigering — sjekk Brreg-treff for valgte rader
+
+- [ ] `bulkredigering.js` — vis Brreg-badge (✓) ved investornavn for allerede koblede
+- [ ] `bulkredigering.js` — ny knapp «🔍 Sjekk Brreg-treff» i bulk-action-bar (vises ved valgte rader uten org_nr)
+- [ ] Sekvensielt søk mot `/api/brreg/search` per valgt investor (300ms pause, samme mønster som ukentlig sync)
+- [ ] Resultatmodal: investor → forslag (navn, orgnr, poststed, orgform) eller «ingen treff», med avkrysning (forhåndskrysset ved sterkt navnetreff)
+- [ ] «Koble valgte» → `brregSync` per godkjent rad, deretter reload av investorlisten
+- [ ] Manuell test: noen treff, noen uten treff, noen allerede koblet
+
 ### Kontakter — telefon 2 + duplikatopprydding
 
 - [x] `schema.sql` — legg til `phone2 TEXT` på `contacts` (idempotent DO-blokk)
