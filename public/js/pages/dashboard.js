@@ -220,8 +220,8 @@ function buildGaugeCards(data) {
       </svg>`;
   }
 
-  const cards = prods.map(p => `
-    <div class="card gauge-card-link" data-product-id="${esc(String(p.id))}"
+  const cards = prods.map((p, i) => `
+    <div class="card gauge-card-link${i >= 4 ? ' gauge-extra' : ''}" data-product-id="${esc(String(p.id))}"
          style="text-align:center;flex:1;min-width:140px;max-width:220px;cursor:pointer;transition:box-shadow .15s">
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
                   letter-spacing:.5px;margin-bottom:10px">${esc(p.name.replace('ORO ', ''))}</div>
@@ -230,11 +230,16 @@ function buildGaugeCards(data) {
       <div style="font-size:11px;color:var(--muted);margin-top:2px">av ${fmt(p.target_size || 0, 0)} MNOK mål</div>
     </div>`).join('');
 
+  const showMoreBtn = prods.length > 4
+    ? `<button class="btn btn-ghost btn-sm gauge-show-more" id="gauge-show-more" style="margin-top:8px">Vis ${prods.length - 4} flere</button>`
+    : '';
+
   return `
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
                   letter-spacing:.6px;margin-bottom:10px">Tegnet vs. mål per prosjekt</div>
-      <div class="gauge-cards" style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>
+      <div class="gauge-cards gauge-collapsed" style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>
+      ${showMoreBtn}
     </div>`;
 }
 
@@ -401,6 +406,16 @@ function setupEvents(el, data, investors, filter) {
   el.querySelectorAll('.gauge-card-link').forEach(card => {
     card.addEventListener('click', () => window.navigate('prosjektDetalj', card.dataset.productId));
   });
+
+  const showMoreBtn = el.querySelector('#gauge-show-more');
+  if (showMoreBtn) {
+    showMoreBtn.addEventListener('click', () => {
+      const container = el.querySelector('.gauge-cards');
+      const collapsed = container.classList.toggle('gauge-collapsed');
+      const extraCount = container.querySelectorAll('.gauge-extra').length;
+      showMoreBtn.textContent = collapsed ? `Vis ${extraCount} flere` : 'Vis færre';
+    });
+  }
 
   const searchInput = el.querySelector('#dash-search');
   if (searchInput) {

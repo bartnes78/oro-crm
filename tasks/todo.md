@@ -10,6 +10,13 @@
 - [x] **#6.3** — tydeligere merking av avslag: egen "Avslått"-seksjon med overskrift i produktkortet
 - [ ] Manuell test: investor med tegnet+aktiv+avslått produkt, kontaktliste med Brreg-kontakter (kristian — server kjører på localhost:3001)
 
+### Resterende bug-rapporter (#5, #8, #9)
+
+- [x] **#5** — `buildProductCard()`: ned 1px på produktnavn (13→12px), ticket/% inputs og enheter (12→11px)
+- [x] **#8** — allerede løst: "+ Kontakt"-knapp (`brreg-add-contact-btn`) per Brreg-rolle som ikke allerede er kontakt, ingen auto-flytting
+- [x] **#9** — `dashboard.js` `buildGaugeCards()`: prosjekter >4 får klasse `gauge-extra`, "Vis X flere"/"Vis færre"-knapp toggler `.gauge-collapsed`. CSS skjuler `.gauge-extra` og viser knappen kun under 640px (mobil)
+- [ ] Manuell test: dashboard på mobilbredde med >4 aktive prosjekter (vis mer/færre), "+Kontakt fra rolle" på Brreg-kort
+
 ### Bulkredigering — sjekk Brreg-treff for valgte rader
 
 - [x] `bulkredigering.js` — vis Brreg-badge (✓) ved investornavn for allerede koblede
@@ -74,12 +81,12 @@
 - [x] **[detalj-side]** «Felles prosjekt»-kategorien skal ikke ha dokumenter — skjult i dokumentseksjonen *(kristian, 3. juni)*
 - [x] **[dashboard]** Global kundesøk i topbaren — søkefelt i sidemenyen, Enter navigerer til investorer *(kristian, 3. juni)*
 - [x] **[brukere]** Send velkomstmail til nye brukere — modal med ferdigskrevet velkomstmelding + kopierknapp *(kristian, 4. juni)*
-- [ ] **[detalj]** Produktinteresse: vis kun produkter i fase Pipeline/Pre-marketing og Fundraise — tegnede produkter flyttes lengre ned/til egen seksjon *(kristian, 8. juni)*
-- [ ] **[detalj]** Ta ned fontstørrelsen på produktinteresser-seksjonen *(kristian, 8. juni)*
-- [ ] **[detalj]** 1) Rydd i produkter — kun Pipeline/Pre-marketing og Fundraise vises, tegnede produkter i kolonne til høyre. 2) Sorter kontakter — Brreg-kontakter nederst. 3) Tydeligere merking av avslag *(kristian, 9. juni)*
-- [ ] **[dashboard]** Vis kun prosjekter i fase Fundraise eller Pipeline, og gjør prosjektkortene klikkbare *(kristian, 10. juni)*
-- [ ] **[detalj]** Brreg-kontakter (roller) holder å ligge under "Roller" — ikke flytt automatisk til Kontakter. Vurder en "Legg til kontakt fra roller"-knapp i stedet *(kristian, 10. juni)*
-- [ ] **[dashboard]** Prosjektoversikt — vis to og to (grid), legg til "vis mer"-knapp ved >4 prosjekter. Gjelder kun mobil/smale visninger (desktop viser trolig alle/flere i rad allerede) *(kristian, 10. juni)*
+- [x] **[detalj]** Produktinteresse: vis kun produkter i fase Pipeline/Pre-marketing og Fundraise — tegnede produkter flyttes lengre ned/til egen seksjon *(kristian, 8. juni)*
+- [x] **[detalj]** Ta ned fontstørrelsen på produktinteresser-seksjonen *(kristian, 8. juni)*
+- [x] **[detalj]** 1) Rydd i produkter — kun Pipeline/Pre-marketing og Fundraise vises, tegnede produkter i kolonne til høyre. 2) Sorter kontakter — Brreg-kontakter nederst. 3) Tydeligere merking av avslag *(kristian, 9. juni)*
+- [x] **[dashboard]** Vis kun prosjekter i fase Fundraise eller Pipeline, og gjør prosjektkortene klikkbare *(kristian, 10. juni)*
+- [x] **[detalj]** Brreg-kontakter (roller) holder å ligge under "Roller" — ikke flytt automatisk til Kontakter. Vurder en "Legg til kontakt fra roller"-knapp i stedet *(kristian, 10. juni)*
+- [x] **[dashboard]** Prosjektoversikt — vis to og to (grid), legg til "vis mer"-knapp ved >4 prosjekter. Gjelder kun mobil/smale visninger (desktop viser trolig alle/flere i rad allerede) *(kristian, 10. juni)*
 
 
 

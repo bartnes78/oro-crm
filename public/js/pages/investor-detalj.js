@@ -397,7 +397,7 @@ function buildProductCard(inv, products, piData) {
           </label>
           <button class="pi-name-nav" data-pid="${window.escHtml(String(p._id))}"
             style="background:none;border:none;padding:0;cursor:pointer;text-align:left;
-                   font-weight:${interested ? 600 : 400};font-size:13px;
+                   font-weight:${interested ? 600 : 400};font-size:12px;
                    color:${interested ? 'var(--blue)' : 'var(--muted)'};">
             ${window.escHtml(p.name)}
           </button>
@@ -406,14 +406,14 @@ function buildProductCard(inv, products, piData) {
           <div style="display:flex;align-items:center;gap:4px;">
             <input class="pi-ticket" type="number" step="0.5" data-pid="${window.escHtml(String(p._id))}"
               value="${pi.target_ticket != null ? pi.target_ticket : ''}" placeholder="—"
-              style="width:75px;font-size:12px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
-            <span style="font-size:12px;color:var(--muted);">MNOK</span>
+              style="width:75px;font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
+            <span style="font-size:11px;color:var(--muted);">MNOK</span>
           </div>
           <div style="display:flex;align-items:center;gap:4px;">
             <input class="pi-prob" type="number" min="0" max="100" step="5" data-pid="${window.escHtml(String(p._id))}"
               value="${pi.probability != null ? Math.round(pi.probability * 100) : ''}" placeholder="—"
-              style="width:60px;font-size:12px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
-            <span style="font-size:12px;color:var(--muted);">%</span>
+              style="width:60px;font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);text-align:right;" />
+            <span style="font-size:11px;color:var(--muted);">%</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
             ${isTegnet ? `<span style="font-size:11px;padding:2px 10px;border-radius:20px;background:rgba(26,138,106,.12);color:var(--color-signed);font-weight:700;">&#10003; Tegnet${pi.committed_amount ? ' ' + pi.committed_amount + 'M' : ''}</span>` : ''}
