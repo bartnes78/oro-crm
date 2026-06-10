@@ -279,9 +279,7 @@ function buildKeyFigures(inv, products, piData, tasks) {
 }
 
 function buildContactsCard(inv, visInaktive) {
-  const contacts = (inv.contacts || [])
-    .filter(c => c.active !== 0 || visInaktive)
-    .sort((a, b) => (a.source === 'brreg' ? 1 : 0) - (b.source === 'brreg' ? 1 : 0));
+  const contacts = (inv.contacts || []).filter(c => c.active !== 0 || visInaktive);
   const inaktiveCount = (inv.contacts || []).filter(c => c.active === 0).length;
 
   const contactsHtml = contacts.length === 0
@@ -521,7 +519,10 @@ function buildBrregCard(inv) {
         </div>`;
     }).join('');
 
-    const roller = (bd.roller || []).map(r => `
+    const eksisterendeKontakter = new Set((inv.contacts || []).map(c => c.name.toLowerCase()));
+    const roller = (bd.roller || []).map(r => {
+      const alleredeKontakt = eksisterendeKontakter.has(r.navn.toLowerCase());
+      return `
       <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">
         <div style="flex:1;">
           <span style="font-size:13px;font-weight:600;">${window.escHtml(r.navn)}</span>
@@ -530,7 +531,11 @@ function buildBrregCard(inv) {
           <div style="font-size:11px;font-weight:600;color:var(--text);">${window.escHtml(r.type)}</div>
           ${r.gruppe && r.gruppe !== r.type ? `<div style="font-size:10px;color:var(--muted);">${window.escHtml(r.gruppe)}</div>` : ''}
         </div>
-      </div>`).join('');
+        ${alleredeKontakt ? '' : `
+          <button class="btn btn-ghost btn-sm brreg-add-contact-btn" style="font-size:11px;min-height:28px;padding:2px 8px;flex-shrink:0;"
+            data-navn="${window.escHtml(r.navn)}" data-tittel="${window.escHtml(r.type)}">+ Kontakt</button>`}
+      </div>`;
+    }).join('');
 
     const syncedAt = bd.synced_at
       ? new Date(bd.synced_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -1474,6 +1479,15 @@ export async function render(el, state) {
       });
     }
 
+    el.querySelectorAll('.brreg-add-contact-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        openContactModal({
+          investor_id: inv.id, name: btn.dataset.navn, title: btn.dataset.tittel,
+          email: '', phone: '', is_primary: 0, notes: '', active: 1,
+        }, reload);
+      });
+    });
+
     const toggleInaktiveBtn = el.querySelector('#toggle-inaktive');
     if (toggleInaktiveBtn) {
       toggleInaktiveBtn.addEventListener('click', async () => {
@@ -1592,11 +1606,8 @@ export async function render(el, state) {
         syncBtn.disabled = true;
         syncBtn.textContent = 'Synkroniserer…';
         try {
-          const result = await api.brregSync(inv.id, { org_nr: inv.org_nr });
-          const parts = [];
-          if (result.importedContacts > 0) parts.push(`${result.importedContacts} ny(e) lagt til`);
-          if (result.removedContacts > 0) parts.push(`${result.removedContacts} fjernet`);
-          const msg = parts.length > 0 ? `Synkronisert! ${parts.join(', ')}.` : 'Synkronisert — ingen endringer.';
+          await api.brregSync(inv.id, { org_nr: inv.org_nr });
+          const msg = 'Synkronisert!';
           window.ui.toast?.(msg) || alert(msg);
           await reload();
         } catch (e) {
@@ -1663,10 +1674,8 @@ export async function render(el, state) {
               try {
                 // Bruk poststed fra Brreg som city hvis CRM-city er tom
                 const cityPayload = !inv.city && poststed ? poststed : undefined;
-                const result = await api.brregSync(inv.id, { org_nr: orgnr, city: cityPayload });
-                const msg = result.importedContacts > 0
-                  ? `Koblet! ${result.importedContacts} kontakt(er) importert fra roller.`
-                  : 'Investor koblet til Brreg!';
+                await api.brregSync(inv.id, { org_nr: orgnr, city: cityPayload });
+                const msg = 'Investor koblet til Brreg!';
                 window.ui.toast?.(msg) || alert(msg);
                 await reload();
               } catch (err) {

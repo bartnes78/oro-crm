@@ -630,43 +630,13 @@ app.post('/api/investors/:id/brreg-sync', async (req, res) => {
       [req.params.id, orgnr, e.navn, JSON.stringify(brregData), city || null]
     );
 
-    // Synkroniser Brreg-kontakter: legg til nye, fjern de som ikke lenger er i rollene
-    const rollerNavn = new Set(roller.map(r => r.navn.toLowerCase()));
-    const { rows: eksisterendeBrreg } = await client.query(
-      `SELECT id, name FROM contacts WHERE investor_id=$1 AND source='brreg'`,
-      [req.params.id]
-    );
-    // Slett Brreg-kontakter som ikke lenger er i rollene
-    let removedCount = 0;
-    for (const c of eksisterendeBrreg) {
-      if (!rollerNavn.has(c.name.toLowerCase())) {
-        await client.query(`DELETE FROM contacts WHERE id=$1`, [c.id]);
-        removedCount++;
-      }
-    }
-    // Legg til nye roller som ikke allerede finnes
-    let importedCount = 0;
-    for (const r of roller) {
-      const { rows: exists } = await client.query(
-        `SELECT id FROM contacts WHERE investor_id=$1 AND LOWER(name)=LOWER($2)`,
-        [req.params.id, r.navn]
-      );
-      if (exists.length === 0) {
-        await client.query(
-          `INSERT INTO contacts (investor_id, name, title, source, active) VALUES ($1,$2,$3,'brreg',1)`,
-          [req.params.id, r.navn, r.type]
-        );
-        importedCount++;
-      }
-    }
-
     await client.query('COMMIT');
 
     await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
       { org_nr: null }, { org_nr: orgnr, brreg_navn: e.navn },
       `Koblet Brreg org.nr ${orgnr} til investor`);
 
-    res.json({ ok: true, brreg_navn: e.navn, importedContacts: importedCount, removedContacts: removedCount, adresser, roller });
+    res.json({ ok: true, brreg_navn: e.navn, adresser, roller });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[POST /investors/:id/brreg-sync]', e.message);
