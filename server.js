@@ -1036,10 +1036,10 @@ app.post('/api/contacts', async (req, res) => {
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [c] } = await query(`
-      INSERT INTO contacts (investor_id, name, title, email, phone, is_primary, notes, active)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *
+      INSERT INTO contacts (investor_id, name, title, email, phone, phone2, is_primary, notes, active)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
     `, [req.body.investor_id, req.body.name, req.body.title || null,
-        req.body.email || null, req.body.phone || null, req.body.is_primary || 0, req.body.notes || null,
+        req.body.email || null, req.body.phone || null, req.body.phone2 || null, req.body.is_primary || 0, req.body.notes || null,
         req.body.active ?? 1]);
     await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'contact', c.id, null, { name: c.name, investor_id: c.investor_id }, `Opprettet kontakt: ${c.name}`);
     res.json(fmtRow(c));
@@ -1054,10 +1054,10 @@ app.put('/api/contacts/:id', async (req, res) => {
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
     const { rows: [c] } = await query(`
-      UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, is_primary=$7, notes=$8, active=$9
+      UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, phone2=$7, is_primary=$8, notes=$9, active=$10
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id'), v('name'), v('title') || null,
-        v('email') || null, v('phone') || null, v('is_primary') || 0, v('notes') || null,
+        v('email') || null, v('phone') || null, v('phone2') || null, v('is_primary') || 0, v('notes') || null,
         'active' in b ? (b.active ?? 1) : (cur.active ?? 1)]);
     res.json(fmtRow(c));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1082,17 +1082,25 @@ app.post('/api/contacts/merge', async (req, res) => {
     const keep = rows.find(r => r.id === parseInt(keep_id));
     const drop = rows.find(r => r.id === parseInt(drop_id));
     if (!keep || !drop) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kontakt ikke funnet' }); }
-    // Merge: keep wins, fill nulls from drop
+    // Merge: keep wins, fill nulls from drop. Hvis keep.phone og drop.phone begge er satt
+    // og ulike, havner drop.phone i phone2 (i stedet for å gå tapt).
+    let phone  = keep.phone;
+    let phone2 = keep.phone2;
+    if (!phone) phone = drop.phone || null;
+    else if (drop.phone && drop.phone !== phone && !phone2) phone2 = drop.phone;
+    if (!phone2) phone2 = drop.phone2 || null;
+
     await client.query(`
       UPDATE contacts SET
         title     = COALESCE(NULLIF(title,''), $2),
         email     = COALESCE(NULLIF(email,''), $3),
-        phone     = COALESCE(NULLIF(phone,''), $4),
-        notes     = CASE WHEN notes IS NOT NULL AND notes <> '' AND $5::TEXT IS NOT NULL AND $5::TEXT <> ''
-                         THEN notes || E'\n' || $5::TEXT
-                         ELSE COALESCE(NULLIF(notes,''), $5::TEXT) END
+        phone     = $4,
+        phone2    = $5,
+        notes     = CASE WHEN notes IS NOT NULL AND notes <> '' AND $6::TEXT IS NOT NULL AND $6::TEXT <> ''
+                         THEN notes || E'\n' || $6::TEXT
+                         ELSE COALESCE(NULLIF(notes,''), $6::TEXT) END
       WHERE id = $1
-    `, [parseInt(keep_id), drop.title, drop.email, drop.phone, drop.notes]);
+    `, [parseInt(keep_id), drop.title, drop.email, phone, phone2, drop.notes]);
     await client.query('DELETE FROM contacts WHERE id = $1', [parseInt(drop_id)]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'merge', 'contact', keep_id,
@@ -1855,13 +1863,14 @@ app.get('/api/export/excel', async (req, res) => {
     const ctRows = contacts.map(c => ({
       'Investor ID': c.investor_id, 'Investor': invMap[c.investor_id] || '',
       'Navn': c.name || '', 'Tittel': c.title || '', 'E-post': c.email || '',
-      'Telefon': c.phone || '', 'Primærkontakt': c.is_primary ? 'Ja' : '', 'Notater': c.notes || '',
+      'Telefon': c.phone || '', 'Telefon 2': c.phone2 || '', 'Primærkontakt': c.is_primary ? 'Ja' : '', 'Notater': c.notes || '',
     }));
     const wsCt = wb.addWorksheet('Kontakter');
     wsCt.columns = [
       { header: 'Investor ID', key: 'Investor ID', width: 10 }, { header: 'Investor', key: 'Investor', width: 30 },
       { header: 'Navn', key: 'Navn', width: 24 }, { header: 'Tittel', key: 'Tittel', width: 22 },
       { header: 'E-post', key: 'E-post', width: 28 }, { header: 'Telefon', key: 'Telefon', width: 16 },
+      { header: 'Telefon 2', key: 'Telefon 2', width: 16 },
       { header: 'Primærkontakt', key: 'Primærkontakt', width: 14 }, { header: 'Notater', key: 'Notater', width: 36 },
     ];
     wsCt.addRows(ctRows);

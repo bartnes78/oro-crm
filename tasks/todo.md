@@ -2,6 +2,17 @@
 
 ## Pågående
 
+### Kontakter — telefon 2 + duplikatopprydding
+
+- [ ] `schema.sql` — legg til `phone2 TEXT` på `contacts` (idempotent DO-blokk)
+- [ ] `server.js` — POST/PUT `/api/contacts` og `/api/contacts/merge` håndterer `phone2`
+- [ ] `server.js` — Excel-eksport inkluderer `phone2`
+- [ ] `investor-detalj.js` — kontaktmodal: nytt felt «Telefon 2»
+- [ ] `investor-detalj.js` — vis `phone2` i kontaktkort og primærkontakt-sidebar
+- [ ] DB: slå sammen K-Spar-duplikatkontakt (Harald Kristofer Berg) med begge telefonnumre
+- [ ] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse, Mallin/Mallin Eiendom AS, Stormbull/Stormbull Eiendom AS)
+- [ ] Manuell test: ny kontakt med telefon 2, rediger eksisterende, eksport
+
 ### Brreg-integrasjon
 
 - [x] `schema.sql` — legg til `org_nr`, `brreg_navn`, `brreg_data` (idempotent DO-blokker)

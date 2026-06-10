@@ -282,4 +282,11 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='contacts' AND column_name='phone2') THEN
+    ALTER TABLE contacts ADD COLUMN phone2 TEXT;
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_investors_org_nr ON investors (org_nr) WHERE org_nr IS NOT NULL;

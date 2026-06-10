@@ -272,6 +272,7 @@ function buildKeyFigures(inv, products, piData, tasks) {
               ${primaryCtct.title ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.title)}</div>` : ''}
               ${primaryCtct.email ? `<a href="mailto:${window.escHtml(primaryCtct.email)}" style="font-size:11px;color:var(--blue);text-decoration:none;display:block;margin-top:2px">${window.escHtml(primaryCtct.email)}</a>` : ''}
               ${primaryCtct.phone ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.phone)}</div>` : ''}
+              ${primaryCtct.phone2 ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.phone2)}</div>` : ''}
             </div>` : ''}
         </div>
       </div>
@@ -305,6 +306,7 @@ function buildContactsCard(inv, visInaktive) {
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
               ${c.email ? `<a href="mailto:${window.escHtml(c.email)}" style="font-size:12px;color:var(--blue);text-decoration:none;">&#9993; ${window.escHtml(c.email)}</a>` : ''}
               ${c.phone ? `<span style="font-size:12px;color:#555;">&#128222; ${window.escHtml(c.phone)}</span>` : ''}
+              ${c.phone2 ? `<span style="font-size:12px;color:#555;">&#128222; ${window.escHtml(c.phone2)}</span>` : ''}
               ${c.notes ? `<span style="font-size:11px;color:#aaa;font-style:italic;">${window.escHtml(c.notes)}</span>` : ''}
             </div>
           </div>
@@ -954,6 +956,10 @@ function openContactModal(contact, reload) {
         <label>Telefon</label>
         <input id="c-phone" value="${window.escHtml(contact.phone || '')}" placeholder="+47 900 00 000" />
       </div>
+      <div class="form-group">
+        <label>Telefon 2</label>
+        <input id="c-phone2" value="${window.escHtml(contact.phone2 || '')}" placeholder="+47 900 00 000" />
+      </div>
       <div class="form-group full">
         <label>Notat</label>
         <textarea id="c-notes" style="min-height:52px;" placeholder="Valgfritt&hellip;">${window.escHtml(contact.notes || '')}</textarea>
@@ -979,6 +985,7 @@ function openContactModal(contact, reload) {
         title:      document.getElementById('c-title').value.trim(),
         email:      document.getElementById('c-email').value.trim(),
         phone:      document.getElementById('c-phone').value.trim(),
+        phone2:     document.getElementById('c-phone2').value.trim(),
         notes:      document.getElementById('c-notes').value,
         is_primary: document.getElementById('c-primary').checked ? 1 : 0,
       };

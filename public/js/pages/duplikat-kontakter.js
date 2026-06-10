@@ -25,6 +25,7 @@ function contactRowHtml(c, idx) {
       <div style="font-size:11px;color:#555;display:flex;flex-direction:column;gap:2px">
         ${c.email ? `<span>✉ ${window.escHtml(c.email)}</span>` : ''}
         ${c.phone ? `<span>📞 ${window.escHtml(c.phone)}</span>` : ''}
+        ${c.phone2 ? `<span>📞 ${window.escHtml(c.phone2)}</span>` : ''}
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" data-open-investor="${window.escHtml(c.investor_id || '')}" style="font-size:11px;min-height:44px">Åpne →</button>
@@ -47,6 +48,7 @@ function mergeRowHtml(c, role) {
         ${c.investor_name ? `<span>Investor: ${window.escHtml(c.investor_name)}</span>` : ''}
         ${c.email ? `<span>✉ ${window.escHtml(c.email)}</span>` : '<span style="color:#aaa">Ingen e-post</span>'}
         ${c.phone ? `<span>📞 ${window.escHtml(c.phone)}</span>` : ''}
+        ${c.phone2 ? `<span>📞 ${window.escHtml(c.phone2)}</span>` : ''}
         ${c.notes ? `<span style="color:#888">Notat: ${window.escHtml(c.notes)}</span>` : ''}
       </div>
     </div>`;
