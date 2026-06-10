@@ -197,7 +197,8 @@ function buildTop10Card(data, investors, filter) {
 }
 
 function buildGaugeCards(data) {
-  const prods = (data.products || []).filter(p => p.status !== 'Avlyst' && (p.target_size > 0 || p.committed > 0));
+  const ACTIVE_STATUSES = new Set(['Pipeline', 'Fundraise', 'Fundraising']);
+  const prods = (data.products || []).filter(p => ACTIVE_STATUSES.has(p.status));
   if (!prods.length) return '';
 
   const ARC_LEN = Math.PI * 40; // semicircle radius 40 → ≈ 125.66
@@ -220,7 +221,8 @@ function buildGaugeCards(data) {
   }
 
   const cards = prods.map(p => `
-    <div class="card" style="text-align:center;flex:1;min-width:140px;max-width:220px">
+    <div class="card gauge-card-link" data-product-id="${esc(String(p.id))}"
+         style="text-align:center;flex:1;min-width:140px;max-width:220px;cursor:pointer;transition:box-shadow .15s">
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
                   letter-spacing:.5px;margin-bottom:10px">${esc(p.name.replace('ORO ', ''))}</div>
       ${gauge(p.committed || 0, p.target_size || 0)}
@@ -395,6 +397,10 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
 function setupEvents(el, data, investors, filter) {
   const loggBtn = el.querySelector('#dash-logg-btn');
   if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el));
+
+  el.querySelectorAll('.gauge-card-link').forEach(card => {
+    card.addEventListener('click', () => window.navigate('prosjektDetalj', card.dataset.productId));
+  });
 
   const searchInput = el.querySelector('#dash-search');
   if (searchInput) {
