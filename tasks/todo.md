@@ -58,10 +58,10 @@
 
 ### Kritisk (før ekte produksjonsdata)
 
-- [ ] Sett `CRM_PASS` til sterkt passord i Railway-miljøvariabler
-- [ ] Opprett personlige brukerkontoer for alle teammedlemmer via Brukeradmin
-- [ ] Verifiser at Railway-deploy bruker HTTPS (aldri HTTP i prod)
-- [ ] Bestem admin-rolle: hvem har tilgang til backup og brukerstyring
+- [ ] `CRM_PASS`/`CRM_USER` brukes kun ved førstegangsoppsett (tom `users`-tabell) og er ubrukt nå som ekte kontoer finnes — rydd evt. bort fra Railway-variabler (lav prioritet, ikke en sikkerhetsrisiko)
+- [ ] Opprett personlige brukerkontoer for resterende teammedlemmer via Brukeradmin — i dag finnes kun `kristian` (admin) og `nikolai` (bruker), ~8 personer mangler egen konto
+- [x] Verifisert at Railway-deploy bruker HTTPS — HTTP redirecter automatisk til HTTPS på prod-domenet *(kristian, 10. juni)*
+- [x] Admin-rolle avklart — `kristian` har `role='admin'`, full tilgang til backup/brukerstyring/sletting/sammenslåing
 
 ### Data
 
