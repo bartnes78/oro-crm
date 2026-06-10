@@ -71,7 +71,7 @@
 - [ ] **[detalj]** 1) Rydd i produkter — kun Pipeline/Pre-marketing og Fundraise vises, tegnede produkter i kolonne til høyre. 2) Sorter kontakter — Brreg-kontakter nederst. 3) Tydeligere merking av avslag *(kristian, 9. juni)*
 - [ ] **[dashboard]** Vis kun prosjekter i fase Fundraise eller Pipeline, og gjør prosjektkortene klikkbare *(kristian, 10. juni)*
 - [ ] **[detalj]** Brreg-kontakter (roller) holder å ligge under "Roller" — ikke flytt automatisk til Kontakter. Vurder en "Legg til kontakt fra roller"-knapp i stedet *(kristian, 10. juni)*
-- [ ] **[dashboard]** Prosjektoversikt — vis to og to (grid), legg til "vis mer"-knapp ved >4 prosjekter *(kristian, 10. juni)*
+- [ ] **[dashboard]** Prosjektoversikt — vis to og to (grid), legg til "vis mer"-knapp ved >4 prosjekter. Gjelder kun mobil/smale visninger (desktop viser trolig alle/flere i rad allerede) *(kristian, 10. juni)*
 
 
 
