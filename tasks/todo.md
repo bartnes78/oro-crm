@@ -2,6 +2,14 @@
 
 ## Pågående
 
+### Produktinteresse-opprydding (bug #4, #6, #7)
+
+- [x] **#7 dashboard** — allerede løst: `buildGaugeCards()` filtrerer på Pipeline/Fundraise og kortene er klikkbare (`gauge-card-link` → `prosjektDetalj`)
+- [x] **#4/#6 investor-detalj** — `buildProductCard()`: delt i seksjoner — aktiv interesse øverst, "Tegnet" i egen seksjon, "Avslått" i egen seksjon nederst
+- [x] **#6.2** — `buildContactsCard()`: kontakter sorteres slik at `source==='brreg'` vises sist (stabil sortering ellers)
+- [x] **#6.3** — tydeligere merking av avslag: egen "Avslått"-seksjon med overskrift i produktkortet
+- [ ] Manuell test: investor med tegnet+aktiv+avslått produkt, kontaktliste med Brreg-kontakter (kristian — server kjører på localhost:3001)
+
 ### Bulkredigering — sjekk Brreg-treff for valgte rader
 
 - [x] `bulkredigering.js` — vis Brreg-badge (✓) ved investornavn for allerede koblede

@@ -280,7 +280,15 @@ function buildKeyFigures(inv, products, piData, tasks) {
 }
 
 function buildContactsCard(inv, visInaktive) {
-  const contacts = (inv.contacts || []).filter(c => c.active !== 0 || visInaktive);
+  const contacts = (inv.contacts || [])
+    .filter(c => c.active !== 0 || visInaktive)
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => {
+      const aBrreg = a.c.source === 'brreg' ? 1 : 0;
+      const bBrreg = b.c.source === 'brreg' ? 1 : 0;
+      return aBrreg - bBrreg || a.i - b.i;
+    })
+    .map(({ c }) => c);
   const inaktiveCount = (inv.contacts || []).filter(c => c.active === 0).length;
 
   const contactsHtml = contacts.length === 0
@@ -349,10 +357,12 @@ function buildProductCard(inv, products, piData) {
     if (pi.committed_amount != null) totalCommitted += pi.committed_amount;
   }
 
-  // Rows — only Pipeline/Fundraise products; declined shown inline with red styling
+  // Rows — only Pipeline/Fundraise products; delt i tre seksjoner
   const ACTIVE_STATUSES = new Set(['Pipeline', 'Fundraise', 'Fundraising']);
-  const allRows = products.map(p => {
-    if (!ACTIVE_STATUSES.has(p.status)) return '';
+  const activeRows = [], tegnetRows = [], declinedRows = [];
+
+  products.forEach(p => {
+    if (!ACTIVE_STATUSES.has(p.status)) return;
 
     const isDeclined = declinedIds.has(p._id);
     const interested  = interests.has(p._id);
@@ -364,19 +374,20 @@ function buildProductCard(inv, products, piData) {
       const dateStr = d.declined_at
         ? new Date(d.declined_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })
         : '';
-      return `
+      declinedRows.push(`
         <div style="padding:8px 0 8px 10px;border-bottom:1px solid var(--border);border-left:3px solid #e74c3c;
-                    display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(231,76,60,.03);">
+                    display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(231,76,60,.05);">
           <span style="flex:1;min-width:160px;font-size:13px;font-weight:600;
                        text-decoration:line-through;color:var(--muted);">${window.escHtml(p.name)}</span>
           <span style="font-size:11px;padding:2px 10px;border-radius:20px;
                        background:#e74c3c;color:#fff;font-weight:700;white-space:nowrap;">&#x2715; Takket nei</span>
           ${dateStr ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap;">${window.escHtml(dateStr)}</span>` : ''}
           ${d.decline_reason ? `<span style="font-size:11px;color:var(--muted);font-style:italic;flex-basis:100%;">&ldquo;${window.escHtml(d.decline_reason)}&rdquo;</span>` : ''}
-        </div>`;
+        </div>`);
+      return;
     }
 
-    return `
+    const row = `
       <div class="pi-row" style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
         <div style="display:flex;align-items:center;gap:8px;min-width:180px;">
           <label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;">
@@ -420,7 +431,18 @@ function buildProductCard(inv, products, piData) {
         ` : ''}
       </div>
     `;
-  }).join('');
+
+    (isTegnet ? tegnetRows : activeRows).push(row);
+  });
+
+  const sectionHeader = (label, color) => `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${color};margin:14px 0 4px;">${label}</div>`;
+
+  const allRows = `
+    ${activeRows.join('')}
+    ${tegnetRows.length ? sectionHeader('Tegnet', 'var(--color-signed)') + tegnetRows.join('') : ''}
+    ${declinedRows.length ? sectionHeader('Avslått', '#e74c3c') + declinedRows.join('') : ''}
+  `;
 
   const aggregateHtml = (totalWeighted > 0 || totalCommitted > 0) ? `
     <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);display:flex;gap:24px;flex-wrap:wrap;">
