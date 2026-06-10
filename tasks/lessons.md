@@ -30,6 +30,12 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 **Rotårsak:** Samme forretningslogikk var duplisert to steder i `server.js` (manuelt endepunkt + cron-jobb), og kun det ene stedet ble oppdatert først.  
 **Regel:** Når en arkitektur-/atferdsendring gjøres i ett endepunkt, søk gjennom hele `server.js` (inkl. cron-jobber og bakgrunnsjobber) etter samme mønster/logikk og oppdater alle forekomster samtidig.
 
+### [2026-06-10] Navnenormalisering for Brreg-matching kan slå sammen selskap og pensjonskasse
+
+**Hva som gikk galt:** Ved automatisk Brreg-kobling av 399 investorer (eksakt navnetreff etter normalisering) ble `INV-042 "Å Energi PK"` foreslått matchet mot "Å ENERGI AS" — men "PK" er trolig forkortelse for *Pensjonskasse*, en egen juridisk enhet, ikke morselskapet. Samme felle som de 2 tidligere falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse).  
+**Rotårsak:** `normalizeBrregName()` (i `bulkredigering.js`) fjerner ordet "pk" som støy (sammen med as/asa/is/sa/ans/ab/spk) for å treffe forkortelser av selskapsformer — men "PK" er også en vanlig forkortelse for "Pensjonskasse" i investornavn, og da blir normaliseringen feil retning.  
+**Regel:** Før automatisk kobling/sammenslåing basert på normalisert navnematch: flagg og hold tilbake (ikke autokoble) tilfeller der investornavnet inneholder "PK" eller "Pensjonskasse"/"Stiftelse" men treff-enhetens `organisasjonsform` ikke er "Pensjonskasse"/"Stiftelse" — slik konflikt tyder på at det finnes to separate juridiske enheter (mor + pensjonskasse/stiftelse), ikke én.
+
 ---
 
 ## Format
