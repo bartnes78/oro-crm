@@ -4,12 +4,16 @@
 
 ### Bulkredigering — sjekk Brreg-treff for valgte rader
 
-- [ ] `bulkredigering.js` — vis Brreg-badge (✓) ved investornavn for allerede koblede
-- [ ] `bulkredigering.js` — ny knapp «🔍 Sjekk Brreg-treff» i bulk-action-bar (vises ved valgte rader uten org_nr)
-- [ ] Sekvensielt søk mot `/api/brreg/search` per valgt investor (300ms pause, samme mønster som ukentlig sync)
-- [ ] Resultatmodal: investor → forslag (navn, orgnr, poststed, orgform) eller «ingen treff», med avkrysning (forhåndskrysset ved sterkt navnetreff)
-- [ ] «Koble valgte» → `brregSync` per godkjent rad, deretter reload av investorlisten
+- [x] `bulkredigering.js` — vis Brreg-badge (✓) ved investornavn for allerede koblede
+- [x] `bulkredigering.js` — ny knapp «🔍 Sjekk Brreg-treff» i bulk-action-bar (vises ved valgte rader uten org_nr)
+- [x] Sekvensielt søk mot `/api/brreg/search` per valgt investor (300ms pause, samme mønster som ukentlig sync)
+- [x] Resultatmodal: investor → forslag (navn, orgnr, poststed, orgform) eller «ingen treff», med avkrysning (forhåndskrysset ved sterkt navnetreff)
+- [x] «Koble valgte» → `brregSync` per godkjent rad, deretter reload av investorlisten
 - [ ] Manuell test: noen treff, noen uten treff, noen allerede koblet
+- [x] Engangsjobb: full Brreg-gjennomgang av alle 619 ukoblede investorer kjørt direkte mot DB — 398 sterke (eksakte) navnetreff koblet automatisk (org_nr/brreg_navn/brreg_data + audit-logget), 203 usikre og 17 uten treff stod igjen ukoblet *(10. juni)*
+- [x] `data-kvalitet.js` + `/api/data-quality` — nytt kort «Ikke koblet til Brreg» som lister alle investorer uten `org_nr`
+- [ ] `INV-042 "Å Energi PK"` ble utelatt fra autokobling — navnetreff gikk mot "Å ENERGI AS", men "PK" er trolig *Pensjonskasse* (egen juridisk enhet, samme felle som Aker/Nordea-falskpositivene). Sjekk manuelt om "Å Energi Pensjonskasse" finnes i Brreg og koble riktig enhet via investorsiden.
+- [ ] 203 investorer med usikre Brreg-treff og 17 uten treff — gå gjennom Datakvalitet-kortet «Ikke koblet til Brreg» og koble manuelt der det er riktig
 
 ### Kontakter — telefon 2 + duplikatopprydding
 
