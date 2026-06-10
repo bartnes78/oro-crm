@@ -1998,29 +1998,6 @@ async function brregSyncAll() {
           `UPDATE investors SET brreg_navn=$2, brreg_data=$3, updated_at=NOW() WHERE id=$1`,
           [id, e.navn, JSON.stringify(brregData)]
         );
-        // Slett Brreg-kontakter som ikke lenger er i rollene
-        const rollerNavn = new Set(roller.map(r => r.navn.toLowerCase()));
-        const { rows: eksisterendeBrreg } = await client.query(
-          `SELECT id, name FROM contacts WHERE investor_id=$1 AND source='brreg'`, [id]
-        );
-        for (const c of eksisterendeBrreg) {
-          if (!rollerNavn.has(c.name.toLowerCase())) {
-            await client.query(`DELETE FROM contacts WHERE id=$1`, [c.id]);
-          }
-        }
-        // Legg til nye roller
-        for (const r of roller) {
-          const { rows: exists } = await client.query(
-            `SELECT id FROM contacts WHERE investor_id=$1 AND LOWER(name)=LOWER($2)`,
-            [id, r.navn]
-          );
-          if (exists.length === 0) {
-            await client.query(
-              `INSERT INTO contacts (investor_id, name, title, source, active) VALUES ($1,$2,$3,'brreg',1)`,
-              [id, r.navn, r.type]
-            );
-          }
-        }
         await client.query('COMMIT');
         oppdatert++;
       } catch (err) {
