@@ -4,14 +4,15 @@
 
 ### Kontakter — telefon 2 + duplikatopprydding
 
-- [ ] `schema.sql` — legg til `phone2 TEXT` på `contacts` (idempotent DO-blokk)
-- [ ] `server.js` — POST/PUT `/api/contacts` og `/api/contacts/merge` håndterer `phone2`
-- [ ] `server.js` — Excel-eksport inkluderer `phone2`
-- [ ] `investor-detalj.js` — kontaktmodal: nytt felt «Telefon 2»
-- [ ] `investor-detalj.js` — vis `phone2` i kontaktkort og primærkontakt-sidebar
-- [ ] DB: slå sammen K-Spar-duplikatkontakt (Harald Kristofer Berg) med begge telefonnumre
-- [ ] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse, Mallin/Mallin Eiendom AS, Stormbull/Stormbull Eiendom AS)
+- [x] `schema.sql` — legg til `phone2 TEXT` på `contacts` (idempotent DO-blokk)
+- [x] `server.js` — POST/PUT `/api/contacts` og `/api/contacts/merge` håndterer `phone2`
+- [x] `server.js` — Excel-eksport inkluderer `phone2`
+- [x] `investor-detalj.js` — kontaktmodal: nytt felt «Telefon 2»
+- [x] `investor-detalj.js` — vis `phone2` i kontaktkort og primærkontakt-sidebar
+- [x] DB: slå sammen K-Spar-duplikatkontakt (Harald Kristofer Berg) — telefon 988 93 822 (primær) + telefon 2: 92497600
+- [x] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse → INV-004, Mallin/Mallin Eiendom AS → INV-361, Stormbull/Stormbull Eiendom AS → INV-538), audit-logget
 - [ ] Manuell test: ny kontakt med telefon 2, rediger eksisterende, eksport
+- [ ] Bruker: avvis de 2 falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse) i Duplikater-siden — lagres i nettleserens localStorage, må gjøres av hver bruker
 
 ### Brreg-integrasjon
 
