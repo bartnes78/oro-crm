@@ -60,7 +60,27 @@
 
 ### Teknisk gjeld
 
-- [ ] `server.js` er 1357 linjer — vurder å splitte i rutemoduler hvis filen vokser ytterligere
+- [ ] **`server.js` (2060 linjer, voksende) — gradvis utflytting til rutemoduler.**
+      Strategi: IKKE en stor refactor-commit. I stedet, hver gang vi likevel
+      jobber i et rute-område og gjør en funksjonell endring der, flytt *de*
+      endepunktene (+ delte hjelpefunksjoner de bruker, f.eks. cron-jobber for
+      samme domene) til en egen `routes/<domene>.js`-modul i samme commit.
+      Mål-struktur etter hvert: `routes/investors.js`, `routes/products.js`,
+      `routes/contacts.js`, `routes/brreg.js`, `routes/users.js`,
+      `routes/feedback.js`, osv. Delte ting (`pool`/`query`, `fmtRow`,
+      `auditLog`, `requireAdmin`, `validationError`) flyttes til en liten
+      `lib/`-modul som rutemodulene importerer.
+      Rekkefølge — gjør neste utflytting når vi likevel rører domenet, foreslått
+      prioritet basert på hva som mest sannsynlig endres snart:
+        1. Brreg-ruter + `brregSyncAll`-cron (allerede nylig endret to ganger)
+        2. Produkter / `product_investors` / `declined_offers`
+        3. Investorer (kjerne-CRUD)
+        4. Kontakter
+        5. Brukere / auth / feedback (mest stabile, lavest prioritet)
+      Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
+      route-registrering), regnes utflyttingen som ferdig.
+      Etter hver utflytting: full manuell test av berørt sides hovedflyt
+      (golden path + tomme/feil-tilfeller), siden vi ikke har automatiserte tester.
 - [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
 - [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
 
