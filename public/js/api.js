@@ -3,10 +3,13 @@ const BASE = '/api';
 async function req(method, url, body) {
   const res = await fetch(BASE + url, {
     method,
+    credentials: 'same-origin',
     headers: { 'X-Requested-With': 'XMLHttpRequest', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    // Utløpt/manglende sesjon midt i bruk → vis login på nytt (men ikke for selve login-kallet)
+    if (res.status === 401 && url !== '/login') window.onUnauthorized?.();
     const text = await res.text();
     let msg;
     try { msg = JSON.parse(text).error; } catch { msg = text; }
@@ -67,6 +70,8 @@ export const api = {
   brregEnhet:          (orgnr)    => req('GET', `/brreg/enhet/${orgnr}`),
   brregSync:           (id, data) => req('POST', `/investors/${id}/brreg-sync`, data),
   brregDisconnect:     (id)       => req('DELETE', `/investors/${id}/brreg-sync`),
+  login:               (username, password) => req('POST', '/login', { username, password }),
+  logout:              ()         => req('POST', '/logout'),
   me:                  ()         => req('GET', '/me'),
   changeMyPassword:    (password) => req('PUT', '/me/password', { password }),
   users:               ()         => req('GET', '/users'),

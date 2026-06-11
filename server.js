@@ -3,6 +3,8 @@ const express   = require('express');
 const cors      = require('cors');
 const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
+const session   = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const path      = require('path');
 const fs        = require('fs');
 const crypto    = require('crypto');
@@ -146,6 +148,15 @@ if (IS_PROD && !ALLOWED_ORIGIN) {
   process.exit(1);
 }
 
+const SESSION_SECRET = process.env.SESSION_SECRET || (IS_PROD ? null : crypto.randomBytes(32).toString('hex'));
+if (IS_PROD && !SESSION_SECRET) {
+  console.error('[sikkerhet] SESSION_SECRET er ikke satt i production — avbryter oppstart.');
+  process.exit(1);
+}
+
+// Railway terminerer HTTPS i en proxy foran appen — kreves for at secure-cookies skal settes
+app.set('trust proxy', 1);
+
 const DEV_ORIGINS = /^https?:\/\/localhost(:\d+)?$/;
 const apiCors = cors({
   origin: (origin, cb) => {
@@ -201,26 +212,66 @@ app.use((req, res, next) => {
 
 // ── Auth-middleware ───────────────────────────────────────────────────────────
 app.use('/api', apiCors, apiLimiter);
-app.use('/api', async (req, res, next) => {
-  const auth = req.headers['authorization'];
-  if (!auth || !auth.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="ORO CRM"');
-    return res.status(401).json({ error: 'Innlogging kreves' });
-  }
-  const decoded  = Buffer.from(auth.slice(6), 'base64').toString();
-  const colonIdx = decoded.indexOf(':');
-  const username = decoded.slice(0, colonIdx);
-  const password = decoded.slice(colonIdx + 1);
+
+app.use('/api', session({
+  store: new PgSession({ pool, tableName: 'user_sessions', createTableIfMissing: true }),
+  name: 'oro.sid',
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,  // fornyer utløpstid ved hver forespørsel → aktive brukere forblir innlogget
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: IS_PROD,
+    maxAge: 30 * 24 * 60 * 60 * 1000,  // 30 dager
+  },
+}));
+
+// X-Requested-With-vern mot CSRF — gjelder også /api/login og /api/logout
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-requested-with'] !== 'XMLHttpRequest')
+    return res.status(403).json({ error: 'Ugyldig forespørsel' });
+  next();
+});
+
+// Login/logout — registrert før «auth kreves»-middleware, så de fungerer uten aktiv sesjon
+app.post('/api/login', async (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  if (!username || !password)
+    return res.status(400).json({ error: 'Brukernavn og passord er påkrevd' });
   try {
     const { rows } = await query('SELECT * FROM users WHERE username = $1', [username]);
     const user = rows[0];
     if (!user || !verifyPassword(password, user.password_hash)) {
       // Kallast berre ved reell auth-feil — teller mot brute-force-grensa (15/15 min per IP)
-      return authLimiter(req, res, () => {
-        res.setHeader('WWW-Authenticate', 'Basic realm="ORO CRM"');
-        res.status(401).json({ error: 'Feil brukernavn eller passord' });
-      });
+      return authLimiter(req, res, () =>
+        res.status(401).json({ error: 'Feil brukernavn eller passord' }));
     }
+    req.session.userId = user.id;
+    res.json(fmtUser(user));
+  } catch (e) {
+    res.status(500).json({ error: 'Innlogging feilet' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('oro.sid');
+    res.json({ ok: true });
+  });
+});
+
+// Auth kreves for alle øvrige /api-ruter
+app.use('/api', async (req, res, next) => {
+  if (!req.session?.userId)
+    return res.status(401).json({ error: 'Innlogging kreves' });
+  try {
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+    const user = rows[0];
+    if (!user)  // brukeren er slettet etter at sesjonen ble opprettet
+      return req.session.destroy(() => res.status(401).json({ error: 'Innlogging kreves' }));
     req.currentUser = fmtUser(user);
     next();
   } catch (e) {
@@ -229,16 +280,11 @@ app.use('/api', async (req, res, next) => {
 });
 
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-requested-with'] !== 'XMLHttpRequest')
-    return res.status(403).json({ error: 'Ugyldig forespørsel' });
-  next();
-});
-
-app.use('/api', (req, res, next) => {
   if (!req.currentUser?.mustChangePassword) return next();
   const allowed =
     (req.method === 'GET'  && req.path === '/me') ||
-    (req.method === 'PUT'  && req.path === '/me/password');
+    (req.method === 'PUT'  && req.path === '/me/password') ||
+    (req.method === 'POST' && req.path === '/logout');
   if (!allowed)
     return res.status(403).json({ error: 'Passord må endres før du kan bruke CRM' });
   next();

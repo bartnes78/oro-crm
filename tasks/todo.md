@@ -5,7 +5,18 @@
 1. [x] Lukk de fire åpne manuelle testene fra pågående arbeid — gjennomført 11. juni, to bugs funnet og fikset underveis (se «Funn fra QA-runden» under)
 2. [ ] Verifiser Railway backup/restore — sjekk at automatiske PG-backups er aktivert, test restore én gang
 3. [ ] Dokumenter backup-prosedyre og ansvar (hvem kjører ukentlig Excel-eksport)
-4. [ ] Innfør express-session + login/logout (erstatter Basic Auth)
+4. [x] **Innfør express-session + login/logout (erstatter Basic Auth)** — ferdig 11. juni
+   - [x] Avhengigheter: `express-session` + `connect-pg-simple` (PG-store, overlever Railway-redeploys)
+   - [x] Backend: session-middleware (`trust proxy`, httpOnly/sameSite=lax/secure-i-prod, rullende 30-dagers cookie, tabell `user_sessions`)
+   - [x] Backend: `SESSION_SECRET` påkrevd i prod (process.exit ellers), tilfeldig dev-fallback
+   - [x] Backend: `POST /api/login` (verifiser + sett session.userId, authLimiter ved feil), `POST /api/logout` (destroy)
+   - [x] Backend: erstattet Basic-dekoding med session-oppslag, laster bruker fra DB på userId, fjernet WWW-Authenticate
+   - [x] Backend: rekkefølge — login/logout etter X-Requested-With-sjekk, før «auth kreves»; mustChange-gate whitelist login/logout
+   - [x] Frontend: `api.login`/`api.logout`, `req()` credentials='same-origin' + 401-hook (`window.onUnauthorized`)
+   - [x] Frontend: pen login-side (ekte `<form>` + autocomplete username/current-password for passordbehandler/biometri-autofyll)
+   - [x] Frontend: «Logg ut»-knapp i sidebar-footer → reload til login
+   - [x] Verifisering (browser + HTTP): 401 uten sesjon, 401 feil passord (feilmelding i skjema), 403 uten X-Requested-With, 200 login/me/logout, HttpOnly+SameSite=Lax-cookie, sesjon overlever server-restart, login/logout-flyt i UI. Ingen konsollfeil.
+   - [ ] **GJENSTÅR (du):** sett `SESSION_SECRET` i Railway-variabler før neste prod-deploy — ellers nekter serveren å starte (samme mønster som ALLOWED_ORIGIN). En lokal `SESSION_SECRET` er lagt i `.env` for utvikling.
 5. [x] ~~Tvunget passordbytte server-håndhevet~~ — finnes allerede: middleware i server.js blokkerer alt unntatt GET /me og PUT /me/password når `must_change_password` er satt
 6. [ ] Smoke-tester rundt de viktigste API-flytene (auth, investor-CRUD, merge, produkter)
 

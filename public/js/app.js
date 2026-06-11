@@ -172,6 +172,13 @@ function buildSidebar() {
     arrow.textContent = open ? '▾' : '▸';
   });
 
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) logoutBtn.onclick = async () => {
+    logoutBtn.disabled = true;
+    try { await api.logout(); } catch { /* lokal sesjon ryddes uansett via reload */ }
+    window.location.reload();
+  };
+
   updateSidebarActive();
 }
 
@@ -314,22 +321,81 @@ window.openFeedback = async function() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 async function init() {
-  try {
-    state.currentUser = await api.me();
-  } catch { /* Browser shows Basic Auth dialog */ }
-
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   }
 
-  buildSidebar();
+  try {
+    state.currentUser = await api.me();
+  } catch {
+    showLogin();
+    return;
+  }
 
+  await bootAuthed();
+}
+
+// Kjøres etter vellykket autentisering (ved oppstart eller etter login)
+async function bootAuthed() {
+  buildSidebar();
   if (state.currentUser?.mustChangePassword) {
     await showChangePasswordModal();
   }
-
   renderPage();
 }
+
+// Utløpt eller manglende sesjon → vis login (idempotent: kalles både fra init og fra api-401-hook)
+function showLogin() {
+  if (document.getElementById('login-overlay')) return;
+  state.currentUser = null;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'login-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--green);padding:20px';
+  overlay.innerHTML = `
+    <form id="login-form" autocomplete="on" style="background:var(--card);border-radius:12px;padding:32px 28px;width:100%;max-width:360px;box-shadow:0 24px 64px rgba(15,73,73,.35)">
+      <img src="/logo.svg" alt="ORO" style="height:44px;width:auto;display:block;margin:0 auto 8px">
+      <p style="text-align:center;font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:24px">Investor CRM</p>
+      <div id="login-error" style="display:none;background:#fdeaec;color:var(--red);border-radius:6px;padding:9px 12px;font-size:13px;margin-bottom:14px"></div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px">Brukernavn</label>
+        <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" style="width:100%;min-height:44px" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px">Passord</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" style="width:100%;min-height:44px" required>
+      </div>
+      <button type="submit" id="login-btn" class="btn btn-primary" style="width:100%;min-height:46px">Logg inn</button>
+    </form>`;
+  document.body.appendChild(overlay);
+
+  const errEl = document.getElementById('login-error');
+  const btn   = document.getElementById('login-btn');
+  document.getElementById('login-username').focus();
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+      errEl.textContent = 'Fyll inn brukernavn og passord'; errEl.style.display = 'block'; return;
+    }
+    btn.disabled = true; btn.textContent = 'Logger inn…';
+    try {
+      state.currentUser = await api.login(username, password);
+      overlay.remove();  // fjerner passordfeltet fra DOM → nettleseren tilbyr å lagre passordet
+      await bootAuthed();
+    } catch (err) {
+      errEl.textContent = err.message || 'Innlogging feilet';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Logg inn';
+      const pw = document.getElementById('login-password');
+      pw.value = ''; pw.focus();
+    }
+  });
+}
+
+window.onUnauthorized = showLogin;
 
 function showChangePasswordModal() {
   return new Promise(resolve => {

@@ -42,6 +42,12 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 **Rotårsak:** `fmtInvestor()` returnerer et håndplukket felt-sett. Nye felter lagt på investor-objektet i en rute forsvinner i responsen uten feil, og frontend faller tilbake til tom default (`|| []`) — usynlig både i konsoll og server-logg.  
 **Regel:** Når et nytt felt skal ut via et investor-endepunkt: oppdater `fmtInvestor()` i samme commit. Ved «data finnes i DB men vises ikke»-symptomer: sjekk API-responsen i nettverksfanen/fetch før frontend-koden mistenkes.
 
+### [2026-06-11] Service worker serverte gammel JS under lokal verifisering
+
+**Hva som gikk galt:** Etter endring av `app.js`/`api.js` viste nettleseren fortsatt gammel oppførsel (gammel `init()` uten login-skjerm) ved reload, og feilsøking pekte mot ikke-eksisterende bugs.  
+**Rotårsak:** `public/service-worker.js` bruker stale-while-revalidate for `.js`/`.css`/`.svg` — den serverer cachet versjon umiddelbart og oppdaterer cachen i bakgrunnen. En enkelt reload viser derfor forrige versjon av frontend-koden.  
+**Regel:** Ved verifisering av frontend-endringer i nettleser: avregistrer service worker + tøm cache først (`navigator.serviceWorker.getRegistrations()` → `unregister()`, `caches.keys()` → `caches.delete()`), deretter reload. Merk også at `preview_click` ikke alltid utløser `onclick`/form-submit i denne appen — bruk `el.click()` / `form.requestSubmit()` via eval for å teste handler-logikk deterministisk.
+
 ---
 
 ## Format
