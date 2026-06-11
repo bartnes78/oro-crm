@@ -290,3 +290,10 @@ DO $$ BEGIN
 END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_investors_org_nr ON investors (org_nr) WHERE org_nr IS NOT NULL;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='products' AND column_name='established_date') THEN
+    ALTER TABLE products ADD COLUMN established_date DATE;
+  END IF;
+END $$;

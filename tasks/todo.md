@@ -1,5 +1,24 @@
 # ORO CRM — Oppgaveliste
 
+## Fase 1 — stabilisering før ny utvikling *(plan vedtatt 11. juni)*
+
+1. [x] Lukk de fire åpne manuelle testene fra pågående arbeid — gjennomført 11. juni, to bugs funnet og fikset underveis (se «Funn fra QA-runden» under)
+2. [ ] Verifiser Railway backup/restore — sjekk at automatiske PG-backups er aktivert, test restore én gang
+3. [ ] Dokumenter backup-prosedyre og ansvar (hvem kjører ukentlig Excel-eksport)
+4. [ ] Innfør express-session + login/logout (erstatter Basic Auth)
+5. [x] ~~Tvunget passordbytte server-håndhevet~~ — finnes allerede: middleware i server.js blokkerer alt unntatt GET /me og PUT /me/password når `must_change_password` er satt
+6. [ ] Smoke-tester rundt de viktigste API-flytene (auth, investor-CRUD, merge, produkter)
+
+Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gjeld).
+
+### Funn fra QA-runden 11. juni
+
+- [x] **Bug: Avslått-seksjonen rendret aldri** — `fmtInvestor()` i server.js whitelistet bort `declined_offers` fra GET /api/investors/:id (samme feilklasse som committed_amount-fiksen i mai). Fikset: feltet lagt til i fmtInvestor.
+- [x] **Bug: dashboard-prosjektkort lå 4-i-bredden på mobil (#9)** — inline `flex:1` på kortene slo media query-regelen `.gauge-cards > .card`. Fikset: `!important` på flex-regelen i index.html.
+- [x] **Datafunn: `committed_amount` lagret i NOK, ikke MNOK** — migrert 11. juni etter godkjenning: 40 rader (ikke 41 som antatt) delt på 1e6, alle stemmer nå med `target_ticket`. Samme drift funnet og fikset i `products.target_size` for de tre Etablert-prosjektene (id 6, 7, 8). Alt audit-logget (`username='migration'`). Verifisert i UI (investor-detalj INV-053 «Totalt tegnet 20,0 MNOK», prosjekt-detalj 100 % tegnet av mål) og Excel-eksport. Skript: `scripts/migrate-*.js` (idempotente).
+- Observasjon: «+ Kontakt» fra Brreg-rolle oppretter kontakt med `source=null` (ikke `'brreg'`) — bevisst valgte kontakter sorteres dermed som vanlige. Sorteringen «brreg sist» (#6.2) er kodeverifisert, men ingen kontakter i databasen har `source='brreg'` i dag.
+- Observasjon: Brreg-fuzzysøket returnerer nesten alltid et forslag (f.eks. «Brookfield» → «BROOKFIELD HAGESERVICE»), så «ingen treff»-grenen i bulkmodalen er sjelden. Ufarlig — usikre treff forhåndskrysses ikke.
+
 ## Pågående
 
 ### Produktinteresse-opprydding (bug #4, #6, #7)
@@ -8,14 +27,22 @@
 - [x] **#4/#6 investor-detalj** — `buildProductCard()`: delt i seksjoner — aktiv interesse øverst, "Tegnet" i egen seksjon, "Avslått" i egen seksjon nederst
 - [x] **#6.2** — `buildContactsCard()`: kontakter sorteres slik at `source==='brreg'` vises sist (stabil sortering ellers)
 - [x] **#6.3** — tydeligere merking av avslag: egen "Avslått"-seksjon med overskrift i produktkortet
-- [ ] Manuell test: investor med tegnet+aktiv+avslått produkt, kontaktliste med Brreg-kontakter (kristian — server kjører på localhost:3001)
+- [x] Manuell test: investor med tegnet+aktiv+avslått produkt (INV-053, testdata via UI, ryddet etterpå) — alle tre seksjoner OK etter fmtInvestor-fiks. Brreg-kontakt-sortering kodeverifisert (ingen source='brreg'-kontakter i DB) *(11. juni)*
+
+### Ny feedback fra databasen (#10-13, ikke tidligere i todo)
+
+- [x] **#12 dashboard** — `buildGaugeCards()` brukte `p.id` (alltid undefined fra `/api/dashboard`, som returnerer `_id`) → lenke til prosjekt virket ikke. Fikset til `p._id`
+- [x] **#11 prosjekter** — nytt felt `established_date` (DATE) på `products`. Lagt til i `schema.sql`, POST/PUT `/api/products`, redigeringsmodal i `prosjekter.js` og `prosjekt-detalj.js`, vist i produktkort og prosjektheader
+- [x] **#10 detalj** — `DELETE /api/investors/:id/brreg-sync` fjerner org_nr/brreg_navn/brreg_data (audit-logget). "Fjern kobling"-knapp i Brreg-kortet (`investor-detalj.js`), deretter vises søkeskjema igjen for å koble til riktig enhet (f.eks. ved fisjon/fusjon)
+- [x] Manuell test (browser): #12 navigasjon fra dashboard, #11 lagring/visning av etableringsdato, #10 fjern/gjenopprett Brreg-kobling — alle OK *(11. juni)*
+- [x] **#13 brukere** — fjernet "Hilsen ORO Areal" fra velkomstmail-teksten (`bruker-admin.js`)
 
 ### Resterende bug-rapporter (#5, #8, #9)
 
 - [x] **#5** — `buildProductCard()`: ned 1px på produktnavn (13→12px), ticket/% inputs og enheter (12→11px)
 - [x] **#8** — allerede løst: "+ Kontakt"-knapp (`brreg-add-contact-btn`) per Brreg-rolle som ikke allerede er kontakt, ingen auto-flytting
 - [x] **#9** — `dashboard.js` `buildGaugeCards()`: prosjekter >4 får klasse `gauge-extra`, "Vis X flere"/"Vis færre"-knapp toggler `.gauge-collapsed`. CSS skjuler `.gauge-extra` og viser knappen kun under 640px (mobil)
-- [ ] Manuell test: dashboard på mobilbredde med >4 aktive prosjekter (vis mer/færre), "+Kontakt fra rolle" på Brreg-kort
+- [x] Manuell test: dashboard på mobilbredde med 5 aktive prosjekter — vis mer/færre OK, to-og-to-grid OK etter CSS-fiks. "+Kontakt fra rolle" på Brreg-kort OK (forhåndsutfylt navn/tittel, vises kun for roller uten kontakt) *(11. juni)*
 
 ### Bulkredigering — sjekk Brreg-treff for valgte rader
 
@@ -24,7 +51,7 @@
 - [x] Sekvensielt søk mot `/api/brreg/search` per valgt investor (300ms pause, samme mønster som ukentlig sync)
 - [x] Resultatmodal: investor → forslag (navn, orgnr, poststed, orgform) eller «ingen treff», med avkrysning (forhåndskrysset ved sterkt navnetreff)
 - [x] «Koble valgte» → `brregSync` per godkjent rad, deretter reload av investorlisten
-- [ ] Manuell test: noen treff, noen uten treff, noen allerede koblet
+- [x] Manuell test: 4 usikre treff (inkl. PK-regelen: Asker Kommunale PK holdt tilbake som usikker mot ASKER KOMMUNALE PENSJONSKASSE), ingen forhåndskrysset, allerede koblede viser ✓-badge, avbrutt uten kobling *(11. juni)*
 - [x] Engangsjobb: full Brreg-gjennomgang av alle 619 ukoblede investorer kjørt direkte mot DB — 398 sterke (eksakte) navnetreff koblet automatisk (org_nr/brreg_navn/brreg_data + audit-logget), 203 usikre og 17 uten treff stod igjen ukoblet *(10. juni)*
 - [x] `data-kvalitet.js` + `/api/data-quality` — nytt kort «Ikke koblet til Brreg» som lister alle investorer uten `org_nr`
 - [ ] `INV-042 "Å Energi PK"` ble utelatt fra autokobling — navnetreff gikk mot "Å ENERGI AS", men "PK" er trolig *Pensjonskasse* (egen juridisk enhet, samme felle som Aker/Nordea-falskpositivene). Sjekk manuelt om "Å Energi Pensjonskasse" finnes i Brreg og koble riktig enhet via investorsiden.
@@ -39,7 +66,7 @@
 - [x] `investor-detalj.js` — vis `phone2` i kontaktkort og primærkontakt-sidebar
 - [x] DB: slå sammen K-Spar-duplikatkontakt (Harald Kristofer Berg) — telefon 988 93 822 (primær) + telefon 2: 92497600
 - [x] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse → INV-004, Mallin/Mallin Eiendom AS → INV-361, Stormbull/Stormbull Eiendom AS → INV-538), audit-logget
-- [ ] Manuell test: ny kontakt med telefon 2, rediger eksisterende, eksport
+- [x] Manuell test: ny kontakt med telefon 2 (via Brreg-rolle-knapp), redigering av telefon 2, Excel-eksport verifisert med exceljs-parsing («Telefon 2»-kolonne + verdier i Kontakter-arket) *(11. juni)*
 - [ ] Bruker: avvis de 2 falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse) i Duplikater-siden — lagres i nettleserens localStorage, må gjøres av hver bruker
 
 ### Brreg-integrasjon

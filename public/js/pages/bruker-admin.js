@@ -10,9 +10,7 @@ Du har fått tilgang til ORO CRM.
 👤 Brukernavn: ${username}
 🔑 Passord: byttpassord
 
-Logg inn og endre passordet ditt ved første anledning.
-
-Hilsen ORO Areal`;
+Logg inn og endre passordet ditt ved første anledning.`;
 
   window.openModal(`
     <div class="modal-header">

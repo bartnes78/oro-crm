@@ -52,7 +52,8 @@ async function loadProducts() {
 function productCard(p) {
   const sc      = STATUS_COLOR[p.status] || 'var(--muted)';
   const archived = ARCHIVED_STATUSES.has(p.status);
-  const sub     = [p.type, p.target_size ? `${Number(p.target_size).toLocaleString('nb-NO')} MNOK` : '']
+  const sub     = [p.type, p.target_size ? `${Number(p.target_size).toLocaleString('nb-NO')} MNOK` : '',
+                    p.established_date ? `Etablert ${p.established_date}` : '']
                     .filter(Boolean).join(' · ');
   return `
     <div class="card product-card" data-id="${escHtml(p._id)}"
@@ -130,7 +131,7 @@ function renderList() {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openProductModal(product) {
   const isNew = !product._id;
-  const form  = { name: '', type: 'Fond', status: 'Fundraising', target_size: '', description: '', ...product };
+  const form  = { name: '', type: 'Fond', status: 'Fundraising', target_size: '', description: '', established_date: '', ...product };
 
   const html = `
     <div class="modal-header">
@@ -161,6 +162,10 @@ function openProductModal(product) {
           <input id="f-size" type="number" min="0" step="0.1"
             value="${form.target_size != null ? form.target_size : ''}" />
         </div>
+        <div class="form-group">
+          <label>Etablert</label>
+          <input id="f-established" type="date" value="${form.established_date || ''}" />
+        </div>
         <div class="form-group full">
           <label>Beskrivelse</label>
           <textarea id="f-desc" style="min-height:60px;">${escHtml(form.description || '')}</textarea>
@@ -189,6 +194,7 @@ function openProductModal(product) {
         type:        document.getElementById('f-type').value,
         status:      document.getElementById('f-status').value,
         target_size: parseFloat(document.getElementById('f-size').value) || null,
+        established_date: document.getElementById('f-established').value || null,
         description: document.getElementById('f-desc').value.trim(),
       };
       try {

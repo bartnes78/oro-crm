@@ -221,7 +221,7 @@ function buildGaugeCards(data) {
   }
 
   const cards = prods.map((p, i) => `
-    <div class="card gauge-card-link${i >= 4 ? ' gauge-extra' : ''}" data-product-id="${esc(String(p.id))}"
+    <div class="card gauge-card-link${i >= 4 ? ' gauge-extra' : ''}" data-product-id="${esc(String(p._id))}"
          style="text-align:center;flex:1;min-width:140px;max-width:220px;cursor:pointer;transition:box-shadow .15s">
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
                   letter-spacing:.5px;margin-bottom:10px">${esc(p.name.replace('ORO ', ''))}</div>

@@ -66,6 +66,7 @@ export const api = {
   brregSearch:         (q)        => req('GET', `/brreg/search?q=${encodeURIComponent(q)}`),
   brregEnhet:          (orgnr)    => req('GET', `/brreg/enhet/${orgnr}`),
   brregSync:           (id, data) => req('POST', `/investors/${id}/brreg-sync`, data),
+  brregDisconnect:     (id)       => req('DELETE', `/investors/${id}/brreg-sync`),
   me:                  ()         => req('GET', '/me'),
   changeMyPassword:    (password) => req('PUT', '/me/password', { password }),
   users:               ()         => req('GET', '/users'),

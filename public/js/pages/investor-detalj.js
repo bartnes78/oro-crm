@@ -572,7 +572,10 @@ function buildBrregCard(inv) {
             Brønnøysund
             <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">${window.escHtml(inv.org_nr)}</span>
           </div>
-          <button class="btn btn-ghost btn-sm" id="brreg-sync-btn" style="font-size:11px;min-height:32px;">&#8635; Synkroniser</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" id="brreg-sync-btn" style="font-size:11px;min-height:32px;">&#8635; Synkroniser</button>
+            <button class="btn btn-ghost btn-sm" id="brreg-disconnect-btn" style="font-size:11px;min-height:32px;color:#e74c3c;">Fjern kobling</button>
+          </div>
         </div>
 
         ${inv.brreg_navn ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Registrert navn: <b style="color:var(--text);">${window.escHtml(inv.brreg_navn)}</b></div>` : ''}
@@ -1643,6 +1646,21 @@ export async function render(el, state) {
           alert('Feil: ' + e.message);
           syncBtn.disabled = false;
           syncBtn.textContent = '↻ Synkroniser';
+        }
+      });
+
+      const disconnectBtn = el.querySelector('#brreg-disconnect-btn');
+      disconnectBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Fjerne Brreg-koblingen til ${inv.org_nr}?\n\nDette sletter ikke kontakter som er lagt til, men fjerner stamdata, adresser og roller. Du kan koble til en annen enhet etterpå.`)) return;
+        disconnectBtn.disabled = true;
+        disconnectBtn.textContent = 'Fjerner…';
+        try {
+          await api.brregDisconnect(inv.id);
+          await reload();
+        } catch (e) {
+          alert('Feil: ' + e.message);
+          disconnectBtn.disabled = false;
+          disconnectBtn.textContent = 'Fjern kobling';
         }
       });
       return;

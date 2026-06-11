@@ -36,6 +36,12 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 **Rotårsak:** `normalizeBrregName()` (i `bulkredigering.js`) fjerner ordet "pk" som støy (sammen med as/asa/is/sa/ans/ab/spk) for å treffe forkortelser av selskapsformer — men "PK" er også en vanlig forkortelse for "Pensjonskasse" i investornavn, og da blir normaliseringen feil retning.  
 **Regel:** Før automatisk kobling/sammenslåing basert på normalisert navnematch: flagg og hold tilbake (ikke autokoble) tilfeller der investornavnet inneholder "PK" eller "Pensjonskasse"/"Stiftelse" men treff-enhetens `organisasjonsform` ikke er "Pensjonskasse"/"Stiftelse" — slik konflikt tyder på at det finnes to separate juridiske enheter (mor + pensjonskasse/stiftelse), ikke én.
 
+### [2026-06-11] fmtInvestor-whitelisten dropper nye felter stille
+
+**Hva som gikk galt:** Avslått-seksjonen i produktkortet på investor-detalj rendret aldri — GET /api/investors/:id bygde `declined_offers` på investor-objektet, men `fmtInvestor()` er en eksplisitt whitelist og droppet feltet stille. Samme feilklasse som mai-fiksen der `committed_amount`/`decline_reason` manglet.  
+**Rotårsak:** `fmtInvestor()` returnerer et håndplukket felt-sett. Nye felter lagt på investor-objektet i en rute forsvinner i responsen uten feil, og frontend faller tilbake til tom default (`|| []`) — usynlig både i konsoll og server-logg.  
+**Regel:** Når et nytt felt skal ut via et investor-endepunkt: oppdater `fmtInvestor()` i samme commit. Ved «data finnes i DB men vises ikke»-symptomer: sjekk API-responsen i nettverksfanen/fetch før frontend-koden mistenkes.
+
 ---
 
 ## Format

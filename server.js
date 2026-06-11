@@ -24,6 +24,7 @@ function fmtInvestor(row) {
     investor_type:     row.investor_type,
     fund_vehicle:      row.fund_vehicle,
     product_interests: row.product_interests || [],  // populated by caller from product_investors
+    declined_offers:   row.declined_offers   || [],  // populated by caller from declined_offers
     phase:             row.phase,
     lead:              row.lead,
     advisor:           row.advisor,
@@ -643,6 +644,27 @@ app.post('/api/investors/:id/brreg-sync', async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+app.delete('/api/investors/:id/brreg-sync', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT org_nr FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
+    const oldOrgNr = rows[0].org_nr;
+
+    await query(
+      `UPDATE investors SET org_nr=NULL, brreg_navn=NULL, brreg_data='{}', updated_at=NOW() WHERE id=$1`,
+      [req.params.id]
+    );
+
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
+      { org_nr: oldOrgNr }, { org_nr: null },
+      `Fjernet Brreg-kobling (org.nr ${oldOrgNr})`);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1490,10 +1512,10 @@ app.post('/api/products', async (req, res) => {
   if (!String(req.body.name || '').trim()) return validationError(res, ['Produktnavn er påkrevd']);
   try {
     const { rows: [p] } = await query(`
-      INSERT INTO products (name, type, status, target_size, description)
-      VALUES ($1,$2,$3,$4,$5) RETURNING *
+      INSERT INTO products (name, type, status, target_size, description, established_date)
+      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
     `, [req.body.name, req.body.type || null, req.body.status || null,
-        req.body.target_size || null, req.body.description || null]);
+        req.body.target_size || null, req.body.description || null, req.body.established_date || null]);
     res.json(fmtRow(p));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1507,10 +1529,10 @@ app.put('/api/products/:id', async (req, res) => {
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
     const { rows: [p] } = await query(`
-      UPDATE products SET name=$2, type=$3, status=$4, target_size=$5, description=$6
+      UPDATE products SET name=$2, type=$3, status=$4, target_size=$5, description=$6, established_date=$7
       WHERE id=$1 RETURNING *
     `, [id, v('name'), v('type') || null, v('status') || null,
-        v('target_size') || null, v('description') || null]);
+        v('target_size') || null, v('description') || null, v('established_date') || null]);
     res.json(fmtRow(p));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

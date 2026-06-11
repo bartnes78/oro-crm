@@ -129,6 +129,9 @@ function renderContent() {
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
               background:${sc}22;color:${sc};">${esc(_product.status || '')}</span>
             <span style="font-size:12px;color:var(--muted);">${esc(_product.type || '')}</span>
+            ${_product.established_date
+              ? `<span style="font-size:12px;color:var(--muted);">Etablert ${esc(_product.established_date)}</span>`
+              : ''}
             ${_product.target_size
               ? `<span style="font-size:16px;font-weight:700;color:var(--text);">${fmt(_product.target_size)} MNOK</span>`
               : ''}
@@ -755,6 +758,10 @@ function openEditModal() {
           <label>Målstørrelse (MNOK)</label>
           <input id="ep-size" type="number" min="0" step="0.1" value="${p.target_size != null ? p.target_size : ''}" />
         </div>
+        <div class="form-group">
+          <label>Etablert</label>
+          <input id="ep-established" type="date" value="${p.established_date || ''}" />
+        </div>
         <div class="form-group full">
           <label>Beskrivelse</label>
           <textarea id="ep-desc" style="min-height:60px;">${esc(p.description || '')}</textarea>
@@ -781,6 +788,7 @@ function openEditModal() {
         type:        document.getElementById('ep-type').value,
         status:      document.getElementById('ep-status').value,
         target_size: parseFloat(document.getElementById('ep-size').value) || null,
+        established_date: document.getElementById('ep-established').value || null,
         description: document.getElementById('ep-desc').value.trim(),
       };
       try {
