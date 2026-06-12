@@ -94,10 +94,10 @@ function renderContent() {
                 <thead>
                   <tr>
                     <th>Investor</th>
-                    <th>Type</th>
+                    <th class="hide-sm">Type</th>
                     <th>Fase</th>
-                    <th>Ansvarlig</th>
-                    <th class="text-right">Ticket (M)</th>
+                    <th class="hide-sm">Ansvarlig</th>
+                    <th class="text-right hide-sm">Ticket (M)</th>
                     <th>Sist kontaktet</th>
                     <th></th>
                   </tr>
@@ -179,12 +179,12 @@ function staleRow(inv, groupColor) {
 
   return `<tr class="of-row" data-inv-id="${esc(String(inv.id))}" style="cursor:pointer;">
     <td style="font-weight:600;color:var(--blue);">${esc(inv.name || '')}</td>
-    <td style="font-size:12px;color:var(--muted);">${esc(inv.investor_type || '—')}</td>
+    <td class="hide-sm" style="font-size:12px;color:var(--muted);">${esc(inv.investor_type || '—')}</td>
     <td>
       <span class="badge badge-${phaseClass}" style="font-size:10px;">${esc(inv.phase || '')}</span>
     </td>
-    <td style="font-size:12px;color:var(--muted);">${esc(inv.lead || '—')}</td>
-    <td class="text-right" style="font-size:12px;color:var(--muted);">${esc(ticket)}</td>
+    <td class="hide-sm" style="font-size:12px;color:var(--muted);">${esc(inv.lead || '—')}</td>
+    <td class="text-right hide-sm" style="font-size:12px;color:var(--muted);">${esc(ticket)}</td>
     <td style="font-weight:600;font-size:12px;color:${contactColor};white-space:nowrap;">
       ${esc(contactText)}
     </td>

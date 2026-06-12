@@ -6,7 +6,11 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 
 ## Mønstre
 
-*(ingen registrerte mønstre ennå — legges til etter korreksjoner)*
+### [2026-06-12] Forklar endringer på et ikke-teknisk språk
+
+**Hva som gikk galt:** Endringer ble forklart med teknisk terminologi (klassenavn, CSS, filnavn) uten å si hva brukeren faktisk merker.  
+**Rotårsak:** Brukeren er ikke programmerer og kjenner ikke kodebegreper.  
+**Regel:** For hver endring fremover, forklar kort i tre deler: (1) hva problemet var (slik brukeren opplevde det), (2) hva som ble endret (uten kode-sjargong), (3) hva brukeren vil merke nå.
 
 ---
 
