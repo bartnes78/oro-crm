@@ -12,16 +12,23 @@ function formatStamp(stamp) {
   }
 }
 
+function formatWeekStamp(stamp) {
+  // ORO_CRM_2026-W25.xlsx → 2026, uke 25
+  const m = stamp.match(/(\d{4})-W(\d{2})/);
+  return m ? `${m[1]}, uke ${m[2]}` : stamp;
+}
+
 export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted" style="padding:24px">Laster…</p></div>';
 
   let backups = [];
+  let exportFiles = [];
   let restoredStamp = null;
   let restoringStamp = null;
 
   async function load() {
     try {
-      backups = await api.backups();
+      [backups, exportFiles] = await Promise.all([api.backups(), api.exports()]);
       buildPage();
     } catch (e) {
       el.innerHTML = `
@@ -68,6 +75,21 @@ export async function render(el, state) {
           ${backups.length === 0
             ? `<p style="color:var(--muted);font-size:13px">Ingen backups funnet. Start serveren på nytt for å opprette første backup.</p>`
             : rows}
+        </div>
+
+        <div class="card" style="max-width:620px;margin-top:20px">
+          <div class="card-title">Ukentlig Excel-eksport</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:20px">
+            Hver mandag genereres en full Excel-eksport og lagres på serveren. De 8 siste (~2 måneder) beholdes.
+            Last ned og lagre eksternt (f.eks. OneDrive) som ekstra sikring.
+          </p>
+          ${exportFiles.length === 0
+            ? `<p style="color:var(--muted);font-size:13px">Ingen ukentlige eksporter funnet ennå.</p>`
+            : exportFiles.map(f => `
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:13px;flex:1">📄 ${window.escHtml(formatWeekStamp(f))}</span>
+                <a class="btn btn-ghost btn-sm" style="min-height:44px" href="/api/exports/${encodeURIComponent(f)}">Last ned</a>
+              </div>`).join('')}
         </div>
       </div>`;
 

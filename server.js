@@ -32,6 +32,8 @@ function fmtInvestor(row) {
     advisor:           row.advisor,
     target_ticket:     row.target_ticket,
     probability:       row.probability,
+    committed_total:   row.committed_total ?? 0,
+    weighted_total:    row.weighted_total  ?? 0,
     committed_amount:  row.committed_amount  ?? null,
     decline_reason:    row.decline_reason    ?? null,
     first_close:       row.first_close || 0,
@@ -82,6 +84,37 @@ async function runBackup() {
     console.log(`[backup] ${stamp}`);
   } catch (e) {
     console.error('[backup] Feilet:', e.message);
+  }
+}
+
+// ── Ukentlig Excel-eksport ──────────────────────────────────────────────────────
+const EXPORT_DIR = path.join(__dirname, 'data', 'exports');
+
+function isoWeekStamp(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // mandag=0 ... søndag=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round((d - firstThursday) / (7 * 24 * 60 * 60 * 1000));
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+async function runWeeklyExport() {
+  try {
+    await fs.promises.mkdir(EXPORT_DIR, { recursive: true });
+    const file = path.join(EXPORT_DIR, `ORO_CRM_${isoWeekStamp()}.xlsx`);
+    if (fs.existsSync(file)) return; // allerede eksportert denne uken
+
+    const wb = await buildExcelWorkbook();
+    await wb.xlsx.writeFile(file);
+
+    const files = (await fs.promises.readdir(EXPORT_DIR)).filter(f => f.endsWith('.xlsx')).sort();
+    const toDelete = files.slice(0, -8); // behold de 8 siste (~2 måneder)
+    for (const f of toDelete) await fs.promises.unlink(path.join(EXPORT_DIR, f));
+
+    console.log(`[weekly-export] ${file}`);
+  } catch (e) {
+    console.error('[weekly-export] Feilet:', e.message);
   }
 }
 
@@ -756,14 +789,30 @@ app.get('/api/investors', async (req, res) => {
     if (rows.length > 0) {
       const ids = rows.map(r => r.id);
       const { rows: piAll } = await query(
-        'SELECT investor_id, product_id FROM product_investors WHERE investor_id = ANY($1)', [ids]
+        `SELECT pi.investor_id, pi.product_id, pi.target_ticket, pi.probability, pi.committed_amount, p.status
+         FROM product_investors pi JOIN products p ON p.id = pi.product_id
+         WHERE pi.investor_id = ANY($1)`, [ids]
       );
       const piMap = {};
+      const aggMap = {};
       piAll.forEach(pi => {
         if (!piMap[pi.investor_id]) piMap[pi.investor_id] = [];
         piMap[pi.investor_id].push(pi.product_id);
+
+        if (!aggMap[pi.investor_id]) aggMap[pi.investor_id] = { committed_total: 0, weighted_total: 0 };
+        if (['Etablert', 'Avlyst'].includes(pi.status) && pi.committed_amount != null) {
+          aggMap[pi.investor_id].committed_total += Number(pi.committed_amount);
+        }
+        if (['Fundraising', 'Pipeline'].includes(pi.status) && pi.target_ticket != null && pi.probability != null) {
+          aggMap[pi.investor_id].weighted_total += Number(pi.target_ticket) * Number(pi.probability);
+        }
       });
-      rows = rows.map(r => ({ ...r, product_interests: (piMap[r.id] || []).sort((a, b) => a - b) }));
+      rows = rows.map(r => ({
+        ...r,
+        product_interests: (piMap[r.id] || []).sort((a, b) => a - b),
+        committed_total: aggMap[r.id]?.committed_total || 0,
+        weighted_total:  aggMap[r.id]?.weighted_total  || 0,
+      }));
     }
 
     rows.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
@@ -1658,6 +1707,23 @@ app.get('/api/backups', requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/exports', requireAdmin, async (req, res) => {
+  try {
+    await fs.promises.mkdir(EXPORT_DIR, { recursive: true });
+    const files = (await fs.promises.readdir(EXPORT_DIR)).filter(f => f.endsWith('.xlsx')).sort().reverse();
+    res.json(files);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/exports/:file', requireAdmin, async (req, res) => {
+  const { file } = req.params;
+  if (!/^ORO_CRM_\d{4}-W\d{2}\.xlsx$/.test(file))
+    return res.status(400).json({ error: 'Ugyldig filnavn' });
+  const fullPath = path.join(EXPORT_DIR, file);
+  if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'Fil ikke funnet' });
+  res.download(fullPath);
+});
+
 app.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
   const { stamp } = req.params;
   if (!/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(stamp))
@@ -1841,8 +1907,7 @@ app.post('/api/email/parse-msg', (req, res, next) => {
 });
 
 // ── Excel-eksport ─────────────────────────────────────────────────────────────
-app.get('/api/export/excel', async (req, res) => {
-  try {
+async function buildExcelWorkbook() {
     const [{ rows: investors }, { rows: contacts }, { rows: log }, { rows: products }, { rows: piRows }] = await Promise.all([
       query('SELECT * FROM investors WHERE deleted_at IS NULL ORDER BY name'),
       query('SELECT * FROM contacts'),
@@ -1960,6 +2025,12 @@ app.get('/api/export/excel', async (req, res) => {
     ];
     wsLog.addRows(logRows);
 
+    return wb;
+}
+
+app.get('/api/export/excel', async (req, res) => {
+  try {
+    const wb = await buildExcelWorkbook();
     const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Disposition', `attachment; filename="ORO_CRM_${new Date().toISOString().slice(0,10)}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -2105,9 +2176,16 @@ async function init() {
   runBackup().catch(e => console.error('[backup] Oppstart-backup feilet:', e.message));
   setInterval(runBackup, 24 * 60 * 60 * 1000);
 
+  runWeeklyExport().catch(e => console.error('[weekly-export] Oppstart-eksport feilet:', e.message));
+
   // Ukentlig Brreg-synk: mandag kl. 03:00
   cron.schedule('0 3 * * 1', () => {
     brregSyncAll().catch(e => console.error('[brreg-sync] Uventet feil:', e.message));
+  }, { timezone: 'Europe/Oslo' });
+
+  // Ukentlig Excel-eksport til disk: mandag kl. 04:00
+  cron.schedule('0 4 * * 1', () => {
+    runWeeklyExport().catch(e => console.error('[weekly-export] Uventet feil:', e.message));
   }, { timezone: 'Europe/Oslo' });
 
   app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));

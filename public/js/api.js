@@ -58,6 +58,7 @@ export const api = {
   deleteDeclinedOffer: (id)               => req('DELETE', `/declined-offers/${id}`),
   backups:             ()                 => req('GET', '/backups'),
   restoreBackup:       (stamp)    => req('POST', `/backups/restore/${stamp}`),
+  exports:             ()                 => req('GET', '/exports'),
   merge:               (keep_id, drop_id) => req('POST', '/merge', { keep_id, drop_id }),
   submitFeedback:      (data)     => req('POST', '/feedback', data),
   getFeedback:         ()         => req('GET', '/feedback'),

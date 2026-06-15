@@ -212,25 +212,28 @@ Kopier `.env.example` til `.env` og fyll inn verdier. `.env` skal aldri committe
 
 ## 8. Backup og databeskyttelse
 
-**Automatisk backup:**
-- Ved hver oppstart av serveren tas det en komplett backup av alle JSON-filer
-- Deretter kjøres backup én gang per 24. time
-- De 10 siste backup-settene beholdes (eldre slettes automatisk)
-- Backupene ligger i `data/backups/` og er navngitt med tidsstempel
+**Automatisk backup (app-internt):**
+- Ved hver oppstart av serveren, og deretter én gang per 24. time, tas det en komplett snapshot av alle tabeller (investorer, kontakter, produkter, m.fl.)
+- Snapshotene lagres i `backups`-tabellen i samme PostgreSQL-database, navngitt med tidsstempel
+- De 10 siste snapshotene beholdes (eldre slettes automatisk)
 
 **Manuell gjenoppretting:**
-- Gå til **Backup**-siden i CRM-et
+- Gå til **Backup**-siden i CRM-et (kun admin)
 - Velg et tidsstempel og klikk **Gjenopprett**
-- Serveren tar backup av gjeldende tilstand før gjenoppretting
+- Serveren tar en ny backup av gjeldende tilstand før gjenoppretting
 
-**Begrensninger med JSON-fillagring:**
-- Alle brukere skriver til de samme filene. Skriv-køen forhindrer at to operasjoner kolliderer, men systemet er ikke designet for mange samtidige brukere (mer enn 5–10 aktive brukere kan gi ytelsesproblemer).
-- Filene på Railway-serveren kan gå tapt hvis instansen slettes eller migreres. **Ha alltid en ekstern kopi.**
+**Viktig begrensning:** App-backupen ligger i *samme* database som live-dataene. Den beskytter mot feilrettinger, feilslettinger og dårlige migreringer — men ikke mot at hele Railway PG-instansen forsvinner eller blir korrupt.
 
-**Anbefalte ekstra sikkerhetslag:**
-1. Sett opp automatisk eksport: last ned Excel-eksport ukentlig via **Investorer → Eksporter Excel** og lagre lokalt
-2. Commit `data/*.json` til Git jevnlig — det gir full historikk over dataendringer
-3. Bruk sterke, unike passord for alle brukere (minst 12 tegn)
+**Railway sine egne PG-backups (status 15. juni 2026):** Krever Pro-plan. Vi er ikke på Pro — "Automatic backups"/PITR er av, og det finnes ingen volume-backups. Hvis dette skal være sikkerhetsnettet, må Pro-plan vurderes.
+
+**Automatisk ukentlig Excel-eksport (filsystem):**
+- Hver mandag kl. 04:00 (Europe/Oslo), etter Brreg-synk, genererer serveren en full Excel-eksport til `data/exports/ORO_CRM_<år>-W<uke>.xlsx`
+- De 8 siste (~2 måneder) beholdes, eldre slettes automatisk
+- Nedlastbar fra **Backup**-siden (kun admin)
+- Dette er et eget lag på filsystemet, uavhengig av `backups`-tabellen i databasen
+
+**Reelt eksternt sikkerhetslag — last ned og arkiver:**
+- Admin bør periodisk laste ned siste ukentlige eksport fra **Backup**-siden og lagre den utenfor Railway (f.eks. OneDrive/lokal disk)
 
 ---
 

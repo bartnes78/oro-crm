@@ -3,8 +3,8 @@
 ## Fase 1 — stabilisering før ny utvikling *(plan vedtatt 11. juni)*
 
 1. [x] Lukk de fire åpne manuelle testene fra pågående arbeid — gjennomført 11. juni, to bugs funnet og fikset underveis (se «Funn fra QA-runden» under)
-2. [ ] Verifiser Railway backup/restore — sjekk at automatiske PG-backups er aktivert, test restore én gang
-3. [ ] Dokumenter backup-prosedyre og ansvar (hvem kjører ukentlig Excel-eksport)
+2. [x] Verifiser Railway backup/restore — **Railway sine PG-backups krever Pro-plan (vi er ikke på Pro), PITR er av, ingen volume-backups finnes.** Eneste backup i dag er app-internt: `backups`-tabell i samme DB, daglig snapshot av alle 8 tabeller, siste 10 beholdes (verifisert 15. juni, nyeste stamp 2026-06-15 08:31). Risiko: app-backupen ligger i *samme* database — beskytter mot feilrettinger/feilslettinger, men ikke mot at hele DB-instansen forsvinner. Ukentlig Excel-eksport er derfor det reelle eksterne backup-laget. *(15. juni)*
+3. [x] Dokumenter backup-prosedyre og ansvar — prosedyren er beskrevet i ARCHITECTURE.md §8 (15. juni). I tillegg automatisert: serveren genererer nå selv en ukentlig Excel-eksport (mandag kl. 04:00, etter Brreg-synk) til `data/exports/`, beholder de 8 siste (~2 mnd), nedlastbar fra **Backup**-siden (admin). Ingen manuell ansvarsperson nødvendig for selve genereringen — admin bør periodisk laste ned og arkivere eksternt (f.eks. OneDrive) *(15. juni)*
 4. [x] **Innfør express-session + login/logout (erstatter Basic Auth)** — ferdig 11. juni
    - [x] Avhengigheter: `express-session` + `connect-pg-simple` (PG-store, overlever Railway-redeploys)
    - [x] Backend: session-middleware (`trust proxy`, httpOnly/sameSite=lax/secure-i-prod, rullende 30-dagers cookie, tabell `user_sessions`)
@@ -16,9 +16,9 @@
    - [x] Frontend: pen login-side (ekte `<form>` + autocomplete username/current-password for passordbehandler/biometri-autofyll)
    - [x] Frontend: «Logg ut»-knapp i sidebar-footer → reload til login
    - [x] Verifisering (browser + HTTP): 401 uten sesjon, 401 feil passord (feilmelding i skjema), 403 uten X-Requested-With, 200 login/me/logout, HttpOnly+SameSite=Lax-cookie, sesjon overlever server-restart, login/logout-flyt i UI. Ingen konsollfeil.
-   - [ ] **GJENSTÅR (du):** sett `SESSION_SECRET` i Railway-variabler før neste prod-deploy — ellers nekter serveren å starte (samme mønster som ALLOWED_ORIGIN). En lokal `SESSION_SECRET` er lagt i `.env` for utvikling.
+   - [x] `SESSION_SECRET` satt i Railway-variabler *(15. juni)*
 5. [x] ~~Tvunget passordbytte server-håndhevet~~ — finnes allerede: middleware i server.js blokkerer alt unntatt GET /me og PUT /me/password når `must_change_password` er satt
-6. [ ] Smoke-tester rundt de viktigste API-flytene (auth, investor-CRUD, merge, produkter)
+6. [x] Smoke-tester rundt de viktigste API-flytene (auth, investor-CRUD, merge, produkter) — kjørt mot dev-server med temp testbruker (slettet etterpå): innlogging (riktig/feil passord, 401 uten/etter sesjon), investor opprett/hent/oppdater/søk, merge av to investorer (kommentarer slått sammen korrekt, drop-investor 404 etterpå), produktinteresse (PUT product-investors, validering av negativ ticket → 400), sletting (soft-delete via deleted_at). Alle OK. Testdata ryddet *(15. juni)*
 
 Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gjeld).
 
@@ -65,8 +65,9 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] Manuell test: 4 usikre treff (inkl. PK-regelen: Asker Kommunale PK holdt tilbake som usikker mot ASKER KOMMUNALE PENSJONSKASSE), ingen forhåndskrysset, allerede koblede viser ✓-badge, avbrutt uten kobling *(11. juni)*
 - [x] Engangsjobb: full Brreg-gjennomgang av alle 619 ukoblede investorer kjørt direkte mot DB — 398 sterke (eksakte) navnetreff koblet automatisk (org_nr/brreg_navn/brreg_data + audit-logget), 203 usikre og 17 uten treff stod igjen ukoblet *(10. juni)*
 - [x] `data-kvalitet.js` + `/api/data-quality` — nytt kort «Ikke koblet til Brreg» som lister alle investorer uten `org_nr`
-- [ ] `INV-042 "Å Energi PK"` ble utelatt fra autokobling — navnetreff gikk mot "Å ENERGI AS", men "PK" er trolig *Pensjonskasse* (egen juridisk enhet, samme felle som Aker/Nordea-falskpositivene). Sjekk manuelt om "Å Energi Pensjonskasse" finnes i Brreg og koble riktig enhet via investorsiden.
-- [ ] 203 investorer med usikre Brreg-treff og 17 uten treff — gå gjennom Datakvalitet-kortet «Ikke koblet til Brreg» og koble manuelt der det er riktig
+- [x] `INV-042 "Å Energi PK"` ble utelatt fra autokobling — navnetreff gikk mot "Å ENERGI AS", men "PK" var *Pensjonskasse* (egen juridisk enhet). Bekreftet og koblet til "Å ENERGI PENSJONSKASSE" (org.nr 986086021) via investorsiden *(15. juni)*
+- [x] 203 investorer med usikre Brreg-treff og 17 uten treff — gjennomgått via Datakvalitet-kortet «Ikke koblet til Brreg» *(15. juni)*. Automatisert pass med normalisert navnesammenligning (`normalizeOrgName`, samme regel som #16) koblet 19 til som ble oversett 10. juni (rene AS/ASA-suffiksvarianter). Manuell gjennomgang av resten fant 10 til med høy konfidens: 6× «X Kommunale PK» → «X KOMMUNALE PENSJONSKASSE» (INV-010, 014, 041, 044, 048, 050 — samme PK-regel som Asker-eksempelet i #11-testen), ordrekkefølge «Kaare Berg stiftelsen» → «STIFTELSEN KAARE BERG» (INV-603), STI-suffiks (INV-468), skrivefeil «Cenntennial» → «Centennial Eiendom Asa» (INV-171), og fusjonsbytte «Sparebankstiftelsen Sparebanken Vest» → «...SPAREBANKEN NORGE, VEST» etter 2024-fusjonen (INV-518). Totalt 29 nye koblinger (+ INV-042 = 30); 202 investorer uten org_nr gjenstår. De resterende ~185 usikre + 17 uten treff er i hovedsak utenlandske/internasjonale institusjoner uten norsk org.nr (Blackhorse, ImmoFinRE, KZVK, Nuveen, PICTET, PensionDanmark, Sampension, Tryghedsgruppen m.fl.) eller navnetreff mot urelaterte selskaper — korrekt ukoblet. Unntak: INV-210 «Fearnleys Pensjonskasse» har ingen treff i Brreg (trolig avviklet/fusjonert inn i kollektiv pensjonsordning).
+- [ ] Mulig duplikat funnet under gjennomgangen: INV-622 «Marienlyst Eiendom» (org.nr 931296787, allerede koblet til MARIENLYST EIENDOM AS) og INV-729 «Marienlyst Eiendom AS» (samme org.nr ifølge Brreg-søk, men kunne ikke kobles pga. unikhetssjekk på org_nr). Ulike leads (Nikolai Staubo / Anders Brustad-Nilsen) og ulike produktrelasjoner (INV-622: 5 % sannsynlighet produkt 4; INV-729: tegnet 5,8225 MNOK produkt 16) — kan være samme juridiske enhet registrert to ganger. Vurder manuelt om de bør slås sammen *(15. juni)*
 
 ### Kontakter — telefon 2 + duplikatopprydding
 
@@ -125,6 +126,9 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] **[dashboard]** Vis kun prosjekter i fase Fundraise eller Pipeline, og gjør prosjektkortene klikkbare *(kristian, 10. juni)*
 - [x] **[detalj]** Brreg-kontakter (roller) holder å ligge under "Roller" — ikke flytt automatisk til Kontakter. Vurder en "Legg til kontakt fra roller"-knapp i stedet *(kristian, 10. juni)*
 - [x] **[dashboard]** Prosjektoversikt — vis to og to (grid), legg til "vis mer"-knapp ved >4 prosjekter. Gjelder kun mobil/smale visninger (desktop viser trolig alle/flere i rad allerede) *(kristian, 10. juni)*
+- [x] **[analyse]** "KB" som bruker vises ikke korrekt — skal være "Kristian Bartnes" *(kristian, 12. juni)*. Datafiks: én `contact_log`-rad (id=1) hadde `responsible='KB'`, rettet til "Kristian Bartnes", audit-logget *(15. juni)*
+- [x] **[investorer]** Kolonner i tabellen henter ikke tall *(kristian, 12. juni)*. Årsak: `target_ticket`/`probability` ble droppet fra `investors` i mai-sprinten, men investorer.js leste fortsatt disse feltene direkte på investor-objektet → alltid tomme. Fikset: `GET /api/investors` aggregerer nå `committed_total` (Etablert+Avlyst-produkter) og `weighted_total` (Fundraising+Pipeline-produkter) per investor fra `product_investors`. Tabellen har nå 2 kolonner "Tegnet (M)" og "Vektet (M)" (erstatter de 3 gamle "Ticket/Sanns./Vektet"). Verifisert i browser *(15. juni)*
+- [x] **[detalj]** Foreslå navneendring der investornavn ikke stemmer med Brønnøysundregisteret *(kristian, 12. juni)*. Implementert i `buildBrregCard()`: varselbanner + "Bruk dette navnet"-knapp vises når `brreg_navn` ≠ `name` etter normalisering (`normalizeOrgName`: store bokstaver, fjern punktum/komma, trim AS/ASA/A-S/SA-suffiks). Uten normalisering ville 120/431 Brreg-koblede investorer vist banneret pga. bevisste AS/ASA-forskjeller i CRM-navn; med normalisering gjenstår 13 reelle avvik (f.eks. INV-039 "Bærum Kommunale PK" vs "BÆRUM KOMMUNALE PENSJONSKASSE"). Knappen oppdaterer navnet via `PUT /api/investors/:id`. Verifisert i browser på INV-039 *(15. juni)*
 
 
 

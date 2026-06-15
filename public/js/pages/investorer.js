@@ -11,7 +11,6 @@ function saveFilter(search, filter) {
 }
 
 function esc(s) { return window.escHtml(s); }
-function fmt(n) { return window.fmt(n); }
 
 // ── Ny investor modal (rask opprettelse — fullfør på detalj-siden) ────────────
 
@@ -90,15 +89,14 @@ function openNyInvestorModal(lookups) {
 
 function buildTableRows(investors, products) {
   if (investors.length === 0) {
-    return `<tr><td colspan="9" class="empty-state">Ingen investorer funnet.</td></tr>`;
+    return `<tr><td colspan="8" class="empty-state">Ingen investorer funnet.</td></tr>`;
   }
 
   const prodMap = Object.fromEntries(products.map(p => [p._id, p.name]));
 
   return investors.map(inv => {
-    const weighted = (inv.target_ticket != null && inv.probability != null)
-      ? Number((inv.target_ticket * inv.probability).toFixed(1)).toLocaleString('nb-NO')
-      : '—';
+    const committed = inv.committed_total ? Number(inv.committed_total.toFixed(1)).toLocaleString('nb-NO') : '—';
+    const weighted  = inv.weighted_total  ? Number(inv.weighted_total.toFixed(1)).toLocaleString('nb-NO')  : '—';
 
     const prods = (inv.product_interests || [])
       .map(id => prodMap[id])
@@ -114,8 +112,7 @@ function buildTableRows(investors, products) {
         <td class="hide-sm" style="color:#717D87;font-size:12px">${esc(inv.investor_type || '—')}</td>
         <td>${window.phaseBadge(inv.phase)}</td>
         <td class="hide-sm" style="font-size:12px">${esc(inv.lead || '—')}</td>
-        <td class="text-right hide-sm">${fmt(inv.target_ticket)}</td>
-        <td class="text-right hide-sm">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>
+        <td class="text-right hide-sm" style="font-weight:600">${committed}</td>
         <td class="text-right hide-sm" style="font-weight:600">${weighted}</td>
         <td class="hide-sm"><div class="prod-pills">${prodPills}</div></td>
         <td class="hide-sm" style="font-size:12px;color:#717D87">${esc(inv.last_contact || '—')}</td>
@@ -361,8 +358,7 @@ export async function render(el) {
                   <th class="hide-sm">Type</th>
                   <th>Fase</th>
                   <th class="hide-sm">Lead</th>
-                  <th class="text-right hide-sm">Ticket (M)</th>
-                  <th class="text-right hide-sm">Sanns.</th>
+                  <th class="text-right hide-sm">Tegnet (M)</th>
                   <th class="text-right hide-sm">Vektet (M)</th>
                   <th class="hide-sm">Produkter</th>
                   <th class="hide-sm">Sist kontaktet</th>

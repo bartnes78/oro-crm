@@ -12,6 +12,16 @@ const LOG_ICONS = {
   'Annet':          '📋',
 };
 
+function normalizeOrgName(s) {
+  return (s || '')
+    .toUpperCase()
+    .replace(/[.,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b(ASA|AS|A\/S|SA)$/, '')
+    .trim();
+}
+
 function addDate(months) {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
@@ -578,7 +588,11 @@ function buildBrregCard(inv) {
           </div>
         </div>
 
-        ${inv.brreg_navn ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Registrert navn: <b style="color:var(--text);">${window.escHtml(inv.brreg_navn)}</b></div>` : ''}
+        ${inv.brreg_navn && normalizeOrgName(inv.brreg_navn) !== normalizeOrgName(inv.name) ? `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:rgba(154,106,30,.1);border:1px solid var(--color-warning);border-radius:7px;margin-bottom:10px;font-size:12px;">
+            <span>Navnet i CRM stemmer ikke med Brønnøysund: <b style="color:var(--text);">${window.escHtml(inv.brreg_navn)}</b></span>
+            <button class="btn btn-ghost btn-sm" id="brreg-rename-btn" style="font-size:11px;min-height:28px;padding:2px 8px;white-space:nowrap;">Bruk dette navnet</button>
+          </div>` : inv.brreg_navn ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Registrert navn: <b style="color:var(--text);">${window.escHtml(inv.brreg_navn)}</b></div>` : ''}
 
         <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted);margin-bottom:12px;">
           ${bd.orgform      ? `<span>&#127970; ${window.escHtml(bd.orgform)}</span>`      : ''}
@@ -1631,6 +1645,25 @@ export async function render(el, state) {
   }
 
   function bindBrreg() {
+    // ── Bruk Brreg-navn ved navneavvik ─────────────────────────────────────────
+    const renameBtn = el.querySelector('#brreg-rename-btn');
+    if (renameBtn) {
+      renameBtn.addEventListener('click', async () => {
+        const nyttNavn = inv.brreg_navn;
+        if (!window.confirm(`Endre investornavn fra "${inv.name}" til "${nyttNavn}"?`)) return;
+        renameBtn.disabled = true;
+        renameBtn.textContent = 'Oppdaterer…';
+        try {
+          await api.updateInvestor(inv.id, { name: nyttNavn });
+          await reload();
+        } catch (e) {
+          alert('Feil: ' + e.message);
+          renameBtn.disabled = false;
+          renameBtn.textContent = 'Bruk dette navnet';
+        }
+      });
+    }
+
     // ── Synkroniser-knapp (koblet investor) ───────────────────────────────────
     const syncBtn = el.querySelector('#brreg-sync-btn');
     if (syncBtn) {
