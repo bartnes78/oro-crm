@@ -45,12 +45,18 @@ function roleBadgeHtml(role) {
   </span>`;
 }
 
+const TEAM_LEADS = ['Kristian Bartnes','Anders Brustad-Nilsen','Nikolai Staubo','Anders Aasand','Gunnar Vestby'];
+
 function userModalHtml(user) {
   const isNew = !user;
   const title = isNew ? 'Legg til bruker' : 'Rediger bruker';
   const displayName = window.escHtml(user?.displayName || '');
   const username    = window.escHtml(user?.username    || '');
-  const role        = user?.role || 'bruker';
+  const role        = user?.role     || 'bruker';
+  const leadName    = user?.leadName || '';
+
+  const leadOpts = `<option value="">— Ingen —</option>` +
+    TEAM_LEADS.map(l => `<option value="${window.escHtml(l)}"${l === leadName ? ' selected' : ''}>${window.escHtml(l)}</option>`).join('');
 
   return `
     <div class="modal-header">
@@ -84,6 +90,10 @@ function userModalHtml(user) {
             <option value="bruker"${role === 'bruker' ? ' selected' : ''}>Bruker</option>
             <option value="admin"${role === 'admin'   ? ' selected' : ''}>Admin</option>
           </select>
+        </div>
+        <div class="form-group full">
+          <label>Tilknyttet ansvarlig</label>
+          <select id="modal-lead-name" style="min-height:44px">${leadOpts}</select>
         </div>
       </div>
     </div>
@@ -125,7 +135,7 @@ export async function render(el, state) {
 
   function buildPage() {
     const rows = users.length === 0
-      ? `<tr><td colspan="4" class="empty-state">Ingen brukere.</td></tr>`
+      ? `<tr><td colspan="5" class="empty-state">Ingen brukere.</td></tr>`
       : users.map(u => {
           const isSelf = u._id === currentUser?._id;
           return `<tr>
@@ -135,6 +145,7 @@ export async function render(el, state) {
             </td>
             <td style="color:var(--muted);font-size:13px;padding:12px 16px">${window.escHtml(u.username || '')}</td>
             <td style="padding:12px 16px">${roleBadgeHtml(u.role)}</td>
+            <td style="color:var(--muted);font-size:13px;padding:12px 16px">${window.escHtml(u.leadName || '—')}</td>
             <td style="padding:12px 16px">
               <div style="display:flex;gap:6px;justify-content:flex-end">
                 <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${window.escHtml(u._id)}" style="font-size:11px;min-height:44px">Rediger</button>
@@ -158,6 +169,7 @@ export async function render(el, state) {
                   <th>Navn</th>
                   <th>Brukernavn</th>
                   <th>Rolle</th>
+                  <th>Ansvarlig</th>
                   <th style="width:140px"></th>
                 </tr>
               </thead>
@@ -218,6 +230,7 @@ export async function render(el, state) {
         const username    = document.getElementById('modal-username')?.value?.trim()    || '';
         const password    = document.getElementById('modal-password')?.value            || '';
         const role        = document.getElementById('modal-role')?.value                || 'bruker';
+        const leadName    = document.getElementById('modal-lead-name')?.value           || '';
 
         const errEl = document.getElementById('modal-error');
         function showErr(msg) {
@@ -234,12 +247,12 @@ export async function render(el, state) {
 
         try {
           if (isNew) {
-            await api.createUser({ displayName, username, role });
+            await api.createUser({ displayName, username, role, leadName: leadName || null });
             window.closeModal();
             await load();
             showWelcomeModal(displayName, username);
           } else {
-            const patch = { displayName, role };
+            const patch = { displayName, role, leadName: leadName || null };
             if (password.trim()) patch.password = password;
             await api.updateUser(user._id, patch);
             window.closeModal();

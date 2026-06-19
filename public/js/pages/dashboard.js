@@ -273,10 +273,11 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function openQuickLogModal(investors, el) {
+async function openQuickLogModal(investors, el, currentUser) {
   let lookups;
   try { lookups = await api.lookups(); } catch { lookups = {}; }
 
+  const defaultLead = currentUser?.leadName || currentUser?.displayName || '';
   const sortedInvestors = [...investors].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'nb'));
   const investorOpts = sortedInvestors
     .map(i => `<option value="${esc(String(i.id))}">${esc(i.name)}</option>`)
@@ -285,7 +286,7 @@ async function openQuickLogModal(investors, el) {
     .map(t => `<option>${esc(t)}</option>`)
     .join('');
   const leadOpts = (lookups.leads || [])
-    .map(l => `<option>${esc(l)}</option>`)
+    .map(l => `<option${l === defaultLead ? ' selected' : ''}>${esc(l)}</option>`)
     .join('');
 
   const html = window.ui.modal(
@@ -401,7 +402,7 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
 
 function setupEvents(el, data, investors, filter) {
   const loggBtn = el.querySelector('#dash-logg-btn');
-  if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el));
+  if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el, state?.currentUser));
 
   el.querySelectorAll('.gauge-card-link').forEach(card => {
     card.addEventListener('click', () => window.navigate('prosjektDetalj', card.dataset.productId));
@@ -443,7 +444,7 @@ function setupEvents(el, data, investors, filter) {
 
 // ── Public render entry ───────────────────────────────────────────────────────
 
-export async function render(el) {
+export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster…</p></div>';
 
   try {

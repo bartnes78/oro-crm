@@ -297,3 +297,10 @@ DO $$ BEGIN
     ALTER TABLE products ADD COLUMN established_date DATE;
   END IF;
 END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='users' AND column_name='lead_name') THEN
+    ALTER TABLE users ADD COLUMN lead_name TEXT UNIQUE;
+  END IF;
+END $$;

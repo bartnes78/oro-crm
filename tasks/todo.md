@@ -67,7 +67,7 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] `data-kvalitet.js` + `/api/data-quality` — nytt kort «Ikke koblet til Brreg» som lister alle investorer uten `org_nr`
 - [x] `INV-042 "Å Energi PK"` ble utelatt fra autokobling — navnetreff gikk mot "Å ENERGI AS", men "PK" var *Pensjonskasse* (egen juridisk enhet). Bekreftet og koblet til "Å ENERGI PENSJONSKASSE" (org.nr 986086021) via investorsiden *(15. juni)*
 - [x] 203 investorer med usikre Brreg-treff og 17 uten treff — gjennomgått via Datakvalitet-kortet «Ikke koblet til Brreg» *(15. juni)*. Automatisert pass med normalisert navnesammenligning (`normalizeOrgName`, samme regel som #16) koblet 19 til som ble oversett 10. juni (rene AS/ASA-suffiksvarianter). Manuell gjennomgang av resten fant 10 til med høy konfidens: 6× «X Kommunale PK» → «X KOMMUNALE PENSJONSKASSE» (INV-010, 014, 041, 044, 048, 050 — samme PK-regel som Asker-eksempelet i #11-testen), ordrekkefølge «Kaare Berg stiftelsen» → «STIFTELSEN KAARE BERG» (INV-603), STI-suffiks (INV-468), skrivefeil «Cenntennial» → «Centennial Eiendom Asa» (INV-171), og fusjonsbytte «Sparebankstiftelsen Sparebanken Vest» → «...SPAREBANKEN NORGE, VEST» etter 2024-fusjonen (INV-518). Totalt 29 nye koblinger (+ INV-042 = 30); 202 investorer uten org_nr gjenstår. De resterende ~185 usikre + 17 uten treff er i hovedsak utenlandske/internasjonale institusjoner uten norsk org.nr (Blackhorse, ImmoFinRE, KZVK, Nuveen, PICTET, PensionDanmark, Sampension, Tryghedsgruppen m.fl.) eller navnetreff mot urelaterte selskaper — korrekt ukoblet. Unntak: INV-210 «Fearnleys Pensjonskasse» har ingen treff i Brreg (trolig avviklet/fusjonert inn i kollektiv pensjonsordning).
-- [ ] Mulig duplikat funnet under gjennomgangen: INV-622 «Marienlyst Eiendom» (org.nr 931296787, allerede koblet til MARIENLYST EIENDOM AS) og INV-729 «Marienlyst Eiendom AS» (samme org.nr ifølge Brreg-søk, men kunne ikke kobles pga. unikhetssjekk på org_nr). Ulike leads (Nikolai Staubo / Anders Brustad-Nilsen) og ulike produktrelasjoner (INV-622: 5 % sannsynlighet produkt 4; INV-729: tegnet 5,8225 MNOK produkt 16) — kan være samme juridiske enhet registrert to ganger. Vurder manuelt om de bør slås sammen *(15. juni)*
+- [x] Mulig duplikat funnet under gjennomgangen: INV-622 «Marienlyst Eiendom» (org.nr 931296787, allerede koblet til MARIENLYST EIENDOM AS) og INV-729 «Marienlyst Eiendom AS» (samme org.nr ifølge Brreg-søk, men kunne ikke kobles pga. unikhetssjekk på org_nr). Ulike leads (Nikolai Staubo / Anders Brustad-Nilsen) og ulike produktrelasjoner (INV-622: 5 % sannsynlighet produkt 4; INV-729: tegnet 5,8225 MNOK produkt 16) — kan være samme juridiske enhet registrert to ganger. Vurder manuelt om de bør slås sammen *(15. juni)* — løst direkte i databasen *(19. juni)*
 
 ### Kontakter — telefon 2 + duplikatopprydding
 
@@ -79,7 +79,7 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] DB: slå sammen K-Spar-duplikatkontakt (Harald Kristofer Berg) — telefon 988 93 822 (primær) + telefon 2: 92497600
 - [x] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse → INV-004, Mallin/Mallin Eiendom AS → INV-361, Stormbull/Stormbull Eiendom AS → INV-538), audit-logget
 - [x] Manuell test: ny kontakt med telefon 2 (via Brreg-rolle-knapp), redigering av telefon 2, Excel-eksport verifisert med exceljs-parsing («Telefon 2»-kolonne + verdier i Kontakter-arket) *(11. juni)*
-- [ ] Bruker: avvis de 2 falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse) i Duplikater-siden — lagres i nettleserens localStorage, må gjøres av hver bruker
+- [x] Bruker: avvis de 2 falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse) i Duplikater-siden — begge par skal stå som separate investorer *(19. juni)*
 
 ### Brreg-integrasjon
 
@@ -132,10 +132,22 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 
 
 
+### Koble brukere til "Ansvarlig"-identitet (lead-navn)
+
+Implementert *(19. juni)*
+
+- [x] `schema.sql` — `users.lead_name TEXT` (nullable, unik)
+- [x] `server.js` — POST/PUT `/api/users` validerer `leadName`, `fmtUser` returnerer `leadName`
+- [x] `bruker-admin.js` — dropdown «Tilknyttet ansvarlig» i modal + «Ansvarlig»-kolonne i tabell
+- [x] `logg-kontakt.js` — forhåndsvelger `currentUser.leadName` (fallback: `displayName`)
+- [x] `dashboard.js` — hurtiglogg-modal forhåndsvelger ansvarlig via `leadName`
+- [x] `investorer.js` — ny-investor-modal forhåndsvelger lead via `leadName`
+- [ ] **Gjenstår (admin-oppgave):** sett `lead_name` for `kristian` → Kristian Bartnes og `nikolai` → Nikolai Staubo via Brukeradmin → Rediger
+
 ### Kritisk (før ekte produksjonsdata)
 
 - [ ] `CRM_PASS`/`CRM_USER` brukes kun ved førstegangsoppsett (tom `users`-tabell) og er ubrukt nå som ekte kontoer finnes — rydd evt. bort fra Railway-variabler (lav prioritet, ikke en sikkerhetsrisiko)
-- [ ] Opprett personlige brukerkontoer for resterende teammedlemmer via Brukeradmin — i dag finnes kun `kristian` (admin) og `nikolai` (bruker), ~8 personer mangler egen konto
+- [x] Opprett personlige brukerkontoer for resterende teammedlemmer — `andersbn` (Anders Brustad-Nilsen), `andersa` (Anders Aasand), `gunnar` (Gunnar Vestby) opprettet med startpassord «byttpassord» og `lead_name` forhåndsutfylt *(19. juni)*
 - [x] Verifisert at Railway-deploy bruker HTTPS — HTTP redirecter automatisk til HTTPS på prod-domenet *(kristian, 10. juni)*
 - [x] Admin-rolle avklart — `kristian` har `role='admin'`, full tilgang til backup/brukerstyring/sletting/sammenslåing
 
@@ -148,33 +160,22 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 
 ### Teknisk gjeld
 
-- [ ] **`server.js` (2060 linjer, voksende) — gradvis utflytting til rutemoduler.**
-      Strategi: IKKE en stor refactor-commit. I stedet, hver gang vi likevel
-      jobber i et rute-område og gjør en funksjonell endring der, flytt *de*
-      endepunktene (+ delte hjelpefunksjoner de bruker, f.eks. cron-jobber for
-      samme domene) til en egen `routes/<domene>.js`-modul i samme commit.
-      Mål-struktur etter hvert: `routes/investors.js`, `routes/products.js`,
-      `routes/contacts.js`, `routes/brreg.js`, `routes/users.js`,
-      `routes/feedback.js`, osv. Delte ting (`pool`/`query`, `fmtRow`,
-      `auditLog`, `requireAdmin`, `validationError`) flyttes til en liten
-      `lib/`-modul som rutemodulene importerer.
-      Rekkefølge — gjør neste utflytting når vi likevel rører domenet, foreslått
-      prioritet basert på hva som mest sannsynlig endres snart:
-        1. Brreg-ruter + `brregSyncAll`-cron (allerede nylig endret to ganger)
+- [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
+- [ ] **Gjenstående utflytting** — foreslått prioritet:
         2. Produkter / `product_investors` / `declined_offers`
         3. Investorer (kjerne-CRUD)
         4. Kontakter
         5. Brukere / auth / feedback (mest stabile, lavest prioritet)
       Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
       route-registrering), regnes utflyttingen som ferdig.
-      Etter hver utflytting: full manuell test av berørt sides hovedflyt
-      (golden path + tomme/feil-tilfeller), siden vi ikke har automatiserte tester.
+      Etter hver utflytting: full manuell test av berørt sides hovedflyt.
 - [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
 - [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
 
 ### Backup-rutine
 
-- [ ] Avtal hvem er ansvarlig for ukentlig Excel-eksport
+- [x] Automatisk Google Drive-opplasting — etter ukentlig Excel-eksport lastes filen opp til konfigurert Drive-mappe via service account. Aktiveres med Railway-vars `GOOGLE_SA_KEY` + `GOOGLE_DRIVE_FOLDER_ID` *(19. juni)*
+- [ ] **Gjenstår (admin-oppgave):** sett opp Google Cloud service account + del mappe, legg `GOOGLE_SA_KEY` og `GOOGLE_DRIVE_FOLDER_ID` i Railway-variabler
 - [ ] Vurder om Railway volume/persistent storage bør settes opp
 
 ---

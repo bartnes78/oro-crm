@@ -14,11 +14,12 @@ function esc(s) { return window.escHtml(s); }
 
 // ── Ny investor modal (rask opprettelse — fullfør på detalj-siden) ────────────
 
-function openNyInvestorModal(lookups) {
+function openNyInvestorModal(lookups, currentUser) {
+  const defaultLead = currentUser?.leadName || '';
   const typeOpts = (lookups.types || [])
     .map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const leadOpts = (lookups.leads || [])
-    .map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    .map(l => `<option value="${esc(l)}"${l === defaultLead ? ' selected' : ''}>${esc(l)}</option>`).join('');
 
   const html = window.ui.modal(
     'Ny investor',
@@ -292,7 +293,7 @@ function setupEvents(el) {
   const nyBtn = el.querySelector('#inv-ny-btn');
   if (nyBtn) {
     nyBtn.addEventListener('click', () => {
-      if (_state) openNyInvestorModal(_state.lookups);
+      if (_state) openNyInvestorModal(_state.lookups, _state.currentUser);
     });
   }
 
@@ -303,7 +304,7 @@ function setupEvents(el) {
 
 // ── Public render entry ───────────────────────────────────────────────────────
 
-export async function render(el) {
+export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster…</p></div>';
 
   try {
@@ -328,7 +329,7 @@ export async function render(el) {
     ]);
 
     // Store in module state for event handlers
-    _state = { investors, lookups, products, locations, search, filter };
+    _state = { investors, lookups, products, locations, search, filter, currentUser: state?.currentUser };
 
     const tableRows = buildTableRows(investors, products);
 

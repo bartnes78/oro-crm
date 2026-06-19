@@ -11,6 +11,7 @@ const crypto    = require('crypto');
 const ExcelJS   = require('exceljs');
 const cron      = require('node-cron');
 const { query, pool } = require('./db');
+const { google } = require('googleapis');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -59,7 +60,7 @@ function fmtRow(row) {
 
 function fmtUser(row) {
   if (!row) return null;
-  return { _id: row.id, username: row.username, displayName: row.display_name, role: row.role, mustChangePassword: !!row.must_change_password };
+  return { _id: row.id, username: row.username, displayName: row.display_name, role: row.role, mustChangePassword: !!row.must_change_password, leadName: row.lead_name || null };
 }
 
 // ── Backup ────────────────────────────────────────────────────────────────────
@@ -113,9 +114,31 @@ async function runWeeklyExport() {
     for (const f of toDelete) await fs.promises.unlink(path.join(EXPORT_DIR, f));
 
     console.log(`[weekly-export] ${file}`);
+    if (process.env.GOOGLE_SA_KEY && process.env.GOOGLE_DRIVE_FOLDER_ID) {
+      uploadToDrive(file, path.basename(file)).catch(e =>
+        console.error('[weekly-export] Drive-opplasting feilet:', e.message)
+      );
+    }
   } catch (e) {
     console.error('[weekly-export] Feilet:', e.message);
   }
+}
+
+async function uploadToDrive(filePath, fileName) {
+  const keyJson = JSON.parse(Buffer.from(process.env.GOOGLE_SA_KEY, 'base64').toString());
+  const auth = new google.auth.GoogleAuth({
+    credentials: keyJson,
+    scopes: ['https://www.googleapis.com/auth/drive.file'],
+  });
+  const drive = google.drive({ version: 'v3', auth });
+  await drive.files.create({
+    resource: { name: fileName, parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] },
+    media: {
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      body: fs.createReadStream(filePath),
+    },
+  });
+  console.log(`[weekly-export] Lastet opp til Drive: ${fileName}`);
 }
 
 // ── Passord-hashing ───────────────────────────────────────────────────────────
@@ -549,203 +572,7 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // ── Brønnøysundregistrene ─────────────────────────────────────────────────────
-const https = require('https');
-
-function brregGet(path) {
-  return new Promise((resolve, reject) => {
-    const url = `https://data.brreg.no/enhetsregisteret/api${path}`;
-    const req = https.get(url, { headers: { Accept: 'application/json' } }, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: {} }); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('Brreg timeout')); });
-  });
-}
-
-// Søk på navn → returnerer liste med treff
-app.get('/api/brreg/search', async (req, res) => {
-  const q = (req.query.q || '').trim();
-  if (!q) return res.json([]);
-  try {
-    const { body } = await brregGet(`/enheter?navn=${encodeURIComponent(q)}&size=10`);
-    const enheter = body._embedded?.enheter || [];
-    res.json(enheter.map(e => ({
-      orgnr:     e.organisasjonsnummer,
-      navn:      e.navn,
-      orgform:   e.organisasjonsform?.beskrivelse || null,
-      poststed:  e.forretningsadresse?.poststed   || e.postadresse?.poststed || null,
-      slettet:   !!e.slettedato,
-    })));
-  } catch (e) {
-    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
-  }
-});
-
-// Hent stamdata for ett org.nr
-app.get('/api/brreg/enhet/:orgnr', async (req, res) => {
-  const orgnr = req.params.orgnr.replace(/\s/g, '');
-  if (!/^\d{9}$/.test(orgnr)) return res.status(400).json({ error: 'Ugyldig org.nr (må være 9 siffer)' });
-  try {
-    const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
-      brregGet(`/enheter/${orgnr}`),
-      brregGet(`/enheter/${orgnr}/roller`),
-    ]);
-    if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
-
-    const adresser = [];
-    if (e.forretningsadresse) {
-      adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
-    }
-    if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed) {
-      adresser.push({ type: 'Postadresse', ...e.postadresse });
-    }
-    if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed) {
-      adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
-    }
-
-    const SKIP_ROLLER = new Set(['REVI', 'REGN']);
-    const roller = [];
-    for (const rollegruppe of (rollerBody.rollegrupper || [])) {
-      if (SKIP_ROLLER.has(rollegruppe.type?.kode)) continue;
-      for (const rolle of (rollegruppe.roller || [])) {
-        if (rolle.fratredelsesdato) continue;
-        const p = rolle.person || rolle.enhet;
-        if (!p) continue;
-        const navn = p.navn
-          ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
-          : p.navn;
-        if (!navn) continue;
-        roller.push({
-          gruppe: rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
-          type:   rolle.type?.beskrivelse       || rollegruppe.type?.beskrivelse || '',
-          navn,
-        });
-      }
-    }
-
-    res.json({
-      orgnr,
-      navn:         e.navn,
-      orgform:      e.organisasjonsform?.beskrivelse || null,
-      naeringskode: e.naeringskode1?.beskrivelse     || null,
-      stiftet:      e.stiftelsesdato                 || null,
-      ansatte:      e.antallAnsatte                  ?? null,
-      adresser,
-      roller,
-    });
-  } catch (e) {
-    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
-  }
-});
-
-// Koble org.nr til investor og synkroniser data
-app.post('/api/investors/:id/brreg-sync', async (req, res) => {
-  const { org_nr, city } = req.body;
-  const orgnr = (org_nr || '').replace(/\s/g, '');
-  if (!/^\d{9}$/.test(orgnr)) return validationError(res, ['Ugyldig org.nr (må være 9 siffer)']);
-
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query('SELECT * FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
-
-    // Sjekk at org.nr ikke er i bruk av en annen investor
-    const { rows: existing } = await client.query('SELECT id FROM investors WHERE org_nr=$1 AND id<>$2', [orgnr, req.params.id]);
-    if (existing.length) return validationError(res, [`Org.nr ${orgnr} er allerede koblet til investor ${existing[0].id}`]);
-
-    // Hent data fra Brreg
-    const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
-      brregGet(`/enheter/${orgnr}`),
-      brregGet(`/enheter/${orgnr}/roller`),
-    ]);
-    if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
-
-    const adresser = [];
-    if (e.forretningsadresse) adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
-    if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed)
-      adresser.push({ type: 'Postadresse', ...e.postadresse });
-    if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed)
-      adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
-
-    const SKIP_ROLLER = new Set(['REVI', 'REGN']);
-    const roller = [];
-    for (const rollegruppe of (rollerBody.rollegrupper || [])) {
-      if (SKIP_ROLLER.has(rollegruppe.type?.kode)) continue;
-      for (const rolle of (rollegruppe.roller || [])) {
-        if (rolle.fratredelsesdato) continue;
-        const p = rolle.person || rolle.enhet;
-        if (!p) continue;
-        const navn = p.navn
-          ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
-          : null;
-        if (!navn) continue;
-        roller.push({
-          gruppe: rollegruppe.type?.beskrivelse || rollegruppe.type?.kode || '',
-          type:   rolle.type?.beskrivelse       || rollegruppe.type?.beskrivelse || '',
-          navn,
-        });
-      }
-    }
-
-    const brregData = {
-      orgform:      e.organisasjonsform?.beskrivelse || null,
-      naeringskode: e.naeringskode1?.beskrivelse     || null,
-      stiftet:      e.stiftelsesdato                 || null,
-      ansatte:      e.antallAnsatte                  ?? null,
-      adresser,
-      roller,
-      synced_at:    new Date().toISOString(),
-    };
-
-    await client.query('BEGIN');
-
-    // Oppdater investor
-    await client.query(
-      `UPDATE investors SET org_nr=$2, brreg_navn=$3, brreg_data=$4, city=COALESCE($5, city), updated_at=NOW() WHERE id=$1`,
-      [req.params.id, orgnr, e.navn, JSON.stringify(brregData), city || null]
-    );
-
-    await client.query('COMMIT');
-
-    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
-      { org_nr: null }, { org_nr: orgnr, brreg_navn: e.navn },
-      `Koblet Brreg org.nr ${orgnr} til investor`);
-
-    res.json({ ok: true, brreg_navn: e.navn, adresser, roller });
-  } catch (e) {
-    await client.query('ROLLBACK').catch(() => {});
-    console.error('[POST /investors/:id/brreg-sync]', e.message);
-    res.status(500).json({ error: e.message });
-  } finally {
-    client.release();
-  }
-});
-
-app.delete('/api/investors/:id/brreg-sync', async (req, res) => {
-  try {
-    const { rows } = await query('SELECT org_nr FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
-    const oldOrgNr = rows[0].org_nr;
-
-    await query(
-      `UPDATE investors SET org_nr=NULL, brreg_navn=NULL, brreg_data='{}', updated_at=NOW() WHERE id=$1`,
-      [req.params.id]
-    );
-
-    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id,
-      { org_nr: oldOrgNr }, { org_nr: null },
-      `Fjernet Brreg-kobling (org.nr ${oldOrgNr})`);
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+app.use(require('./routes/brreg'));
 
 // ── Investorer ────────────────────────────────────────────────────────────────
 app.get('/api/investors', async (req, res) => {
@@ -1386,18 +1213,20 @@ app.get('/api/users', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/users', requireAdmin, async (req, res) => {
-  const { username, displayName, password, role } = req.body;
+  const { username, displayName, password, role, leadName } = req.body;
   const errors = [];
   if (!String(username    || '').trim()) errors.push('Brukernavn er påkrevd');
   if (!String(displayName || '').trim()) errors.push('Visningsnavn er påkrevd');
   const effectivePassword = String(password || '').trim() || 'byttpassord';
   if (!['admin','bruker'].includes(role)) errors.push('Ugyldig rolle');
+  const validTeamLeads = VALID_LEADS.filter(l => l !== 'Ekstern');
+  if (leadName && !validTeamLeads.includes(leadName)) errors.push(`Ugyldig lead-navn: ${leadName}`);
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [u] } = await query(`
-      INSERT INTO users (username, display_name, role, password_hash, must_change_password)
-      VALUES ($1,$2,$3,$4,TRUE) RETURNING *
-    `, [username.trim(), displayName.trim(), role, hashPassword(effectivePassword)]);
+      INSERT INTO users (username, display_name, role, password_hash, must_change_password, lead_name)
+      VALUES ($1,$2,$3,$4,TRUE,$5) RETURNING *
+    `, [username.trim(), displayName.trim(), role, hashPassword(effectivePassword), leadName || null]);
     await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'user', u.id, null, { username: u.username, role: u.role }, `Opprettet bruker: ${u.username}`);
     res.json(fmtUser(u));
   } catch (e) {
@@ -1412,22 +1241,27 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
     const { rows } = await query('SELECT * FROM users WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Bruker ikke funnet' });
     const cur = rows[0];
-    const { displayName, password, role } = req.body;
+    const { displayName, password, role, leadName } = req.body;
+    const validTeamLeads = VALID_LEADS.filter(l => l !== 'Ekstern');
+    if (leadName !== undefined && leadName !== null && leadName !== '' && !validTeamLeads.includes(leadName))
+      return validationError(res, [`Ugyldig lead-navn: ${leadName}`]);
     const newDisplayName = displayName ? displayName.trim() : cur.display_name;
     const newRole        = role && ['admin','bruker'].includes(role) ? role : cur.role;
     const passwordReset  = password && password.trim();
     const newHash        = passwordReset ? hashPassword(password) : cur.password_hash;
     const mustChange     = passwordReset && id !== req.currentUser._id ? true : cur.must_change_password;
+    const newLeadName    = leadName !== undefined ? (leadName || null) : cur.lead_name;
     const { rows: [u] } = await query(`
-      UPDATE users SET display_name=$2, role=$3, password_hash=$4, must_change_password=$5 WHERE id=$1 RETURNING *
-    `, [id, newDisplayName, newRole, newHash, mustChange]);
+      UPDATE users SET display_name=$2, role=$3, password_hash=$4, must_change_password=$5, lead_name=$6 WHERE id=$1 RETURNING *
+    `, [id, newDisplayName, newRole, newHash, mustChange, newLeadName]);
     const changes = [];
     if (displayName && displayName.trim() !== cur.display_name) changes.push('navn');
     if (role && role !== cur.role) changes.push(`rolle: ${cur.role} → ${role}`);
     if (passwordReset) changes.push('passord tilbakestilt');
+    if (leadName !== undefined && leadName !== cur.lead_name) changes.push(`lead: ${cur.lead_name || '—'} → ${leadName || '—'}`);
     await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'user', id,
-      { role: cur.role, display_name: cur.display_name },
-      { role: u.role, display_name: u.display_name },
+      { role: cur.role, display_name: cur.display_name, lead_name: cur.lead_name },
+      { role: u.role, display_name: u.display_name, lead_name: u.lead_name },
       `Oppdaterte bruker ${u.username}${changes.length ? ': ' + changes.join(', ') : ''}`);
     res.json(fmtUser(u));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2085,90 +1919,6 @@ app.get('/api/feedback/:id/screenshot', requireAdmin, async (req, res) => {
 // ── SPA fallback ──────────────────────────────────────────────────────────────
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ── Brreg ukentlig synkronisering ─────────────────────────────────────────────
-const SKIP_ROLLER_SYNC = new Set(['REVI', 'REGN']);
-
-async function brregSyncAll() {
-  const { rows: investors } = await query(
-    `SELECT id FROM investors WHERE org_nr IS NOT NULL AND deleted_at IS NULL`
-  );
-  if (investors.length === 0) return;
-
-  console.log(`[brreg-sync] Starter ukentlig synk for ${investors.length} investorer`);
-  let oppdatert = 0, feilet = 0;
-
-  for (const { id } of investors) {
-    try {
-      const { rows } = await query('SELECT org_nr FROM investors WHERE id=$1', [id]);
-      const orgnr = rows[0]?.org_nr;
-      if (!orgnr) continue;
-
-      const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
-        brregGet(`/enheter/${orgnr}`),
-        brregGet(`/enheter/${orgnr}/roller`),
-      ]);
-      if (status !== 200) { feilet++; continue; }
-
-      const adresser = [];
-      if (e.forretningsadresse) adresser.push({ type: 'Forretningsadresse', ...e.forretningsadresse });
-      if (e.postadresse && e.postadresse.poststed !== e.forretningsadresse?.poststed)
-        adresser.push({ type: 'Postadresse', ...e.postadresse });
-      if (e.beliggenhetsadresse && e.beliggenhetsadresse.poststed !== e.forretningsadresse?.poststed)
-        adresser.push({ type: 'Beliggenhetsadresse', ...e.beliggenhetsadresse });
-
-      const roller = [];
-      for (const rg of (rollerBody.rollegrupper || [])) {
-        if (SKIP_ROLLER_SYNC.has(rg.type?.kode)) continue;
-        for (const rolle of (rg.roller || [])) {
-          if (rolle.fratredelsesdato) continue;
-          const p = rolle.person || rolle.enhet;
-          if (!p) continue;
-          const navn = p.navn
-            ? `${p.navn.fornavn || ''} ${p.navn.mellomnavn ? p.navn.mellomnavn + ' ' : ''}${p.navn.etternavn || ''}`.trim()
-            : null;
-          if (!navn) continue;
-          roller.push({ gruppe: rg.type?.beskrivelse || '', type: rolle.type?.beskrivelse || rg.type?.beskrivelse || '', navn });
-        }
-      }
-
-      const brregData = {
-        orgform:      e.organisasjonsform?.beskrivelse || null,
-        naeringskode: e.naeringskode1?.beskrivelse     || null,
-        stiftet:      e.stiftelsesdato                 || null,
-        ansatte:      e.antallAnsatte                  ?? null,
-        adresser,
-        roller,
-        synced_at:    new Date().toISOString(),
-      };
-
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          `UPDATE investors SET brreg_navn=$2, brreg_data=$3, updated_at=NOW() WHERE id=$1`,
-          [id, e.navn, JSON.stringify(brregData)]
-        );
-        await client.query('COMMIT');
-        oppdatert++;
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        console.error(`[brreg-sync] Feil ved ${id}:`, err.message);
-        feilet++;
-      } finally {
-        client.release();
-      }
-
-      // Liten pause mellom kall for å ikke overbelaste Brreg
-      await new Promise(r => setTimeout(r, 300));
-    } catch (err) {
-      console.error(`[brreg-sync] Feil ved ${id}:`, err.message);
-      feilet++;
-    }
-  }
-
-  console.log(`[brreg-sync] Ferdig — ${oppdatert} oppdatert, ${feilet} feilet`);
-}
-
 // ── Oppstart ──────────────────────────────────────────────────────────────────
 async function init() {
   await initSchema();
@@ -2177,11 +1927,6 @@ async function init() {
   setInterval(runBackup, 24 * 60 * 60 * 1000);
 
   runWeeklyExport().catch(e => console.error('[weekly-export] Oppstart-eksport feilet:', e.message));
-
-  // Ukentlig Brreg-synk: mandag kl. 03:00
-  cron.schedule('0 3 * * 1', () => {
-    brregSyncAll().catch(e => console.error('[brreg-sync] Uventet feil:', e.message));
-  }, { timezone: 'Europe/Oslo' });
 
   // Ukentlig Excel-eksport til disk: mandag kl. 04:00
   cron.schedule('0 4 * * 1', () => {

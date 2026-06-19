@@ -405,7 +405,7 @@ export async function render(el, state) {
     return;
   }
 
-  const currentUserName = state.currentUser?.displayName || '';
+  const currentUserName = state.currentUser?.leadName || state.currentUser?.displayName || '';
   el.innerHTML = buildHTML(_lookups, currentUserName);
   setupEvents(el, state);
 }
