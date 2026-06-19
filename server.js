@@ -11,7 +11,6 @@ const crypto    = require('crypto');
 const ExcelJS   = require('exceljs');
 const cron      = require('node-cron');
 const { query, pool } = require('./db');
-const { google } = require('googleapis');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -114,9 +113,9 @@ async function runWeeklyExport() {
     for (const f of toDelete) await fs.promises.unlink(path.join(EXPORT_DIR, f));
 
     console.log(`[weekly-export] ${file}`);
-    if (process.env.GOOGLE_SA_KEY && process.env.GOOGLE_DRIVE_FOLDER_ID) {
-      uploadToDrive(file, path.basename(file)).catch(e =>
-        console.error('[weekly-export] Drive-opplasting feilet:', e.message)
+    if (process.env.MS_TENANT_ID && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
+      uploadToOneDrive(file, path.basename(file)).catch(e =>
+        console.error('[weekly-export] OneDrive-opplasting feilet:', e.message)
       );
     }
   } catch (e) {
@@ -124,21 +123,43 @@ async function runWeeklyExport() {
   }
 }
 
-async function uploadToDrive(filePath, fileName) {
-  const keyJson = JSON.parse(Buffer.from(process.env.GOOGLE_SA_KEY, 'base64').toString());
-  const auth = new google.auth.GoogleAuth({
-    credentials: keyJson,
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
-  });
-  const drive = google.drive({ version: 'v3', auth });
-  await drive.files.create({
-    resource: { name: fileName, parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] },
-    media: {
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      body: fs.createReadStream(filePath),
-    },
-  });
-  console.log(`[weekly-export] Lastet opp til Drive: ${fileName}`);
+async function uploadToOneDrive(filePath, fileName) {
+  const tokenRes = await fetch(
+    `https://login.microsoftonline.com/${process.env.MS_TENANT_ID}/oauth2/v2.0/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'client_credentials',
+        client_id:     process.env.MS_CLIENT_ID,
+        client_secret: process.env.MS_CLIENT_SECRET,
+        scope:         'https://graph.microsoft.com/.default',
+      }),
+    }
+  );
+  const { access_token, error_description } = await tokenRes.json();
+  if (!access_token) throw new Error('MS token feilet: ' + error_description);
+
+  const user   = encodeURIComponent(process.env.MS_ONEDRIVE_USER   || '');
+  const folder = encodeURIComponent(process.env.MS_ONEDRIVE_FOLDER || 'ORO CRM Backups');
+  const fileContent = await fs.promises.readFile(filePath);
+
+  const uploadRes = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${user}/drive/root:/${folder}/${fileName}:/content`,
+    {
+      method:  'PUT',
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type':  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+      body: fileContent,
+    }
+  );
+  if (!uploadRes.ok) {
+    const msg = await uploadRes.text().catch(() => uploadRes.status);
+    throw new Error(`Graph API ${uploadRes.status}: ${msg}`);
+  }
+  console.log(`[weekly-export] Lastet opp til OneDrive: ${fileName}`);
 }
 
 // ── Passord-hashing ───────────────────────────────────────────────────────────

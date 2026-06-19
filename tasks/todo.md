@@ -174,8 +174,14 @@ Implementert *(19. juni)*
 
 ### Backup-rutine
 
-- [x] Automatisk Google Drive-opplasting — etter ukentlig Excel-eksport lastes filen opp til konfigurert Drive-mappe via service account. Aktiveres med Railway-vars `GOOGLE_SA_KEY` + `GOOGLE_DRIVE_FOLDER_ID` *(19. juni)*
-- [ ] **Gjenstår (admin-oppgave):** sett opp Google Cloud service account + del mappe, legg `GOOGLE_SA_KEY` og `GOOGLE_DRIVE_FOLDER_ID` i Railway-variabler
+- [x] Automatisk OneDrive-opplasting — etter ukentlig Excel-eksport lastes filen opp til OROEiendom OneDrive via Microsoft Graph API (client credentials). Aktiveres med Railway-vars `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_ONEDRIVE_USER`, `MS_ONEDRIVE_FOLDER` *(19. juni)*
+- [ ] **Gjenstår (admin-oppgave):** registrer Azure AD-app med `Files.ReadWrite.All`-tillatelse, legg inn Railway-variabler. Se oppsettinstruksjoner nedenfor.
+
+  **Azure AD-oppsett (én gang):**
+  1. portal.azure.com → Azure Active Directory → App-registreringer → Ny registrering
+  2. API-tillatelser → Legg til → Microsoft Graph → Apptillatelser → `Files.ReadWrite.All` → Gi admin-godkjenning
+  3. Sertifikater og hemmeligheter → Ny klienthemmelighet → kopier verdi
+  4. Railway-vars: `MS_TENANT_ID` (katalog-ID), `MS_CLIENT_ID` (program-ID), `MS_CLIENT_SECRET`, `MS_ONEDRIVE_USER` (e-post til OneDrive-eier i OROEiendom), `MS_ONEDRIVE_FOLDER` (f.eks. `ORO CRM Backups`)
 - [ ] Vurder om Railway volume/persistent storage bør settes opp
 
 ---
