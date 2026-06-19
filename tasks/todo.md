@@ -161,15 +161,21 @@ Implementert *(19. juni)*
 ### Teknisk gjeld
 
 - [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
-- [ ] **Gjenstående utflytting** — foreslått prioritet:
-        2. Produkter / `product_investors` / `declined_offers`
-        3. Investorer (kjerne-CRUD)
-        4. Kontakter
-        5. Brukere / auth / feedback (mest stabile, lavest prioritet)
-      Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
-      route-registrering), regnes utflyttingen som ferdig.
-      Etter hver utflytting: full manuell test av berørt sides hovedflyt.
-- [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
+- [x] **Gjenstående utflytting** — alle ruter flyttet ut *(19. juni)*:
+        `routes/dashboard.js` (analyse, aktivitetslogg, dashboard)
+        `routes/investors.js` (investor-CRUD, duplikater, merge)
+        `routes/contacts.js` (kontakt-CRUD, kontaktmerge)
+        `routes/log.js` (kontaktlogg-CRUD)
+        `routes/tasks.js` (oppgave-CRUD)
+        `routes/users.js` (bruker-CRUD, passordbytte)
+        `routes/products.js` (produkt-CRUD, product-investors, declined-offers, admin-seed)
+        `routes/admin.js` (audit-logg, datakvalitet, lookups, backup, eksport, MSG-parsing, feedback)
+        `lib/backup.js` (runBackup, buildExcelWorkbook, runWeeklyExport, uploadToOneDrive)
+        `lib/helpers.js` (fmtRow/fmtInvestor/fmtUser, validering, passord-hashing, audit)
+      server.js er nå 206 linjer (kun oppsett, middleware, auth, route-registrering, oppstart).
+- [x] **Automatiserte tester** — vitest + supertest *(19. juni)*
+      `tests/helpers.test.js`: 25 enhetstester (formatering, validering, passord-hashing, domenekonstanter)
+      `tests/api.test.js`: 16 integrasjonstester (auth, CSRF, input-validering for investor/task/log/product-investors)
 - [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
 
 ### Backup-rutine
