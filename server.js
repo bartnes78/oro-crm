@@ -182,6 +182,7 @@ app.use(require('./routes/log'));
 app.use(require('./routes/tasks'));
 app.use(require('./routes/users'));
 app.use(require('./routes/products'));
+app.use(require('./routes/playbook'));
 app.use(require('./routes/admin'));
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────

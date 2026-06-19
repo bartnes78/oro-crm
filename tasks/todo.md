@@ -158,6 +158,32 @@ Implementert *(19. juni)*
 - [ ] Gå gjennom DuplikatKontakter-siden og rydd kontaktduplikater
 - [ ] Sett riktige faser og sannsynligheter på alle aktive investorer
 
+### Fase 2 — Salgsprosess-drevet oppfølging *(19. juni)*
+
+- [x] **Lag 1: Regelbasert playbook-motor** — `routes/playbook.js`
+      Fasebaserte regler som foreslår neste steg per investor basert på:
+      - Fase (Prospekt/Aktiv dialog/Investor/På vent)
+      - Kontaktlogg-historikk (aktivitetstype, frekvens)
+      - Dokumentstatus (deck/IM/PPM/fondsvilkår per produkt)
+      - Tid siden sist kontakt
+      - Planlagte aktiviteter og forfalt oppgaver
+      Endepunkt: `GET /api/playbook/suggestions`
+- [x] **Lag 2: Historisk mønsteranalyse** — `GET /api/playbook/benchmarks`
+      Analyserer investorer i Investor-fasen for konverteringsmønstre:
+      - Snitt aktiviteter til konvertering
+      - Snitt prosessvarighet (dager)
+      - Aktivitetstype-fordeling
+      - Dokumentkompletteringsrater (deck/IM/fondsvilkår/NDA)
+      - Pipeline-sammenligning (antall i pipeline vs. konverterte)
+- [x] **Frontend: Oppfølgingssiden redesignet** — `public/js/pages/oppfolging.js`
+      - Konverteringsmønstre-panel øverst (benchmarks fra Lag 2)
+      - Tabellvisning med foreslått neste steg per investor
+      - Fremgangsindikator per investor (K/D/M/I/V-dots)
+      - Gruppert etter prioritet (Høy/Medium/Lav)
+      - Filter på fase og ansvarlig
+- [x] **API-endepunkter** — `api.playbookSuggestions()`, `api.playbookBenchmarks()` i `public/js/api.js`
+- [x] **Tester** — `tests/playbook.test.js`: 4 integrasjonstester for suggestions og benchmarks
+
 ### Teknisk gjeld
 
 - [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
