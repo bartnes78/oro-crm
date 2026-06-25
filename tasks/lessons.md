@@ -48,6 +48,18 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 **Rotårsak:** `public/service-worker.js` bruker stale-while-revalidate for `.js`/`.css`/`.svg` — den serverer cachet versjon umiddelbart og oppdaterer cachen i bakgrunnen. En enkelt reload viser derfor forrige versjon av frontend-koden.  
 **Regel:** Ved verifisering av frontend-endringer i nettleser: avregistrer service worker + tøm cache først (`navigator.serviceWorker.getRegistrations()` → `unregister()`, `caches.keys()` → `caches.delete()`), deretter reload. Merk også at `preview_click` ikke alltid utløser `onclick`/form-submit i denne appen — bruk `el.click()` / `form.requestSubmit()` via eval for å teste handler-logikk deterministisk.
 
+### [2026-06-23] Express-rute med fast segment skygges av `/:id` når den registreres etterpå
+
+**Hva som gikk galt:** `GET /api/investors/trash` returnerte 404. Papirkurv-siden (admin) hadde vært brutt i prod fordi `GET /api/investors/:id` var registrert *før* `trash`-ruten — `:id` matchet "trash" som en investor-id, fant ingen rad, og svarte 404. Oppdaget under utflytting av investor-ruter til `routes/investors.js`; rekkefølgen var arvet uendret fra `server.js`.  
+**Rotårsak:** Express matcher ruter i registreringsrekkefølge. En parameterrute (`/:id`) fanger alle faste søsken-segmenter (`/trash`, `/export` osv.) som registreres etter den.  
+**Regel:** Registrer alltid faste/litterale subruter (`/api/investors/trash`) *før* den generiske `/:id`-ruten. Ved utflytting til moduler: bevar relativ rekkefølge, men sjekk samtidig om eksisterende rekkefølge skjuler en latent bug — test faste subruter eksplisitt (ikke bare `/:id` med ekte verdier).
+
+### [2026-06-23] Halvferdig redigering krasjet nodemon med "Identifier already declared"
+
+**Hva som gikk galt:** Under flytting av delt logikk ut av `server.js` la jeg til `const { VALID_PHASES, ... } = require(...)` øverst i én edit, og fjernet de lokale `const VALID_PHASES = [...]`-definisjonene i en *senere* edit. Mellom de to editene plukket nodemon opp fila og krasjet med `SyntaxError: Identifier 'VALID_PHASES' has already been declared`.  
+**Rotårsak:** Med nodemon kjørende blir hver Edit en egen restart. En import som dupliserer et navn som fortsatt er deklarert lokalt gir en kortvarig, men ekte, krasj-tilstand.  
+**Regel:** Når en lokal definisjon erstattes med et import: gjør tillegg av import og fjerning av den lokale definisjonen i *samme* edit der det er mulig, eller forvent en forbigående nodemon-krasj og verifiser at den *siste* oppstarten er ren (sjekk `preview_logs` til bunns, ikke bare at serveren svarer).
+
 ---
 
 ## Format

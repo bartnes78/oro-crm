@@ -162,10 +162,31 @@ Implementert *(19. juni)*
 
 - [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
 - [ ] **Gjenstående utflytting** — foreslått prioritet:
-        2. Produkter / `product_investors` / `declined_offers`
-        3. Investorer (kjerne-CRUD)
-        4. Kontakter
         5. Brukere / auth / feedback (mest stabile, lavest prioritet)
+        (+ contact_log/«logg», tasks, dashboard, analyse, backup/restore, Excel-eksport, MSG-parse, lookups, admin-seed ligger fortsatt i server.js)
+
+  **Utflytting #4 — Kontakter — ferdig (23. juni):**
+  - [x] Ny `routes/contacts.js` — 5 ruter: GET/POST `/api/contacts`, PUT/DELETE `/api/contacts/:id`, POST `/api/contacts/merge`. Bruker delte hjelpere fra `lib/helpers.js`.
+  - [x] Mountet `app.use(require('./routes/contacts'))`; kontaktlogg (`/api/log`) er et eget domene og ble værende i server.js.
+  - [x] Verifisert ende-til-ende mot innlogget sesjon: kontaktliste (845, `fmtRow` OK), filtrert på investorId, POST-validering (400 «investor_id/Navn påkrevd»), merge-validering (400 ved lik id), PUT ukjent id (404). Ingen konsollfeil. server.js 1310 → 1213 linjer (−97).
+
+  **Utflytting #3 — Investorer / duplikater / merge — ferdig (23. juni):**
+  - [x] Ny `lib/validation.js` — `VALID_*`-konstanter + `isValidDate` (delt mellom server.js og investor-modul; server.js bruker dem fortsatt i lookups/contact_log/tasks/bruker-admin)
+  - [x] `fmtInvestor` løftet til `lib/helpers.js` (delt med dashboard i server.js)
+  - [x] Ny `routes/investors.js` — 11 ruter: investorliste, locations, POST/GET/PUT/DELETE `:id`, trash, restore, duplicates, duplicate-contacts, merge. Lokale `validateInvestorBody`/`normalizeName`/`jaccard`.
+  - [x] server.js: fjernet lokale `fmtInvestor`/`VALID_*`/`isValidDate`/`validateInvestorBody`, importerer nå fra delte moduler; beholdt `validationError`. Mountet `app.use(require('./routes/investors'))`.
+  - [x] **Bugfiks underveis:** `GET /api/investors/trash` lå etter `GET /api/investors/:id` (både i original og etter flytt) → ble shadowet av `:id` og returnerte 404. Papirkurv-siden (admin) var dermed brutt i prod. Flyttet `trash`-ruten foran `:id` i investor-modulen. Verifisert: trash→200 (tom array), `:id`→200 for ekte investor, ukjent id→404.
+  - [x] Verifisert ende-til-ende mot innlogget sesjon: investorliste (662, sortert), detalj (kontakter/logg/interesser), locations, duplicates (2 par), POST-validering (400 "Navn er påkrevd"), trash, restore-rute registrert. server.js 1747 → 1310 linjer (−437).
+
+  **Utflytting #2 — Produkter — ferdig (23. juni):**
+  - [x] Flyttet `/api/product-investors` (GET/PUT) til `routes/products.js`
+  - [x] Flyttet `/api/products` (GET/POST/PUT/:id, cancel, complete, DELETE) til `routes/products.js`
+  - [x] Flyttet `/api/declined-offers` (GET/POST/DELETE) til `routes/products.js`
+  - [x] Mountet via `app.use(require('./routes/products'))` i server.js (ved siden av brreg)
+  - [x] Kode flyttet verbatim; bruker delte hjelpere fra `lib/helpers.js` (`fmtRow`, `validationError`, `requireAdmin`, `auditLog`)
+  - [x] Verifisert: ren serveroppstart (ingen require-/mountfeil), syntakssjekk OK, alle 11 ruter registrert på router-stacken, ingen rute-rester i server.js. server.js 1961 → 1747 linjer (−214).
+  - [ ] **Gjenstår:** ende-til-ende autentisert HTTP-test (krever innlogget sesjon — dev-`.env`-passordet matcher ikke lenger den ekte `kristian`-kontoen, og jeg unngikk å skrive temp-bruker til prod-DB). Bør bekreftes i nettleser ved neste innlogging: prosjektliste, opprett/rediger prosjekt, registrer interesse/tegning, avlys/fullfør, registrer/slett avslag.
+  - Merk: admin-seed-ruten `/api/admin/seed-pensjon-oro-areal` ble bevisst værende i server.js (admin/seed-konsern, ikke kjerne-produkt-CRUD). Bruker fortsatt `query`/`requireAdmin`/`auditLog` i server.js-scope.
       Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
       route-registrering), regnes utflyttingen som ferdig.
       Etter hver utflytting: full manuell test av berørt sides hovedflyt.
