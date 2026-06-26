@@ -50,10 +50,6 @@ function computeTop10(data, filter) {
 // ── HTML builders ─────────────────────────────────────────────────────────────
 
 function buildKPIs(data) {
-  const productItems = (data.products || [])
-    .map(p => `<span style="font-size:12px"><b>${esc(String(p.count))}</b> ${esc(p.name.replace('ORO ', ''))}</span>`)
-    .join('');
-
   return `
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -69,12 +65,6 @@ function buildKPIs(data) {
         <div class="kpi-label">Vektet volum</div>
         <div class="kpi-value">${fmt(data.weighted, 1)}</div>
         <div class="kpi-sub">MNOK (ticket × sannsynlighet)</div>
-      </div>
-      <div class="kpi-card" style="border-top-color:#8E44AD">
-        <div class="kpi-label">Produktinteresse</div>
-        <div class="kpi-value" style="font-size:16px;margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          ${productItems || '<span style="font-size:12px;color:var(--muted)">—</span>'}
-        </div>
       </div>
     </div>`;
 }

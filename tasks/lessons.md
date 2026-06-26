@@ -6,6 +6,12 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 
 ## Mønstre
 
+### [2026-06-25] Tegnet investor må ha target_ticket + probability, ikke bare committed_amount
+
+**Hva som gikk galt:** Ved import av tegnerlister (prosjektene Valstadsvingen 2 og Strømsveien) satte jeg kun `product_investors.committed_amount`. «Tegnet av mål»-baren og Tegnet-KPI-en stemte, men i investor-tabellen på prosjekt-detalj viste kolonnene **Ticket (M)**, **Sanns.** og **Vektet (M)** «—» for hver tegner, og «Estimert volum» ble 0. Brukeren oppdaget at tegnet beløp «ikke kom riktig inn».
+**Rotårsak:** Tabellen i `public/js/pages/prosjekt-detalj.js` (renderTable, ~linje 375–390) leser `target_ticket` og `probability` per rad — ikke `committed_amount`. Aggregatet `signedTicket` bruker `committed_amount || target_ticket`, derfor stemte totalen selv om radene var tomme.
+**Regel:** For en **tegnet** investor skal alle tre settes: `committed_amount = target_ticket` og `probability = 1` (100 %). Dette er konvensjonen for Etablert-prosjektene (verifisert på produkt 7/14/16). Full presisjon er OK (eks. 2.4500025). Gjenbruk INSERT-mønsteret fra `scripts/import-*.js`.
+
 ### [2026-06-10] Probability lagret som prosent i stedet for desimal
 
 **Hva som gikk galt:** Ved opprettelse av interessenter for ORO Care ble `product_investors.probability` satt til 5 og 10 (heltall), som viste seg som "500%" og "1000%" i UI.  

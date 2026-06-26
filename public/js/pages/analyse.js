@@ -208,6 +208,34 @@ function buildKPIs(fundStats) {
     </div>`;
 }
 
+// ── Topp 30 investorer ───────────────────────────────────────────────────────
+function buildTop30(top30) {
+  if (!top30 || !top30.length) return '';
+  const rows = top30.map((inv, i) => `
+    <tr class="top30-row" data-id="${esc(String(inv.id))}" style="cursor:pointer">
+      <td style="color:#aaa;font-weight:700">${i + 1}</td>
+      <td style="font-weight:600;color:var(--blue)">${esc(inv.name)}</td>
+      <td>${esc(inv.type || '—')}</td>
+      <td>${window.phaseBadge(inv.phase)}</td>
+      <td class="text-right" style="font-weight:700;color:var(--color-signed)">${fmt(inv.committed, 1)}</td>
+    </tr>`).join('');
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Topp 30 investorer — tegnet volum</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Investor</th><th>Type</th><th>Fase</th>
+              <th class="text-right">Tegnet (M)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 // ── Aktivitetsfordeling ───────────────────────────────────────────────────────
 function buildActivityBreakdown(allRows, logTypes) {
   const responsibles = [...new Set(allRows.map(r => r.responsible).filter(Boolean))].sort();
@@ -353,12 +381,16 @@ export async function render(el) {
           ${buildPhaseChart(data.byPhase)}
           ${buildTypeTable(data.byType)}
         </div>
+        ${buildTop30(data.top30)}
         ${buildActivity(data.monthly, data.byResponsible)}
         ${buildActivityBreakdown(actRows, lookups.logTypes || [])}
       </div>`;
 
     el.querySelectorAll('.fund-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.id));
+    });
+    el.querySelectorAll('.top30-row').forEach(row => {
+      row.addEventListener('click', () => window.navigate('detalj', row.dataset.id));
     });
     setupActivityListeners(el, actRows);
   } catch (e) {

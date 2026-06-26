@@ -129,6 +129,10 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] **[analyse]** "KB" som bruker vises ikke korrekt — skal være "Kristian Bartnes" *(kristian, 12. juni)*. Datafiks: én `contact_log`-rad (id=1) hadde `responsible='KB'`, rettet til "Kristian Bartnes", audit-logget *(15. juni)*
 - [x] **[investorer]** Kolonner i tabellen henter ikke tall *(kristian, 12. juni)*. Årsak: `target_ticket`/`probability` ble droppet fra `investors` i mai-sprinten, men investorer.js leste fortsatt disse feltene direkte på investor-objektet → alltid tomme. Fikset: `GET /api/investors` aggregerer nå `committed_total` (Etablert+Avlyst-produkter) og `weighted_total` (Fundraising+Pipeline-produkter) per investor fra `product_investors`. Tabellen har nå 2 kolonner "Tegnet (M)" og "Vektet (M)" (erstatter de 3 gamle "Ticket/Sanns./Vektet"). Verifisert i browser *(15. juni)*
 - [x] **[detalj]** Foreslå navneendring der investornavn ikke stemmer med Brønnøysundregisteret *(kristian, 12. juni)*. Implementert i `buildBrregCard()`: varselbanner + "Bruk dette navnet"-knapp vises når `brreg_navn` ≠ `name` etter normalisering (`normalizeOrgName`: store bokstaver, fjern punktum/komma, trim AS/ASA/A-S/SA-suffiks). Uten normalisering ville 120/431 Brreg-koblede investorer vist banneret pga. bevisste AS/ASA-forskjeller i CRM-navn; med normalisering gjenstår 13 reelle avvik (f.eks. INV-039 "Bærum Kommunale PK" vs "BÆRUM KOMMUNALE PENSJONSKASSE"). Knappen oppdaterer navnet via `PUT /api/investors/:id`. Verifisert i browser på INV-039 *(15. juni)*
+- [x] **#17 [prosjekter]** Sorter prosjektlisten etter fase-prioritet (Pipeline → Fundraise → Etablert), nyeste først innen hver gruppe, avlyste/fullførte nederst *(kristian, 25. juni)*. Fikset: sekundær sortering på `established_date`/`created_at` innen samme statusgruppe *(26. juni)*
+- [x] **#18 [prosjekt-detalj]** Tegningsbeløp manglet ved import — løst: `target_ticket` + `probability` settes nå sammen med `committed_amount` *(kristian, 25. juni)*
+- [x] **#19 [dashboard]** Fjern produktoversikten oppe til høyre — dashboard skal handle om pipeline/fundraise. Topp 10 viser vektet volum (ticket × sannsynlighet). Fikset: fjernet «Produktinteresse»-KPI-kortet *(kristian, 26. juni)*
+- [x] **#19 [analyse]** Topp 30 investorer sortert etter tegnet volum (committed_amount), på tvers av alle produkter. Klikkbare rader. Ny seksjon i analysefanen + nytt `top30`-felt fra `/api/analyse` *(kristian, 26. juni)*
 
 
 
@@ -161,9 +165,20 @@ Implementert *(19. juni)*
 ### Teknisk gjeld
 
 - [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
-- [ ] **Gjenstående utflytting** — foreslått prioritet:
-        5. Brukere / auth / feedback (mest stabile, lavest prioritet)
-        (+ contact_log/«logg», tasks, dashboard, analyse, backup/restore, Excel-eksport, MSG-parse, lookups, admin-seed ligger fortsatt i server.js)
+  **Utflytting #5 — Kontaktlogg, oppgaver, brukere — ferdig (26. juni):**
+  - [x] Ny `routes/log.js` — 4 ruter: GET/POST/PUT/DELETE `/api/log`. Bruker `pool` for transaksjon i POST.
+  - [x] Ny `routes/tasks.js` — 4 ruter: GET/POST/PUT/DELETE `/api/tasks`.
+  - [x] Ny `routes/users.js` — 6 ruter: GET `/api/me`, PUT `/api/me/password`, GET/POST/PUT/DELETE `/api/users`.
+  - [x] `fmtUser`, `hashPassword`, `verifyPassword` løftet til `lib/helpers.js` (delt med login i server.js).
+  - [x] Verifisert: ren serveroppstart, alle ruter svarer korrekt (logg, oppgaver, me, brukere). server.js 1236 → 1013 linjer (−223).
+
+  **Utflytting #6 — Dashboard/analyse + admin — ferdig (26. juni):**
+  - [x] Ny `routes/dashboard.js` — 3 ruter: GET `/api/analyse`, `/api/aktivitetslogg`, `/api/dashboard`.
+  - [x] Ny `routes/admin.js` — 10 ruter: audit-log, data-quality, lookups, backups (list/exports/restore), seed, excel-eksport, feedback (POST/GET/screenshot). Factory-funksjon som tar `{ runBackup, buildExcelWorkbook }`.
+  - [x] `fmtUser`, `hashPassword`, `verifyPassword` i `lib/helpers.js` (delt med login i server.js).
+  - [x] Verifisert: ren serveroppstart, alle 7 endepunkter svarer 200, dashboard rendrer korrekt. server.js 1013 → 563 linjer (−450).
+
+- [ ] **Gjenstående utflytting** — MSG-parse (~35 linjer) og `buildExcelWorkbook` (~120 linjer) ligger fortsatt i server.js. Lokale `fmtRow`/`requireAdmin`/`auditLog`/`validationError` dupliserer lib/helpers — kan ryddes ved neste utflytting.
 
   **Utflytting #4 — Kontakter — ferdig (23. juni):**
   - [x] Ny `routes/contacts.js` — 5 ruter: GET/POST `/api/contacts`, PUT/DELETE `/api/contacts/:id`, POST `/api/contacts/merge`. Bruker delte hjelpere fra `lib/helpers.js`.

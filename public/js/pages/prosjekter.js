@@ -18,7 +18,9 @@ const STATUS_ORDER = ['Pipeline', 'Fundraising', 'Etablert', 'Aktiv', 'Avsluttet
 function statusSort(a, b) {
   const ai = STATUS_ORDER.indexOf(a.status ?? '');
   const bi = STATUS_ORDER.indexOf(b.status ?? '');
-  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  const diff = (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  if (diff !== 0) return diff;
+  return (b.established_date || b.created_at || '').localeCompare(a.established_date || a.created_at || '');
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
