@@ -110,7 +110,7 @@ router.post('/api/investors', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: last } = await client.query(`SELECT id FROM investors WHERE id ~ '^INV-\\d+$' ORDER BY CAST(SUBSTRING(id FROM 5) AS INTEGER) DESC LIMIT 1`);
+    const { rows: last } = await client.query(`SELECT id FROM investors WHERE id ~ '^INV-\\d+$' ORDER BY CAST(SUBSTRING(id FROM 5) AS INTEGER) DESC LIMIT 1 FOR UPDATE`);
     const maxNum = last.length ? parseInt(last[0].id.slice(4)) : 0;
     const id = 'INV-' + String(maxNum + 1).padStart(3, '0');
 

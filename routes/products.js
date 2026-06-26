@@ -75,7 +75,7 @@ router.get('/api/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/api/products', async (req, res) => {
+router.post('/api/products', requireAdmin, async (req, res) => {
   if (!String(req.body.name || '').trim()) return validationError(res, ['Produktnavn er påkrevd']);
   try {
     const { rows: [p] } = await query(`
@@ -87,7 +87,7 @@ router.post('/api/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.put('/api/products/:id', async (req, res) => {
+router.put('/api/products/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
     const { rows } = await query('SELECT * FROM products WHERE id = $1', [id]);
@@ -161,7 +161,7 @@ router.post('/api/products/:id/complete', requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.delete('/api/products/:id', async (req, res) => {
+router.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     await query('DELETE FROM products WHERE id = $1', [parseInt(req.params.id)]);
     res.json({ ok: true });

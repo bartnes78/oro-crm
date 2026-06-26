@@ -205,8 +205,14 @@ Implementert *(19. juni)*
       Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
       route-registrering), regnes utflyttingen som ferdig.
       Etter hver utflytting: full manuell test av berørt sides hovedflyt.
+- [ ] Oppdater ARCHITECTURE.md — beskriver fortsatt én stor server.js, mangler rutemoduler og lib/
 - [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
 - [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
+
+### Bevisste sikkerhetsbeslutninger (dokumentert etter review 26. juni)
+- **Excel-eksport (`/api/export/excel`)** er åpen for alle innloggede brukere — bevisst, alle 5 brukere er betrodd full dataeksport
+- **Backup/restore utelater `users`-tabellen** — bevisst for å unngå å låse seg ute ved restore
+- **Produkt-CRUD** er nå admin-only (POST/PUT/DELETE) etter review-funn — `product-investors` PUT er fortsatt åpen for alle (investorinteresse-registrering)
 
 ### Backup-rutine
 
