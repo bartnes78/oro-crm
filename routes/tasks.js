@@ -36,8 +36,14 @@ router.post('/api/tasks', async (req, res) => {
 });
 
 router.put('/api/tasks/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
+  const errors = [];
+  if ('label' in req.body && !String(req.body.label || '').trim()) errors.push('Oppgavetekst er påkrevd');
+  if ('due_date' in req.body && !isValidDate(req.body.due_date))   errors.push('Ugyldig frist — bruk format ÅÅÅÅ-MM-DD');
+  if (errors.length) return validationError(res, errors);
   try {
-    const { rows } = await query('SELECT * FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
+    const { rows } = await query('SELECT * FROM tasks WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const cur = rows[0];
     const b   = req.body;
@@ -45,7 +51,7 @@ router.put('/api/tasks/:id', async (req, res) => {
     const { rows: [task] } = await query(`
       UPDATE tasks SET investor_id=$2, investor_name=$3, label=$4, due_date=$5, done=$6
       WHERE id=$1 RETURNING *
-    `, [parseInt(req.params.id), v('investor_id') || null, v('investor_name') || null,
+    `, [id, v('investor_id') || null, v('investor_name') || null,
         v('label'), v('due_date'), 'done' in b ? (b.done ? 1 : 0) : cur.done]);
     res.json(fmtRow(task));
   } catch (e) {
@@ -55,12 +61,14 @@ router.put('/api/tasks/:id', async (req, res) => {
 });
 
 router.delete('/api/tasks/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT label, investor_id FROM tasks WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    const { rows } = await client.query('SELECT label, investor_id FROM tasks WHERE id = $1 FOR UPDATE', [id]);
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Oppgave ikke funnet' }); }
-    await client.query('DELETE FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('DELETE FROM tasks WHERE id = $1', [id]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'task', req.params.id, { label: rows[0].label, investor_id: rows[0].investor_id }, null, `Slettet oppgave: ${rows[0].label}`);
     res.json({ ok: true });

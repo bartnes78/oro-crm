@@ -40,8 +40,11 @@ router.post('/api/contacts', async (req, res) => {
 });
 
 router.put('/api/contacts/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
+  if ('name' in req.body && !String(req.body.name || '').trim()) return validationError(res, ['Navn er påkrevd']);
   try {
-    const { rows } = await query('SELECT * FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
+    const { rows } = await query('SELECT * FROM contacts WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const cur = rows[0];
     const b   = req.body;
@@ -49,7 +52,7 @@ router.put('/api/contacts/:id', async (req, res) => {
     const { rows: [c] } = await query(`
       UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, phone2=$7, is_primary=$8, notes=$9, active=$10
       WHERE id=$1 RETURNING *
-    `, [parseInt(req.params.id), v('investor_id'), v('name'), v('title') || null,
+    `, [id, v('investor_id'), v('name'), v('title') || null,
         v('email') || null, v('phone') || null, v('phone2') || null, v('is_primary') || 0, v('notes') || null,
         'active' in b ? (b.active ?? 1) : (cur.active ?? 1)]);
     res.json(fmtRow(c));
@@ -60,12 +63,14 @@ router.put('/api/contacts/:id', async (req, res) => {
 });
 
 router.delete('/api/contacts/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT * FROM contacts WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    const { rows } = await client.query('SELECT * FROM contacts WHERE id = $1 FOR UPDATE', [id]);
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kontakt ikke funnet' }); }
-    await client.query('DELETE FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('DELETE FROM contacts WHERE id = $1', [id]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'contact', req.params.id, { name: rows[0].name, investor_id: rows[0].investor_id }, null, `Slettet kontakt: ${rows[0].name}`);
     res.json({ ok: true });

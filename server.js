@@ -240,6 +240,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Health check (utenfor auth — tilgjengelig for Railway/monitoring) ─────────
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+  } catch {
+    res.status(503).json({ status: 'error', detail: 'Database utilgjengelig' });
+  }
+});
+
 // ── Auth-middleware ───────────────────────────────────────────────────────────
 app.use('/api', apiCors, apiLimiter);
 

@@ -14,6 +14,9 @@ const isPrivate        = !!process.env.DATABASE_PRIVATE_URL;
 const pool = new pg.Pool({
   connectionString,
   ssl: connectionString && !isPrivate ? { rejectUnauthorized: false } : false,
+  max:                      parseInt(process.env.DB_POOL_MAX) || 15,
+  idleTimeoutMillis:        30_000,
+  connectionTimeoutMillis:  5_000,
 });
 
 pool.on('error', err => console.error('[db] Pool-feil:', err.message));

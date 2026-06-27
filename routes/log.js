@@ -49,10 +49,12 @@ router.post('/api/log', async (req, res) => {
 });
 
 router.put('/api/log/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   if (req.body.date && !isValidDate(req.body.date)) return validationError(res, ['Ugyldig dato']);
   if (req.body.log_type && !VALID_LOG_TYPES.includes(req.body.log_type)) return validationError(res, [`Ugyldig type: ${req.body.log_type}`]);
   try {
-    const { rows } = await query('SELECT * FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
+    const { rows } = await query('SELECT * FROM contact_log WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const cur = rows[0];
     const b   = req.body;
@@ -64,7 +66,7 @@ router.put('/api/log/:id', async (req, res) => {
       UPDATE contact_log SET investor_id=$2, investor_name=$3, date=$4, log_type=$5,
         contact_person=$6, responsible=$7, subject=$8, outcome=$9, notes=$10, status=$11, declined_products=$12
       WHERE id=$1 RETURNING *
-    `, [parseInt(req.params.id), v('investor_id'), v('investor_name') || null, v('date'),
+    `, [id, v('investor_id'), v('investor_name') || null, v('date'),
         v('log_type') || null, v('contact_person') || null, v('responsible') || null,
         v('subject') || null, v('outcome') || null, v('notes') || null,
         v('status') || null, declinedProducts]);
@@ -76,12 +78,14 @@ router.put('/api/log/:id', async (req, res) => {
 });
 
 router.delete('/api/log/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT investor_id, date, log_type FROM contact_log WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    const { rows } = await client.query('SELECT investor_id, date, log_type FROM contact_log WHERE id = $1 FOR UPDATE', [id]);
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Loggføring ikke funnet' }); }
-    await client.query('DELETE FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('DELETE FROM contact_log WHERE id = $1', [id]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'log', req.params.id, { investor_id: rows[0].investor_id, date: rows[0].date, log_type: rows[0].log_type }, null, `Slettet loggføring`);
     res.json({ ok: true });

@@ -57,6 +57,7 @@ router.post('/api/users', requireAdmin, async (req, res) => {
 
 router.put('/api/users/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   try {
     const { rows } = await query('SELECT * FROM users WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Bruker ikke funnet' });
@@ -92,6 +93,7 @@ router.put('/api/users/:id', requireAdmin, async (req, res) => {
 
 router.delete('/api/users/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   if (id === req.currentUser._id) return res.status(400).json({ error: 'Du kan ikke slette din egen konto' });
   const client = await pool.connect();
   try {

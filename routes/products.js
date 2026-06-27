@@ -99,6 +99,7 @@ router.post('/api/products', requireAdmin, async (req, res) => {
 
 router.put('/api/products/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   try {
     const { rows } = await query('SELECT * FROM products WHERE id = $1', [id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
@@ -118,7 +119,8 @@ router.put('/api/products/:id', requireAdmin, async (req, res) => {
 });
 
 router.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
-  const id     = parseInt(req.params.id);
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   const reason = (req.body.reason || '').trim() || 'Prosjekt avlyst';
   const client = await pool.connect();
   try {
@@ -163,6 +165,7 @@ router.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
 
 router.post('/api/products/:id/complete', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -185,8 +188,10 @@ router.post('/api/products/:id/complete', requireAdmin, async (req, res) => {
 });
 
 router.delete('/api/products/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   try {
-    await query('DELETE FROM products WHERE id = $1', [parseInt(req.params.id)]);
+    await query('DELETE FROM products WHERE id = $1', [id]);
     res.json({ ok: true });
   } catch (e) {
     console.error('[DELETE /products]', e);
@@ -239,7 +244,7 @@ router.post('/api/declined-offers', async (req, res) => {
 
 router.delete('/api/declined-offers/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  if (!id) return validationError(res, ['Ugyldig id']);
+  if (isNaN(id)) return res.status(400).json({ error: 'Ugyldig ID' });
   try {
     await query('DELETE FROM declined_offers WHERE id = $1', [id]);
     res.json({ ok: true });
