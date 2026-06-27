@@ -101,7 +101,10 @@ router.get('/api/analyse', async (req, res) => {
       .slice(0, 30);
 
     res.json({ fundStats, monthly: monthTotals, byResponsible, byPhase, byType, top30 });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /analyse]', e);
+    res.status(500).json({ error: 'Kunne ikke hente analyse' });
+  }
 });
 
 router.get('/api/aktivitetslogg', async (req, res) => {
@@ -110,7 +113,10 @@ router.get('/api/aktivitetslogg', async (req, res) => {
       `SELECT date::text AS date, log_type, responsible FROM contact_log WHERE date IS NOT NULL ORDER BY date`
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /aktivitetslogg]', e);
+    res.status(500).json({ error: 'Kunne ikke hente aktivitetslogg' });
+  }
 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -191,8 +197,8 @@ router.get('/api/dashboard', async (req, res) => {
 
     res.json({ total, ticket: Math.round(ticket * 10) / 10, weighted: Math.round(wgtd * 10) / 10, byPhase, byType, products, top10, recent: recent.map(fmtRow) });
   } catch (e) {
-    console.error('[dashboard]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[GET /dashboard]', e);
+    res.status(500).json({ error: 'Kunne ikke hente dashboard' });
   }
 });
 

@@ -88,8 +88,8 @@ router.get('/api/investors', async (req, res) => {
     rows.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
     res.json(rows.map(fmtInvestor));
   } catch (e) {
-    console.error('[GET /investors]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[GET /investors]', e);
+    res.status(500).json({ error: 'Kunne ikke hente investorer' });
   }
 });
 
@@ -100,7 +100,8 @@ router.get('/api/locations', async (req, res) => {
     const cities    = [...new Set(rows.map(r => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     res.json({ countries, cities });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[GET /locations]', e);
+    res.status(500).json({ error: 'Kunne ikke hente lokasjoner' });
   }
 });
 
@@ -137,8 +138,8 @@ router.post('/api/investors', async (req, res) => {
     res.json({ ...fmtInvestor(inv), product_interests: interests });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[POST /investors]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[POST /investors]', e);
+    res.status(500).json({ error: 'Kunne ikke opprette investor' });
   } finally {
     client.release();
   }
@@ -156,7 +157,10 @@ router.get('/api/investors/trash', requireAdmin, async (req, res) => {
       ORDER BY i.deleted_at DESC
     `);
     res.json(rows.map(r => ({ ...fmtInvestor(r), deleted_at: r.deleted_at, contact_count: r.contact_count })));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /investors/trash]', e);
+    res.status(500).json({ error: 'Kunne ikke hente papirkurv' });
+  }
 });
 
 router.get('/api/investors/:id', async (req, res) => {
@@ -176,7 +180,8 @@ router.get('/api/investors/:id', async (req, res) => {
     };
     res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[GET /investors/:id]', e);
+    res.status(500).json({ error: 'Kunne ikke hente investor' });
   }
 });
 
@@ -237,8 +242,8 @@ router.put('/api/investors/:id', async (req, res) => {
     res.json({ ...fmtInvestor(updated), product_interests: newInterests });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[PUT /investors]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[PUT /investors]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere investor' });
   } finally {
     client.release();
   }
@@ -254,7 +259,8 @@ router.delete('/api/investors/:id', requireAdmin, async (req, res) => {
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'investor', id, { name: inv.name, phase: inv.phase, lead: inv.lead }, null, `Flyttet til papirkurv: ${inv.name}`);
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[DELETE /investors]', e);
+    res.status(500).json({ error: 'Kunne ikke slette investor' });
   }
 });
 
@@ -266,7 +272,10 @@ router.post('/api/investors/:id/restore', requireAdmin, async (req, res) => {
     await query('UPDATE investors SET deleted_at = NULL WHERE id = $1', [id]);
     await auditLog(req.currentUser._id, req.currentUser.username, 'restore', 'investor', id, null, { name: rows[0].name }, `Gjenopprettet investor: ${rows[0].name}`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[POST /investors/restore]', e);
+    res.status(500).json({ error: 'Kunne ikke gjenopprette investor' });
+  }
 });
 
 // ── Duplikater ────────────────────────────────────────────────────────────────
@@ -297,7 +306,8 @@ router.get('/api/duplicates', async (req, res) => {
     }
     res.json(pairs.sort((a, b) => b.score - a.score));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[GET /duplicates]', e);
+    res.status(500).json({ error: 'Kunne ikke hente duplikater' });
   }
 });
 
@@ -341,7 +351,8 @@ router.get('/api/duplicate-contacts', async (req, res) => {
 
     res.json(groups.sort((a, b) => (a.type === 'exact' ? -1 : 1)));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[GET /duplicate-contacts]', e);
+    res.status(500).json({ error: 'Kunne ikke hente kontaktduplikater' });
   }
 });
 

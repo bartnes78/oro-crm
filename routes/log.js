@@ -12,7 +12,10 @@ router.get('/api/log', async (req, res) => {
     if (req.query.limit) { params.push(parseInt(req.query.limit)); sql += ` LIMIT $${params.length}`; }
     const { rows } = await query(sql, params);
     res.json(rows.map(fmtRow));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /log]', e);
+    res.status(500).json({ error: 'Kunne ikke hente logg' });
+  }
 });
 
 router.post('/api/log', async (req, res) => {
@@ -66,16 +69,29 @@ router.put('/api/log/:id', async (req, res) => {
         v('subject') || null, v('outcome') || null, v('notes') || null,
         v('status') || null, declinedProducts]);
     res.json(fmtRow(entry));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /log]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere logg' });
+  }
 });
 
 router.delete('/api/log/:id', async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { rows } = await query('SELECT investor_id, date, log_type FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
-    await query('DELETE FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
-    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'log', req.params.id, { investor_id: rows[0].investor_id, date: rows[0].date, log_type: rows[0].log_type }, null, `Slettet loggføring`);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT investor_id, date, log_type FROM contact_log WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Loggføring ikke funnet' }); }
+    await client.query('DELETE FROM contact_log WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'log', req.params.id, { investor_id: rows[0].investor_id, date: rows[0].date, log_type: rows[0].log_type }, null, `Slettet loggføring`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[DELETE /log]', e);
+    res.status(500).json({ error: 'Kunne ikke slette loggføring' });
+  } finally {
+    client.release();
+  }
 });
 
 module.exports = router;

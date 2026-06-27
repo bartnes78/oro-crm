@@ -411,7 +411,7 @@ app.post('/api/email/parse-msg', (req, res, next) => {
     res.json({ from: senderEmail ? `${senderName} <${senderEmail}>` : senderName, senderName, senderEmail, senderDomain, recipients, subject: data.subject || '', date, body: body.slice(0, 3000), isCalendar, location: data.apptLocation || '' });
   } catch (e) {
     console.error('MSG parse error:', e);
-    res.status(500).json({ error: 'Kunne ikke lese .msg-filen: ' + e.message });
+    res.status(500).json({ error: 'Kunne ikke lese .msg-filen' });
   }
 });
 
@@ -558,7 +558,24 @@ async function init() {
     runWeeklyExport().catch(e => console.error('[weekly-export] Uventet feil:', e.message));
   }, { timezone: 'Europe/Oslo' });
 
-  app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
+  const server = app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
+
+  // Graceful shutdown — lar in-flight-forespørsler fullføre og lukker DB-poolen
+  function shutdown(signal) {
+    console.log(`\n[shutdown] ${signal} mottatt — stenger ned…`);
+    server.close(() => {
+      pool.end(() => {
+        console.log('[shutdown] Alle tilkoblinger lukket');
+        process.exit(0);
+      });
+    });
+    setTimeout(() => {
+      console.error('[shutdown] Tvangsstenging etter 10s timeout');
+      process.exit(1);
+    }, 10_000).unref();
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
 }
 
 init().catch(err => { console.error('Oppstart feilet:', err.message); process.exit(1); });

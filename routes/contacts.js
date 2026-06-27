@@ -13,7 +13,10 @@ router.get('/api/contacts', async (req, res) => {
     const params = req.query.investorId ? [req.query.investorId] : [];
     const { rows } = await query(sql, params);
     res.json(rows.map(fmtRow));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /contacts]', e);
+    res.status(500).json({ error: 'Kunne ikke hente kontakter' });
+  }
 });
 
 router.post('/api/contacts', async (req, res) => {
@@ -30,7 +33,10 @@ router.post('/api/contacts', async (req, res) => {
         req.body.active ?? 1]);
     await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'contact', c.id, null, { name: c.name, investor_id: c.investor_id }, `Opprettet kontakt: ${c.name}`);
     res.json(fmtRow(c));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[POST /contacts]', e);
+    res.status(500).json({ error: 'Kunne ikke opprette kontakt' });
+  }
 });
 
 router.put('/api/contacts/:id', async (req, res) => {
@@ -47,16 +53,29 @@ router.put('/api/contacts/:id', async (req, res) => {
         v('email') || null, v('phone') || null, v('phone2') || null, v('is_primary') || 0, v('notes') || null,
         'active' in b ? (b.active ?? 1) : (cur.active ?? 1)]);
     res.json(fmtRow(c));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /contacts]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere kontakt' });
+  }
 });
 
 router.delete('/api/contacts/:id', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { rows } = await query('SELECT * FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
-    await query('DELETE FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
-    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'contact', req.params.id, { name: rows[0].name, investor_id: rows[0].investor_id }, null, `Slettet kontakt: ${rows[0].name}`);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM contacts WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kontakt ikke funnet' }); }
+    await client.query('DELETE FROM contacts WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'contact', req.params.id, { name: rows[0].name, investor_id: rows[0].investor_id }, null, `Slettet kontakt: ${rows[0].name}`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[DELETE /contacts]', e);
+    res.status(500).json({ error: 'Kunne ikke slette kontakt' });
+  } finally {
+    client.release();
+  }
 });
 
 router.post('/api/contacts/merge', async (req, res) => {
@@ -98,7 +117,8 @@ router.post('/api/contacts/merge', async (req, res) => {
     res.json(fmtRow(merged));
   } catch (e) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: e.message });
+    console.error('[POST /contacts/merge]', e);
+    res.status(500).json({ error: 'Kunne ikke slå sammen kontakter' });
   } finally {
     client.release();
   }

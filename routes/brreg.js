@@ -74,7 +74,8 @@ router.get('/api/brreg/search', async (req, res) => {
       slettet:  !!e.slettedato,
     })));
   } catch (e) {
-    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
+    console.error('[brreg]', e);
+    res.status(502).json({ error: 'Brreg er utilgjengelig — prøv igjen senere' });
   }
 });
 
@@ -99,7 +100,8 @@ router.get('/api/brreg/enhet/:orgnr', async (req, res) => {
       roller:       parseRoller(rollerBody),
     });
   } catch (e) {
-    res.status(502).json({ error: 'Brreg utilgjengelig: ' + e.message });
+    console.error('[brreg]', e);
+    res.status(502).json({ error: 'Brreg er utilgjengelig — prøv igjen senere' });
   }
 });
 
@@ -149,8 +151,8 @@ router.post('/api/investors/:id/brreg-sync', async (req, res) => {
     res.json({ ok: true, brreg_navn: e.navn, adresser, roller });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('[POST /investors/:id/brreg-sync]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[POST /investors/:id/brreg-sync]', e);
+    res.status(500).json({ error: 'Kunne ikke koble til Brreg' });
   } finally {
     client.release();
   }
@@ -173,7 +175,8 @@ router.delete('/api/investors/:id/brreg-sync', async (req, res) => {
 
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[DELETE /brreg-sync]', e);
+    res.status(500).json({ error: 'Kunne ikke fjerne Brreg-kobling' });
   }
 });
 

@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { query } = require('../db');
+const { query, pool } = require('../db');
 const { fmtUser, validationError, requireAdmin, auditLog, hashPassword } = require('../lib/helpers');
 const { VALID_LEADS } = require('../lib/validation');
 
@@ -15,14 +15,20 @@ router.put('/api/me/password', async (req, res) => {
       [hashPassword(password.trim()), req.currentUser._id]
     );
     res.json(fmtUser(u));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /me/password]', e);
+    res.status(500).json({ error: 'Kunne ikke endre passord' });
+  }
 });
 
 router.get('/api/users', requireAdmin, async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM users ORDER BY id');
     res.json(rows.map(fmtUser));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /users]', e);
+    res.status(500).json({ error: 'Kunne ikke hente brukere' });
+  }
 });
 
 router.post('/api/users', requireAdmin, async (req, res) => {
@@ -44,7 +50,8 @@ router.post('/api/users', requireAdmin, async (req, res) => {
     res.json(fmtUser(u));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Brukernavnet er allerede i bruk' });
-    res.status(500).json({ error: e.message });
+    console.error('[POST /users]', e);
+    res.status(500).json({ error: 'Kunne ikke opprette bruker' });
   }
 });
 
@@ -77,19 +84,31 @@ router.put('/api/users/:id', requireAdmin, async (req, res) => {
       { role: u.role, display_name: u.display_name, lead_name: u.lead_name },
       `Oppdaterte bruker ${u.username}${changes.length ? ': ' + changes.join(', ') : ''}`);
     res.json(fmtUser(u));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /users]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere bruker' });
+  }
 });
 
 router.delete('/api/users/:id', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   if (id === req.currentUser._id) return res.status(400).json({ error: 'Du kan ikke slette din egen konto' });
+  const client = await pool.connect();
   try {
-    const { rows } = await query('SELECT * FROM users WHERE id = $1', [id]);
-    if (!rows.length) return res.status(404).json({ error: 'Bruker ikke funnet' });
-    await query('DELETE FROM users WHERE id = $1', [id]);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [id]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Bruker ikke funnet' }); }
+    await client.query('DELETE FROM users WHERE id = $1', [id]);
+    await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'user', id, { username: rows[0].username, role: rows[0].role }, null, `Slettet bruker: ${rows[0].username}`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[DELETE /users]', e);
+    res.status(500).json({ error: 'Kunne ikke slette bruker' });
+  } finally {
+    client.release();
+  }
 });
 
 module.exports = router;

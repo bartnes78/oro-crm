@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { query } = require('../db');
+const { query, pool } = require('../db');
 const { fmtRow, validationError, auditLog } = require('../lib/helpers');
 const { isValidDate } = require('../lib/validation');
 
@@ -12,7 +12,10 @@ router.get('/api/tasks', async (req, res) => {
     const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const { rows } = await query(`SELECT * FROM tasks ${whereClause} ORDER BY due_date`, params);
     res.json(rows.map(fmtRow));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /tasks]', e);
+    res.status(500).json({ error: 'Kunne ikke hente oppgaver' });
+  }
 });
 
 router.post('/api/tasks', async (req, res) => {
@@ -26,7 +29,10 @@ router.post('/api/tasks', async (req, res) => {
       VALUES ($1,$2,$3,$4,0,CURRENT_DATE) RETURNING *
     `, [req.body.investor_id || null, req.body.investor_name || null, req.body.label, req.body.due_date]);
     res.json(fmtRow(task));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[POST /tasks]', e);
+    res.status(500).json({ error: 'Kunne ikke opprette oppgave' });
+  }
 });
 
 router.put('/api/tasks/:id', async (req, res) => {
@@ -42,16 +48,29 @@ router.put('/api/tasks/:id', async (req, res) => {
     `, [parseInt(req.params.id), v('investor_id') || null, v('investor_name') || null,
         v('label'), v('due_date'), 'done' in b ? (b.done ? 1 : 0) : cur.done]);
     res.json(fmtRow(task));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /tasks]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere oppgave' });
+  }
 });
 
 router.delete('/api/tasks/:id', async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { rows } = await query('SELECT label, investor_id FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
-    await query('DELETE FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
-    if (rows[0]) await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'task', req.params.id, { label: rows[0].label, investor_id: rows[0].investor_id }, null, `Slettet oppgave: ${rows[0].label}`);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT label, investor_id FROM tasks WHERE id = $1 FOR UPDATE', [parseInt(req.params.id)]);
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Oppgave ikke funnet' }); }
+    await client.query('DELETE FROM tasks WHERE id = $1', [parseInt(req.params.id)]);
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'task', req.params.id, { label: rows[0].label, investor_id: rows[0].investor_id }, null, `Slettet oppgave: ${rows[0].label}`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[DELETE /tasks]', e);
+    res.status(500).json({ error: 'Kunne ikke slette oppgave' });
+  } finally {
+    client.release();
+  }
 });
 
 module.exports = router;

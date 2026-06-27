@@ -25,7 +25,10 @@ router.get('/api/audit-log', requireAdmin, async (req, res) => {
       [...params, limit]
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
+  }
 });
 
 // ── Datakvalitet ──────────────────────────────────────────────────────────────
@@ -83,7 +86,10 @@ router.get('/api/data-quality', requireAdmin, async (req, res) => {
       inactive90days: { count: inactive90.length,     items: inactive90 },
       piMissingData:  { count: piMissing.length,      items: piMissing },
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
+  }
 });
 
 // ── Lookups ───────────────────────────────────────────────────────────────────
@@ -104,7 +110,10 @@ router.get('/api/backups', requireAdmin, async (req, res) => {
       stamp: r.stamp,
       label: r.stamp.replace('_', ' ').replace(/-/g, ':').replace(':', '-').replace(':', '-'),
     })));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
+  }
 });
 
 router.get('/api/exports', requireAdmin, async (req, res) => {
@@ -112,7 +121,10 @@ router.get('/api/exports', requireAdmin, async (req, res) => {
     await fs.promises.mkdir(EXPORT_DIR, { recursive: true });
     const files = (await fs.promises.readdir(EXPORT_DIR)).filter(f => f.endsWith('.xlsx')).sort().reverse();
     res.json(files);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
+  }
 });
 
 router.get('/api/exports/:file', requireAdmin, async (req, res) => {
@@ -179,7 +191,7 @@ router.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[restore]', e.message);
-    res.status(500).json({ error: 'Gjenoppretting feilet: ' + e.message });
+    res.status(500).json({ error: 'Gjenoppretting feilet' });
   } finally {
     client.release();
   }
@@ -207,7 +219,10 @@ router.post('/api/admin/seed-pensjon-oro-areal', requireAdmin, async (req, res) 
     }
 
     res.json({ ok: true, productId, investorCount: investors.length, inserted });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
+  }
 });
 
 // ── Excel-eksport ─────────────────────────────────────────────────────────────
@@ -219,8 +234,8 @@ router.get('/api/export/excel', async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
   } catch (e) {
-    console.error('[export]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[export]', e);
+    res.status(500).json({ error: 'Eksport feilet — prøv igjen' });
   }
 });
 
@@ -236,7 +251,8 @@ router.post('/api/feedback', require('express').json({ limit: '8mb' }), async (r
     );
     res.json({ id: rows[0].id });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
   }
 });
 
@@ -247,7 +263,8 @@ router.get('/api/feedback', requireAdmin, async (req, res) => {
     );
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
   }
 });
 
@@ -257,7 +274,8 @@ router.get('/api/feedback/:id/screenshot', requireAdmin, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Ikke funnet' });
     res.json({ screenshot: rows[0].screenshot });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[admin]', e);
+    res.status(500).json({ error: 'Noe gikk galt — prøv igjen' });
   }
 });
 

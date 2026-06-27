@@ -11,7 +11,10 @@ router.get('/api/product-investors', async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM product_investors WHERE investor_id = $1', [investorId]);
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /product-investors]', e);
+    res.status(500).json({ error: 'Kunne ikke hente produktinteresser' });
+  }
 });
 
 router.put('/api/product-investors', async (req, res) => {
@@ -61,7 +64,8 @@ router.put('/api/product-investors', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: e.message });
+    console.error('[PUT /product-investors]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere produktinteresse' });
   } finally {
     client.release();
   }
@@ -72,7 +76,10 @@ router.get('/api/products', async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM products ORDER BY id');
     res.json(rows.map(r => ({ ...fmtRow(r) })));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[GET /products]', e);
+    res.status(500).json({ error: 'Kunne ikke hente produkter' });
+  }
 });
 
 router.post('/api/products', requireAdmin, async (req, res) => {
@@ -84,7 +91,10 @@ router.post('/api/products', requireAdmin, async (req, res) => {
     `, [req.body.name, req.body.type || null, req.body.status || null,
         req.body.target_size || null, req.body.description || null, req.body.established_date || null]);
     res.json(fmtRow(p));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[POST /products]', e);
+    res.status(500).json({ error: 'Kunne ikke opprette produkt' });
+  }
 });
 
 router.put('/api/products/:id', requireAdmin, async (req, res) => {
@@ -101,7 +111,10 @@ router.put('/api/products/:id', requireAdmin, async (req, res) => {
     `, [id, v('name'), v('type') || null, v('status') || null,
         v('target_size') || null, v('description') || null, v('established_date') || null]);
     res.json(fmtRow(p));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[PUT /products]', e);
+    res.status(500).json({ error: 'Kunne ikke oppdatere produkt' });
+  }
 });
 
 router.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
@@ -141,7 +154,8 @@ router.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
     res.json({ ok: true, committed_moved: committed.length });
   } catch (e) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: e.message });
+    console.error('[POST /products/cancel]', e);
+    res.status(500).json({ error: 'Kunne ikke avlyse prosjekt' });
   } finally {
     client.release();
   }
@@ -149,23 +163,35 @@ router.post('/api/products/:id/cancel', requireAdmin, async (req, res) => {
 
 router.post('/api/products/:id/complete', requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
+  const client = await pool.connect();
   try {
-    const { rows: [product] } = await query('SELECT * FROM products WHERE id = $1', [id]);
-    if (!product) return res.status(404).json({ error: 'Prosjekt ikke funnet' });
-    await query('UPDATE products SET status = $1 WHERE id = $2', ['Fullført', id]);
+    await client.query('BEGIN');
+    const { rows: [product] } = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [id]);
+    if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Prosjekt ikke funnet' }); }
+    await client.query('UPDATE products SET status = $1 WHERE id = $2', ['Fullført', id]);
+    await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'complete', 'product', id,
       { name: product.name, status: product.status },
       { status: 'Fullført' },
       `Merket prosjekt som fullført: ${product.name}`);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[POST /products/complete]', e);
+    res.status(500).json({ error: 'Kunne ikke fullføre prosjekt' });
+  } finally {
+    client.release();
+  }
 });
 
 router.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     await query('DELETE FROM products WHERE id = $1', [parseInt(req.params.id)]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[DELETE /products]', e);
+    res.status(500).json({ error: 'Kunne ikke slette produkt' });
+  }
 });
 
 // ── Avslåtte tilbud ───────────────────────────────────────────────────────────
@@ -186,7 +212,8 @@ router.get('/api/declined-offers', async (req, res) => {
     );
     res.json(rows.map(fmtRow));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[GET /declined-offers]', e);
+    res.status(500).json({ error: 'Kunne ikke hente avslåtte tilbud' });
   }
 });
 
@@ -205,7 +232,8 @@ router.post('/api/declined-offers', async (req, res) => {
     );
     res.json(fmtRow(rows[0]));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[POST /declined-offers]', e);
+    res.status(500).json({ error: 'Kunne ikke registrere avslag' });
   }
 });
 
@@ -216,7 +244,8 @@ router.delete('/api/declined-offers/:id', async (req, res) => {
     await query('DELETE FROM declined_offers WHERE id = $1', [id]);
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[DELETE /declined-offers]', e);
+    res.status(500).json({ error: 'Kunne ikke slette avslag' });
   }
 });
 
