@@ -97,6 +97,19 @@ window.ui = {
     </div>
     <div class="modal-body">${body}</div>
     <div class="modal-footer">${footer}</div>`,
+  toast: (msg, type = 'success', duration = 3500) => {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    const icon = type === 'error' ? '✕' : type === 'info' ? 'ℹ' : '✓';
+    el.innerHTML = `<span>${icon}</span><span>${window.escHtml(msg)}</span>`;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('toast-out');
+      el.addEventListener('animationend', () => el.remove());
+    }, duration);
+  },
 };
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -312,7 +325,7 @@ window.openFeedback = async function() {
         window.closeModal();
       } catch (e) {
         btn.disabled = false; btn.textContent = 'Lagre';
-        alert('Kunne ikke lagre: ' + e.message);
+        window.ui.toast('Kunne ikke lagre: ' + e.message, 'error');
       }
     });
     setTimeout(() => document.getElementById('fb-comment')?.focus(), 50);

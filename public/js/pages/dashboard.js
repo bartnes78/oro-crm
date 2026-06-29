@@ -56,12 +56,12 @@ function buildKPIs(data) {
         <div class="kpi-label">Investorer totalt</div>
         <div class="kpi-value">${fmt(data.total)}</div>
       </div>
-      <div class="kpi-card" style="border-top-color:var(--color-signed)">
+      <div class="kpi-card">
         <div class="kpi-label">Aggregert volum</div>
         <div class="kpi-value">${fmt(data.ticket)}</div>
         <div class="kpi-sub">MNOK målticket</div>
       </div>
-      <div class="kpi-card" style="border-top-color:#D35400">
+      <div class="kpi-card kpi-accent">
         <div class="kpi-label">Vektet volum</div>
         <div class="kpi-value">${fmt(data.weighted, 1)}</div>
         <div class="kpi-sub">MNOK (ticket × sannsynlighet)</div>
@@ -79,7 +79,7 @@ function buildPipelineCard(data) {
   }).join('');
   return `
     <div class="card">
-      <div class="card-title">Pipeline per fase</div>
+      <div class="card-title">📊 Pipeline per fase</div>
       ${rows || window.ui.emptyState('Ingen data')}
     </div>`;
 }
@@ -93,7 +93,7 @@ function buildTypeCard(data) {
     </tr>`).join('');
   return `
     <div class="card">
-      <div class="card-title">Type investor</div>
+      <div class="card-title">🏢 Type investor</div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Type</th><th class="text-right">Antall</th><th class="text-right">Ticket (M)</th></tr></thead>
@@ -252,7 +252,7 @@ function buildRecentActivity(recent) {
 
   return `
     <div class="card">
-      <div class="card-title">Siste aktivitet</div>
+      <div class="card-title">🕐 Siste aktivitet</div>
       <div class="log-list">${items}</div>
     </div>`;
 }
@@ -473,10 +473,12 @@ export async function render(el, state) {
       <div class="content">
         ${buildKPIs(data)}
         ${buildGaugeCards(data)}
+        <div class="section-label">Pipeline</div>
         <div class="grid-2">
           ${buildPipelineCard(data)}
           ${buildTypeCard(data)}
         </div>
+        <div class="section-label">Topp investorer</div>
         <div class="dash-bottom-grid${recentHtml ? ' has-recent' : ''}">
           ${buildTop10Card(data, investors, filter)}
           ${recentHtml}

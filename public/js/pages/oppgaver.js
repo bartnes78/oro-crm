@@ -159,7 +159,7 @@ function buildTaskRow(t, today) {
       await api.updateTask(t._id, { done: t.done ? 0 : 1 });
       await loadTasks();
     } catch (e) {
-      alert('Feil: ' + e.message);
+      window.ui.toast('Feil: ' + e.message, 'error');
     }
   });
 
@@ -179,7 +179,7 @@ function buildTaskRow(t, today) {
       await api.deleteTask(t._id);
       await loadTasks();
     } catch (e) {
-      alert('Feil: ' + e.message);
+      window.ui.toast('Feil: ' + e.message, 'error');
     }
   });
 

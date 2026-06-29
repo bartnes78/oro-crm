@@ -303,7 +303,7 @@ export async function render(el, state) {
             buildPage();
           }, 1000);
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
           if (btn) { btn.disabled = false; btn.textContent = `Slå sammen → beholder "${(primary === 'a' ? pair.a : pair.b).name}"`; }
         }
       });

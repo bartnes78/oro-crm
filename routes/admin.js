@@ -3,11 +3,12 @@ const fs     = require('fs');
 const router = require('express').Router();
 const { query, pool } = require('../db');
 const { fmtRow, validationError, requireAdmin, auditLog } = require('../lib/helpers');
+const { buildExcelWorkbook } = require('../lib/excel');
 const { VALID_PHASES, VALID_TYPES, VALID_VEHICLES, VALID_LOG_TYPES, VALID_LEADS } = require('../lib/validation');
 
 const EXPORT_DIR = path.join(__dirname, '..', 'data', 'exports');
 
-module.exports = function createAdminRoutes({ runBackup, buildExcelWorkbook }) {
+module.exports = function createAdminRoutes({ runBackup }) {
 
 // ── Audit-logg ────────────────────────────────────────────────────────────────
 router.get('/api/audit-log', requireAdmin, async (req, res) => {

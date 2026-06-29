@@ -110,7 +110,7 @@ export async function render(el, state) {
         } catch (e) {
           restoringStamp = null;
           buildPage();
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
         }
       });
     });

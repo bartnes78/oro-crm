@@ -619,7 +619,7 @@ export async function render(el, state) {
         }
         renderSuccessView(selectedInvs);
       } catch (e) {
-        alert('Feil: ' + e.message);
+        window.ui.toast('Feil: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = selectedInvs.length > 1 ? `✓ Loggfør (${selectedInvs.length} investorer)` : '✓ Loggfør'; }
       }
     });
@@ -689,7 +689,7 @@ export async function render(el, state) {
           }
           renderSuccessView(selectedInvs);
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
           if (btn) { btn.disabled = false; }
         }
       });

@@ -201,7 +201,7 @@ export async function render(el, state) {
           await api.deleteUser(btn.dataset.id);
           await load();
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
         }
       });
     });

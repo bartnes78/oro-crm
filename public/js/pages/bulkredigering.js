@@ -341,7 +341,7 @@ export async function render(el, state) {
     el.querySelector('#bulk-phase-btn')?.addEventListener('click', async () => {
       const sel = el.querySelector('#bulk-phase-select');
       const phase = sel?.value;
-      if (!phase) { alert('Velg en fase først.'); return; }
+      if (!phase) { window.ui.toast('Velg en fase først.', 'info'); return; }
       for (const id of [...selectedIds]) await saveOne(id, 'phase', phase);
       selectedIds.clear();
       rebuildTable();

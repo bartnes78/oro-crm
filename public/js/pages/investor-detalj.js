@@ -84,7 +84,7 @@ function buildPipelineCard(inv, lookups) {
 
   return `
     <div class="card">
-      <div class="card-title">Pipeline</div>
+      <div class="card-title">📊 Pipeline</div>
       <div class="form-grid" style="gap:10px;">
         <div class="form-group">
           <label>Fase</label>
@@ -190,7 +190,7 @@ function buildDocsCard(inv, products) {
   return `
     <div class="card">
       <div class="card-title">
-        Dokumenter
+        📄 Dokumenter
         ${isArchived ? '<span style="margin-left:8px;font-size:11px;color:var(--muted);font-style:italic;font-weight:400;">arkiv</span>' : ''}
       </div>
       ${productsHtml}
@@ -309,6 +309,7 @@ function buildContactsCard(inv, visInaktive) {
           <div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px;opacity:${inaktiv ? .45 : 1};">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:8px;">
+                <div class="contact-avatar">${window.escHtml(c.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div>
                 <span style="font-weight:600;font-size:14px;text-decoration:${inaktiv ? 'line-through' : 'none'};">${window.escHtml(c.name)}</span>
                 ${c.is_primary === 1 && !inaktiv ? '<span class="badge badge-prospect" style="font-size:10px;">Prim&aelig;r</span>' : ''}
                 ${c.source === 'brreg' ? '<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(26,138,106,.1);color:#1a8a6a;font-weight:600;">Brreg</span>' : ''}
@@ -334,7 +335,7 @@ function buildContactsCard(inv, visInaktive) {
   return `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-        <div class="card-title" style="margin:0;">Kontakter</div>
+        <div class="card-title" style="margin:0;">👥 Kontakter</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           ${inaktiveCount > 0 ? `
             <button class="btn btn-ghost btn-sm" id="toggle-inaktive" style="font-size:11px;opacity:.7;min-height:36px;">
@@ -471,7 +472,7 @@ function buildProductCard(inv, products, piData) {
 
   return `
     <div class="card">
-      <div class="card-title">Produktinteresse</div>
+      <div class="card-title">🏦 Produktinteresse</div>
       ${allRows}
       ${aggregateHtml}
     </div>
@@ -524,9 +525,9 @@ function buildLogCard(inv, products) {
   }
 
   return `
-    <div class="card">
+    <div class="card card-muted">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="card-title" style="margin:0;">Aktiviteter</div>
+        <div class="card-title" style="margin:0;">📋 Aktiviteter</div>
         <button class="btn btn-ghost btn-sm" id="new-log-btn" style="min-height:36px;">+ Ny</button>
       </div>
       ${allLog.length === 0 ? '<p class="text-muted" style="font-size:13px;">Ingen aktiviteter registrert.</p>' : ''}
@@ -579,7 +580,7 @@ function buildBrregCard(inv) {
       <div class="card" id="brreg-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
           <div class="card-title" style="margin:0;">
-            Brønnøysund
+            🏛️ Brønnøysund
             <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">${window.escHtml(inv.org_nr)}</span>
           </div>
           <div style="display:flex;gap:6px;">
@@ -617,7 +618,7 @@ function buildBrregCard(inv) {
   // ── Ikke koblet: søkeskjema ───────────────────────────────────────────────
   return `
     <div class="card" id="brreg-card">
-      <div class="card-title">Brønnøysund</div>
+      <div class="card-title">🏛️ Brønnøysund</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Koble investor til Brønnøysundregistrene for å hente stamdata, adresser og roller.</p>
       <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input id="brreg-search-input" type="text"
@@ -653,9 +654,9 @@ function buildTasksCard(tasks) {
     `).join('');
 
   return `
-    <div class="card">
+    <div class="card card-muted">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="card-title" style="margin:0;">Oppgaver</div>
+        <div class="card-title" style="margin:0;">✅ Oppgaver</div>
         <button class="btn btn-ghost btn-sm" id="new-task-btn" style="min-height:36px;">+ Ny oppgave</button>
       </div>
       ${tasksHtml}
@@ -1039,7 +1040,7 @@ function openContactModal(contact, reload) {
         window.closeModal();
         await reload();
       } catch (e) {
-        alert('Feil: ' + e.message);
+        window.ui.toast('Feil: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = isNew ? 'Legg til' : 'Lagre'; }
       }
     });
@@ -1092,7 +1093,7 @@ function openTaskModal(inv, lookups, reload) {
         window.closeModal();
         await reload();
       } catch (e) {
-        alert('Feil: ' + e.message);
+        window.ui.toast('Feil: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Legg til'; }
       }
     });
@@ -1165,7 +1166,7 @@ function openPaVentModal(inv, reload) {
         window.closeModal();
         await reload();
       } catch (e) {
-        alert('Feil ved lagring: ' + e.message);
+        window.ui.toast('Feil ved lagring: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Legg til oppgaver'; }
       }
     });
@@ -1222,7 +1223,7 @@ function openQuickDeclineModal(inv, product, products, reload, state) {
         window.closeModal();
         await reload();
       } catch (e) {
-        alert('Feil ved lagring: ' + e.message);
+        window.ui.toast('Feil ved lagring: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Registrer avslag'; }
       }
     });
@@ -1254,7 +1255,7 @@ function openTegnetModal(inv, productId, productName, currentAmount, reload) {
         window.closeModal();
         await reload();
       } catch (e) {
-        alert('Feil: ' + e.message);
+        window.ui.toast('Feil: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Bekreft tegning'; }
       }
     });
@@ -1336,16 +1337,19 @@ export async function render(el, state) {
         ${buildDetailHeader(inv, products)}
         <div class="inv-detail-layout" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
+            <div class="section-label">Kjerneinformasjon</div>
             <div class="grid-2">
               ${buildPipelineCard(inv, lookups)}
               ${buildProductCard(inv, products, piData)}
             </div>
             ${inv.org_nr ? buildBrregCard(inv) : ''}
+            <div class="section-label">Relasjoner</div>
             <div class="grid-2">
               ${buildDocsCard(inv, products)}
               ${buildContactsCard(inv, visInaktive)}
             </div>
             ${!inv.org_nr ? buildBrregCard(inv) : ''}
+            <div class="section-label">Historikk</div>
             ${buildLogCard(inv, products)}
             ${buildTasksCard(tasks)}
           </div>
@@ -1371,7 +1375,7 @@ export async function render(el, state) {
       try {
         await api.deleteInvestor(inv.id);
         window.navigate('investorer');
-      } catch (e) { alert('Feil ved sletting: ' + e.message); }
+      } catch (e) { window.ui.toast('Feil ved sletting: ' + e.message, 'error'); }
     });
   }
 
@@ -1380,7 +1384,7 @@ export async function render(el, state) {
       try {
         await api.updateInvestor(inv.id, { [field]: value });
         inv[field] = value;
-      } catch (e) { alert('Feil ved lagring: ' + e.message); }
+      } catch (e) { window.ui.toast('Feil ved lagring: ' + e.message, 'error'); }
     };
 
     const inlinePhase = el.querySelector('#inline-phase');
@@ -1411,7 +1415,7 @@ export async function render(el, state) {
           await api.updateInvestor(inv.id, { product_interests: newInterests });
           inv.product_interests = newInterests;
           await reload();
-        } catch (e) { alert('Feil: ' + e.message); cb.checked = !cb.checked; }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); cb.checked = !cb.checked; }
       });
     });
 
@@ -1424,7 +1428,7 @@ export async function render(el, state) {
           const pi = piData.find(p => p.product_id === pid);
           if (pi) pi.target_ticket = val;
           else piData.push({ product_id: pid, investor_id: inv.id, target_ticket: val, probability: null });
-        } catch (e) { alert('Feil ved lagring: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil ved lagring: ' + e.message, 'error'); }
       };
       input.addEventListener('change', save);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
@@ -1440,7 +1444,7 @@ export async function render(el, state) {
           const pi = piData.find(p => p.product_id === pid);
           if (pi) pi.probability = val;
           else piData.push({ product_id: pid, investor_id: inv.id, target_ticket: null, probability: val });
-        } catch (e) { alert('Feil ved lagring: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil ved lagring: ' + e.message, 'error'); }
       };
       input.addEventListener('change', save);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
@@ -1480,7 +1484,7 @@ export async function render(el, state) {
         try {
           await api.updateInvestor(inv.id, { docs: updated });
           inv.docs = updated;
-        } catch (e) { alert('Feil: ' + e.message); cb.checked = !cb.checked; }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); cb.checked = !cb.checked; }
       });
     });
 
@@ -1496,7 +1500,7 @@ export async function render(el, state) {
         try {
           await api.updateInvestor(inv.id, { docs: updated });
           inv.docs = updated;
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
 
@@ -1512,7 +1516,7 @@ export async function render(el, state) {
         try {
           await api.updateInvestor(inv.id, { docs: updated });
           inv.docs = updated;
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
   }
@@ -1557,7 +1561,7 @@ export async function render(el, state) {
         try {
           await api.updateContact(btn.dataset.contactId, { ...contact, active: active === 1 ? 0 : 1 });
           await reload();
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
 
@@ -1567,7 +1571,7 @@ export async function render(el, state) {
         try {
           await api.deleteContact(btn.dataset.contactId);
           await reload();
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
   }
@@ -1591,7 +1595,7 @@ export async function render(el, state) {
         try {
           await api.deleteLog(btn.dataset.logId);
           await reload();
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
 
@@ -1627,7 +1631,7 @@ export async function render(el, state) {
             const inner = row.querySelector('div[style*="flex:1"]') || row.querySelector('div[style*="flex: 1"]');
             if (inner) inner.style.opacity = task.done ? .6 : 1;
           }
-        } catch (e) { alert('Feil: ' + e.message); cb.checked = !cb.checked; }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); cb.checked = !cb.checked; }
       });
     });
 
@@ -1639,7 +1643,7 @@ export async function render(el, state) {
           tasks = tasks.filter(t => String(t._id) !== String(tid));
           const row = btn.closest('[data-task-id]');
           if (row) row.remove();
-        } catch (e) { alert('Feil: ' + e.message); }
+        } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
       });
     });
   }
@@ -1657,7 +1661,7 @@ export async function render(el, state) {
           await api.updateInvestor(inv.id, { name: nyttNavn });
           await reload();
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
           renameBtn.disabled = false;
           renameBtn.textContent = 'Bruk dette navnet';
         }
@@ -1673,10 +1677,10 @@ export async function render(el, state) {
         try {
           await api.brregSync(inv.id, { org_nr: inv.org_nr });
           const msg = 'Synkronisert!';
-          window.ui.toast?.(msg) || alert(msg);
+          window.ui.toast(msg);
           await reload();
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
           syncBtn.disabled = false;
           syncBtn.textContent = '↻ Synkroniser';
         }
@@ -1691,7 +1695,7 @@ export async function render(el, state) {
           await api.brregDisconnect(inv.id);
           await reload();
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
           disconnectBtn.disabled = false;
           disconnectBtn.textContent = 'Fjern kobling';
         }
@@ -1756,10 +1760,10 @@ export async function render(el, state) {
                 const cityPayload = !inv.city && poststed ? poststed : undefined;
                 await api.brregSync(inv.id, { org_nr: orgnr, city: cityPayload });
                 const msg = 'Investor koblet til Brreg!';
-                window.ui.toast?.(msg) || alert(msg);
+                window.ui.toast(msg);
                 await reload();
               } catch (err) {
-                alert('Feil: ' + err.message);
+                window.ui.toast('Feil: ' + err.message, 'error');
                 btn.disabled = false;
                 btn.textContent = 'Koble';
               }

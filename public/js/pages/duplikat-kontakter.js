@@ -223,7 +223,7 @@ export async function render(el, state) {
           await api.deleteContact(id);
           await reload();
         } catch (e) {
-          alert('Feil: ' + e.message);
+          window.ui.toast('Feil: ' + e.message, 'error');
         }
       });
     });
@@ -238,7 +238,7 @@ export async function render(el, state) {
             await api.mergeContacts(keep_id, drop_id);
             await reload();
           } catch (e) {
-            alert('Feil ved sammenslåing: ' + e.message);
+            window.ui.toast('Feil ved sammenslåing: ' + e.message, 'error');
           }
         });
       });

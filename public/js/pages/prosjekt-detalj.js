@@ -220,7 +220,7 @@ function renderContent() {
         await api.deleteDeclinedOffer(parseInt(btn.dataset.id));
         _declinedOffers = _declinedOffers.filter(d => String(d._id) !== btn.dataset.id);
         renderContent();
-      } catch (e) { alert(e.message); }
+      } catch (e) { window.ui.toast(e.message, 'error'); }
     });
   });
 }
@@ -488,7 +488,7 @@ function attachTableEvents() {
     try {
       await api.completeProduct(_productId);
       await loadData();
-    } catch (e) { alert('Feil: ' + e.message); }
+    } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
   });
 
   document.getElementById('btn-cancel-prod')?.addEventListener('click', () => {
@@ -537,7 +537,7 @@ function attachTableEvents() {
     try {
       await api.updateProduct(_productId, { status: 'Fundraising' });
       await loadData();
-    } catch (e) { alert('Feil: ' + e.message); }
+    } catch (e) { window.ui.toast('Feil: ' + e.message, 'error'); }
   });
 
   // ── Tabellhendelser ───────────────────────────────────────────────────────

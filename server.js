@@ -8,22 +8,13 @@ const PgSession = require('connect-pg-simple')(session);
 const path      = require('path');
 const fs        = require('fs');
 const crypto    = require('crypto');
-const ExcelJS   = require('exceljs');
 const cron      = require('node-cron');
 const { query, pool } = require('./db');
 const { fmtUser, hashPassword, verifyPassword } = require('./lib/helpers');
-const { VALID_PHASES, VALID_TYPES, VALID_LOG_TYPES, VALID_LEADS, VALID_VEHICLES, isValidDate } = require('./lib/validation');
+const { buildExcelWorkbook } = require('./lib/excel');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
-
-// ── Formathjelpere ────────────────────────────────────────────────────────────
-function fmtRow(row) {
-  if (!row) return null;
-  const { id, ...rest } = row;
-  return { _id: id, ...rest };
-}
-
 
 // ── Backup ────────────────────────────────────────────────────────────────────
 async function runBackup() {
@@ -320,32 +311,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-function requireAdmin(req, res, next) {
-  if (req.currentUser?.role !== 'admin')
-    return res.status(403).json({ error: 'Kun administratorer har tilgang' });
-  next();
-}
-
-async function auditLog(userId, username, action, entityType, entityId, oldVal, newVal, description) {
-  try {
-    await query(
-      `INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, old_value, new_value, description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [userId ?? null, username ?? null, action, entityType, String(entityId ?? ''),
-       oldVal != null ? JSON.stringify(oldVal) : null,
-       newVal != null ? JSON.stringify(newVal) : null,
-       description ?? null]
-    );
-  } catch (e) {
-    console.error('[audit]', e.message);
-  }
-}
-
-// ── Validering ────────────────────────────────────────────────────────────────
-function validationError(res, errors) {
-  return res.status(400).json({ error: errors.join('. ') });
-}
-
 // ── Dashboard / Analyse ──────────────────────────────────────────────────────
 app.use(require('./routes/dashboard'));
 
@@ -371,171 +336,10 @@ app.use(require('./routes/tasks'));
 app.use(require('./routes/users'));
 
 // ── Admin (audit, datakvalitet, lookups, backups, seed, eksport, feedback) ───
-app.use(require('./routes/admin')({ runBackup, buildExcelWorkbook }));
+app.use(require('./routes/admin')({ runBackup }));
 
-// ── MSG-parsing ───────────────────────────────────────────────────────────────
-let _multer, _MsgReader;
-function getMulter()    { if (!_multer)    _multer    = require('multer');                  return _multer; }
-function getMsgReader() { if (!_MsgReader) _MsgReader = require('@kenjiuno/msgreader');     return _MsgReader; }
-
-app.post('/api/email/parse-msg', (req, res, next) => {
-  let multer;
-  try { multer = getMulter(); } catch { return res.status(503).json({ error: 'Kjør npm install og restart' }); }
-  multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single('file')(req, res, next);
-}, (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Ingen fil' });
-  try {
-    let MsgReader;
-    try { MsgReader = getMsgReader(); } catch { return res.status(503).json({ error: 'Kjør npm install og restart' }); }
-    const reader = new MsgReader.default(req.file.buffer);
-    const data   = reader.getFileData();
-    const msgClass   = (data.messageClass || '').toLowerCase();
-    const isCalendar = msgClass.includes('appointment') || msgClass.includes('meeting') || msgClass.includes('schedule');
-    let date = '';
-    const rawDate = (isCalendar && data.apptStartWhole) ? data.apptStartWhole : data.messageDeliveryTime || data.clientSubmitTime || data.creationTime;
-    if (rawDate) {
-      let d = rawDate instanceof Date ? rawDate : typeof rawDate === 'string' ? new Date(rawDate) : typeof rawDate === 'number' ? new Date(rawDate / 10000 - 11644473600000) : null;
-      if (d && !isNaN(d)) date = d.toISOString().slice(0, 10);
-    }
-    if (!date) date = new Date().toISOString().slice(0, 10);
-    let body = data.body || '';
-    if (!body && data.bodyHTML) {
-      body = data.bodyHTML.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-    const senderEmail = (data.senderEmail || '').startsWith('/O=') ? '' : (data.senderEmail || '');
-    const senderName  = data.senderName || '';
-    const senderDomain = senderEmail.includes('@') ? senderEmail.split('@')[1].split('.')[0] : '';
-    const recipients = (data.recipients || [])
-      .map(r => ({ name: r.name || '', email: (r.email || r.smtpAddress || '').startsWith('/O=') ? '' : (r.email || r.smtpAddress || ''), recipType: r.recipType }))
-      .filter(r => r.name || r.email);
-    res.json({ from: senderEmail ? `${senderName} <${senderEmail}>` : senderName, senderName, senderEmail, senderDomain, recipients, subject: data.subject || '', date, body: body.slice(0, 3000), isCalendar, location: data.apptLocation || '' });
-  } catch (e) {
-    console.error('MSG parse error:', e);
-    res.status(500).json({ error: 'Kunne ikke lese .msg-filen: ' + e.message });
-  }
-});
-
-// ── Excel-eksport ─────────────────────────────────────────────────────────────
-async function buildExcelWorkbook() {
-    const [{ rows: investors }, { rows: contacts }, { rows: log }, { rows: products }, { rows: piRows }] = await Promise.all([
-      query('SELECT * FROM investors WHERE deleted_at IS NULL ORDER BY name'),
-      query('SELECT * FROM contacts'),
-      query('SELECT * FROM contact_log ORDER BY date DESC'),
-      query('SELECT * FROM products'),
-      query(`SELECT pi.* FROM product_investors pi
-             WHERE NOT EXISTS (
-               SELECT 1 FROM declined_offers d
-               WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
-             )`),
-    ]);
-    const prodNameById = Object.fromEntries(products.map(p => [p.id, p.name]));
-    const wb = new ExcelJS.Workbook();
-
-    // Aggregate product_investors per investor (sum across all products)
-    const piByInv = {};
-    const prodsByInv = {};
-    for (const pi of piRows) {
-      if (!piByInv[pi.investor_id]) piByInv[pi.investor_id] = { ticket: 0, weighted: 0, committed: 0 };
-      piByInv[pi.investor_id].ticket    += Number(pi.target_ticket)    || 0;
-      piByInv[pi.investor_id].committed += Number(pi.committed_amount) || 0;
-      if (pi.target_ticket != null && pi.probability != null)
-        piByInv[pi.investor_id].weighted += Number(pi.target_ticket) * Number(pi.probability);
-      if (!prodsByInv[pi.investor_id]) prodsByInv[pi.investor_id] = [];
-      prodsByInv[pi.investor_id].push(pi.product_id);
-    }
-
-    const invRows = investors.map(i => {
-      const pi = piByInv[i.id] || {};
-      return {
-        'ID': i.id, 'Navn': i.name, 'Land': i.country || '', 'By': i.city || '',
-        'Type': i.investor_type || '', 'Fase': i.phase || '', 'Lead': i.lead || '',
-        'Rådgiver': i.advisor || '',
-        'Ticket totalt (MNOK)': pi.ticket ? Math.round(pi.ticket * 10) / 10 : '',
-        'Vektet totalt (MNOK)': pi.weighted ? Math.round(pi.weighted * 10) / 10 : '',
-        'Innbetalt (MNOK)': pi.committed ? Math.round(pi.committed * 10) / 10 : '',
-        'Produktinteresse': (prodsByInv[i.id] || []).map(id => prodNameById[id] || id).join(', '),
-        'Sist kontakt': i.last_contact || '', 'Neste steg': i.next_steps || '', 'Kommentarer': i.comments || '',
-      };
-    });
-    const wsInv = wb.addWorksheet('Investorer');
-    wsInv.columns = [
-      { header: 'ID', key: 'ID', width: 10 }, { header: 'Navn', key: 'Navn', width: 36 },
-      { header: 'Land', key: 'Land', width: 10 }, { header: 'By', key: 'By', width: 16 },
-      { header: 'Type', key: 'Type', width: 18 }, { header: 'Fase', key: 'Fase', width: 14 },
-      { header: 'Lead', key: 'Lead', width: 22 }, { header: 'Rådgiver', key: 'Rådgiver', width: 18 },
-      { header: 'Ticket totalt (MNOK)', key: 'Ticket totalt (MNOK)', width: 16 },
-      { header: 'Vektet totalt (MNOK)', key: 'Vektet totalt (MNOK)', width: 16 },
-      { header: 'Innbetalt (MNOK)', key: 'Innbetalt (MNOK)', width: 14 },
-      { header: 'Produktinteresse', key: 'Produktinteresse', width: 50 },
-      { header: 'Sist kontakt', key: 'Sist kontakt', width: 14 },
-      { header: 'Neste steg', key: 'Neste steg', width: 28 },
-      { header: 'Kommentarer', key: 'Kommentarer', width: 40 },
-    ];
-    wsInv.addRows(invRows);
-
-    // Extra sheet: pipeline per produkt
-    const piSheetRows = piRows
-      .filter(pi => pi.target_ticket != null || pi.committed_amount != null)
-      .map(pi => {
-        const inv = investors.find(i => i.id === pi.investor_id);
-        const weighted = (pi.target_ticket != null && pi.probability != null)
-          ? Math.round(Number(pi.target_ticket) * Number(pi.probability) * 10) / 10 : '';
-        return {
-          'Produkt': prodNameById[pi.product_id] || pi.product_id,
-          'Investor': inv?.name || pi.investor_id,
-          'Fase': inv?.phase || '',
-          'Ticket (MNOK)': pi.target_ticket != null ? Number(pi.target_ticket) : '',
-          'Sannsynlighet (%)': pi.probability != null ? Math.round(Number(pi.probability) * 100) : '',
-          'Vektet (MNOK)': weighted,
-          'Innbetalt (MNOK)': pi.committed_amount != null ? Number(pi.committed_amount) : '',
-          'Avslagsgrunn': pi.decline_reason || '',
-        };
-      })
-      .sort((a, b) => String(a['Produkt']).localeCompare(String(b['Produkt'])) || String(a['Investor']).localeCompare(String(b['Investor'])));
-    const wsPi = wb.addWorksheet('Pipeline per produkt');
-    wsPi.columns = [
-      { header: 'Produkt', key: 'Produkt', width: 36 }, { header: 'Investor', key: 'Investor', width: 36 },
-      { header: 'Fase', key: 'Fase', width: 14 }, { header: 'Ticket (MNOK)', key: 'Ticket (MNOK)', width: 14 },
-      { header: 'Sannsynlighet (%)', key: 'Sannsynlighet (%)', width: 16 },
-      { header: 'Vektet (MNOK)', key: 'Vektet (MNOK)', width: 14 },
-      { header: 'Innbetalt (MNOK)', key: 'Innbetalt (MNOK)', width: 14 },
-      { header: 'Avslagsgrunn', key: 'Avslagsgrunn', width: 24 },
-    ];
-    wsPi.addRows(piSheetRows);
-
-    const invMap = Object.fromEntries(investors.map(i => [i.id, i.name]));
-    const ctRows = contacts.map(c => ({
-      'Investor ID': c.investor_id, 'Investor': invMap[c.investor_id] || '',
-      'Navn': c.name || '', 'Tittel': c.title || '', 'E-post': c.email || '',
-      'Telefon': c.phone || '', 'Telefon 2': c.phone2 || '', 'Primærkontakt': c.is_primary ? 'Ja' : '', 'Notater': c.notes || '',
-    }));
-    const wsCt = wb.addWorksheet('Kontakter');
-    wsCt.columns = [
-      { header: 'Investor ID', key: 'Investor ID', width: 10 }, { header: 'Investor', key: 'Investor', width: 30 },
-      { header: 'Navn', key: 'Navn', width: 24 }, { header: 'Tittel', key: 'Tittel', width: 22 },
-      { header: 'E-post', key: 'E-post', width: 28 }, { header: 'Telefon', key: 'Telefon', width: 16 },
-      { header: 'Telefon 2', key: 'Telefon 2', width: 16 },
-      { header: 'Primærkontakt', key: 'Primærkontakt', width: 14 }, { header: 'Notater', key: 'Notater', width: 36 },
-    ];
-    wsCt.addRows(ctRows);
-
-    const logRows = log.map(l => ({
-      'Dato': l.date || '', 'Investor ID': l.investor_id, 'Investor': invMap[l.investor_id] || l.investor_name || '',
-      'Type': l.log_type || '', 'Kontaktperson': l.contact_person || '', 'Ansvarlig': l.responsible || '',
-      'Emne': l.subject || '', 'Utfall': l.outcome || '', 'Notater': l.notes || '',
-    }));
-    const wsLog = wb.addWorksheet('Kontaktlogg');
-    wsLog.columns = [
-      { header: 'Dato', key: 'Dato', width: 12 }, { header: 'Investor ID', key: 'Investor ID', width: 10 },
-      { header: 'Investor', key: 'Investor', width: 30 }, { header: 'Type', key: 'Type', width: 10 },
-      { header: 'Kontaktperson', key: 'Kontaktperson', width: 22 }, { header: 'Ansvarlig', key: 'Ansvarlig', width: 22 },
-      { header: 'Emne', key: 'Emne', width: 36 }, { header: 'Utfall', key: 'Utfall', width: 36 },
-      { header: 'Notater', key: 'Notater', width: 50 },
-    ];
-    wsLog.addRows(logRows);
-
-    return wb;
-}
+// ── E-post (MSG-parsing) ─────────────────────────────────────────────────────
+app.use(require('./routes/email'));
 
 // ── Vendor / SPA fallback ────────────────────────────────────────────────────
 app.get('/js/vendor/html2canvas.min.js', (req, res) =>
