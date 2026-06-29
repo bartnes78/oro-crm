@@ -86,7 +86,7 @@
       #mobile-topbar { display:none; }
     }
     @media (max-width:640px) {
-      .kpi-grid { grid-template-columns:1fr 1fr !important; }
+      .kpi-grid { grid-template-columns:1fr !important; }
       .hide-sm  { display:none !important; }
     }
     .nav-item.active { background:rgba(253,252,249,.1); color:var(--offwhite); border-left-color:var(--gold); }
@@ -285,6 +285,15 @@
     }
     #feedback-btn:hover { transform:scale(1.08); opacity:.92; }
 
+    /* ── Dashboard mobile bar ── */
+    .dash-mobile-bar { display:none; }
+    @media(max-width:1023px){
+      .dash-mobile-bar {
+        display:flex; gap:8px; align-items:center; margin-bottom:16px;
+      }
+      .dash-mobile-bar .search-box { flex:1; min-width:0; }
+    }
+
     /* ── Mobile overrides ── */
     @media(max-width:1023px){ .topbar { display:none; } }
     @media(max-width:640px){
@@ -292,8 +301,10 @@
       .modal-box { max-width:calc(100% - 16px); }
       .inv-detail-layout { flex-direction:column !important; }
       .inv-sidebar { width:100% !important; position:static !important; }
-      .gauge-cards > .card { flex:1 1 calc(50% - 8px) !important; min-width:0 !important; max-width:none !important; }
+      .gauge-cards > .card { flex:1 1 calc(50% - 8px) !important; min-width:0 !important; max-width:none !important; padding:12px !important; }
       .gauge-cards.gauge-collapsed > .gauge-extra { display:none; }
+      .dash-top10-card .table-wrap { margin:0 -12px; }
+      .dash-top10-card .table-wrap table { font-size:11px; }
     }
     @media(min-width:641px){ .gauge-show-more { display:none; } }
     @media(hover:none){

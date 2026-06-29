@@ -149,8 +149,8 @@ function buildTop10Card(data, investors, filter) {
         <tr class="dash-inv-row" data-id="${esc(String(inv.id))}" style="cursor:pointer">
           <td style="color:#aaa;font-weight:700">${i + 1}</td>
           <td style="font-weight:600;color:var(--blue)">${esc(inv.name || '')}</td>
-          <td>${esc(inv.investor_type || '—')}</td>
-          <td>${window.phaseBadge(inv.phase)}</td>
+          <td class="hide-sm">${esc(inv.investor_type || '—')}</td>
+          <td class="hide-sm">${window.phaseBadge(inv.phase)}</td>
           <td class="text-right">${fmt(inv.target_ticket)}</td>
           ${showProbCol ? `<td class="text-right">${inv.probability != null ? Math.round(inv.probability * 100) + '%' : '—'}</td>` : ''}
           <td class="text-right" style="font-weight:700;color:#1A3E5C">${fmt(inv.weighted, 1)}</td>
@@ -174,7 +174,7 @@ function buildTop10Card(data, investors, filter) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Investor</th><th>Type</th><th>Fase</th>
+              <th>#</th><th>Investor</th><th class="hide-sm">Type</th><th class="hide-sm">Fase</th>
               <th class="text-right">Ticket</th>
               ${showProbCol ? '<th class="text-right">Sanns.</th>' : ''}
               <th class="text-right">Vektet</th>
@@ -391,8 +391,9 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
 }
 
 function setupEvents(el, data, investors, filter) {
-  const loggBtn = el.querySelector('#dash-logg-btn');
-  if (loggBtn) loggBtn.addEventListener('click', () => openQuickLogModal(investors, el, state?.currentUser));
+  el.querySelectorAll('.dash-logg-btn').forEach(btn => {
+    btn.addEventListener('click', () => openQuickLogModal(investors, el, state?.currentUser));
+  });
 
   el.querySelectorAll('.gauge-card-link').forEach(card => {
     card.addEventListener('click', () => window.navigate('prosjektDetalj', card.dataset.productId));
@@ -408,19 +409,18 @@ function setupEvents(el, data, investors, filter) {
     });
   }
 
-  const searchInput = el.querySelector('#dash-search');
-  if (searchInput) {
-    searchInput.addEventListener('keydown', e => {
+  el.querySelectorAll('.dash-search-input').forEach(input => {
+    input.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
-      const q = searchInput.value.trim();
+      const q = input.value.trim();
       if (!q) return;
       const k = window.lsKey('crm_filter_investorer');
       const saved = JSON.parse(localStorage.getItem(k) || '{}');
       localStorage.setItem(k, JSON.stringify({ ...saved, search: q }));
-      searchInput.value = '';
+      input.value = '';
       window.navigate('investorer');
     });
-  }
+  });
 
   // Top-10 card filters & rows
   const card = el.querySelector('.dash-top10-card');
@@ -465,12 +465,20 @@ export async function render(el, state) {
         <span class="topbar-title">Dashboard</span>
         <div class="search-box" style="flex:1;max-width:260px">
           <span style="opacity:.45;font-size:13px;flex-shrink:0">🔍</span>
-          <input id="dash-search" type="search" placeholder="Søk investor…"
+          <input class="dash-search-input" type="search" placeholder="Søk investor…"
             style="width:100%" autocomplete="off">
         </div>
-        <button id="dash-logg-btn" class="btn btn-green btn-sm" style="min-height:36px">+ Logg kontakt</button>
+        <button class="dash-logg-btn btn btn-green btn-sm" style="min-height:36px">+ Logg kontakt</button>
       </div>
       <div class="content">
+        <div class="dash-mobile-bar">
+          <div class="search-box">
+            <span style="opacity:.45;font-size:13px;flex-shrink:0">🔍</span>
+            <input class="dash-search-input" type="search" placeholder="Søk investor…"
+              style="width:100%" autocomplete="off">
+          </div>
+          <button class="dash-logg-btn btn btn-green btn-sm" style="min-height:36px;white-space:nowrap">+ Logg</button>
+        </div>
         ${buildKPIs(data)}
         ${buildGaugeCards(data)}
         <div class="section-label">Pipeline</div>
