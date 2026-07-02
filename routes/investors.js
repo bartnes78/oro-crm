@@ -361,21 +361,23 @@ router.post('/api/merge', requireAdmin, async (req, res) => {
     const drop = dropRows[0];
     const merged = { ...keep };
     for (const key of Object.keys(drop)) {
-      if (key === 'id' || key === 'updated_at') continue;
+      if (key === 'id' || key === 'updated_at' || key === 'deleted_at') continue;
       if (merged[key] == null || merged[key] === '' || merged[key] === 0) {
         if (drop[key] != null && drop[key] !== '' && drop[key] !== 0) merged[key] = drop[key];
       }
     }
     if (keep.comments && drop.comments && keep.comments !== drop.comments)
       merged.comments = keep.comments + ' | ' + drop.comments;
+    // Brreg-kobling følger org_nr som en enhet — ellers kan keep ende med drops
+    // org_nr men eget (tomt) brreg_data
+    if (!keep.org_nr && drop.org_nr) {
+      merged.org_nr     = drop.org_nr;
+      merged.brreg_navn = drop.brreg_navn;
+      merged.brreg_data = drop.brreg_data;
+    }
+    merged.docs = { ...(drop.docs || {}), ...(keep.docs || {}) };
 
     await client.query('BEGIN');
-    await client.query(`
-      UPDATE investors SET name=$2, country=$3, city=$4, investor_type=$5, phase=$6, lead=$7,
-        advisor=$8, comments=$9, updated_at=NOW()
-      WHERE id=$1
-    `, [keep_id, merged.name, merged.country, merged.city, merged.investor_type, merged.phase,
-        merged.lead, merged.advisor, merged.comments]);
     await client.query('UPDATE contacts SET investor_id=$1 WHERE investor_id=$2', [keep_id, drop_id]);
     await client.query('UPDATE contact_log SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
     await client.query('UPDATE tasks SET investor_id=$1, investor_name=$2 WHERE investor_id=$3', [keep_id, keep.name, drop_id]);
@@ -386,7 +388,26 @@ router.post('/api/merge', requireAdmin, async (req, res) => {
       FROM product_investors WHERE investor_id = $2
       ON CONFLICT (product_id, investor_id) DO NOTHING
     `, [keep_id, drop_id]);
+    // Flytt avslagshistorikk — CASCADE ville ellers slettet den sammen med drop-investoren
+    await client.query(`
+      INSERT INTO declined_offers (product_id, investor_id, decline_reason, declined_at)
+      SELECT product_id, $1, decline_reason, declined_at
+      FROM declined_offers WHERE investor_id = $2
+      ON CONFLICT (product_id, investor_id) DO NOTHING
+    `, [keep_id, drop_id]);
+    // Slett drop før keep oppdateres — org_nr har unik indeks og må frigis først
     await client.query('DELETE FROM investors WHERE id=$1', [drop_id]);
+    await client.query(`
+      UPDATE investors SET name=$2, country=$3, city=$4, investor_type=$5, fund_vehicle=$6,
+        phase=$7, lead=$8, advisor=$9, source=$10, next_steps=$11,
+        last_contact=$12, doc_shared=$13, meeting_date=$14, comments=$15, docs=$16,
+        org_nr=$17, brreg_navn=$18, brreg_data=$19, updated_at=NOW()
+      WHERE id=$1
+    `, [keep_id, merged.name, merged.country, merged.city, merged.investor_type, merged.fund_vehicle,
+        merged.phase, merged.lead, merged.advisor, merged.source, merged.next_steps,
+        merged.last_contact, merged.doc_shared, merged.meeting_date, merged.comments,
+        JSON.stringify(merged.docs || {}), merged.org_nr || null, merged.brreg_navn || null,
+        JSON.stringify(merged.brreg_data || {})]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'merge', 'investor', keep_id,
       { dropped_id: drop_id, dropped_name: drop.name },
