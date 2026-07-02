@@ -31,7 +31,26 @@ window.navigate = function(page, id) {
   state.id   = id ?? null;
   renderPage();
   window.scrollTo(0, 0);
+  checkVersion();
 };
+
+// ── Versjonssjekk — varsler når serveren er redeployet (service worker kan servere gammelt JS)
+let knownVersion = null;
+let lastVersionCheck = 0;
+async function checkVersion() {
+  if (Date.now() - lastVersionCheck < 5 * 60 * 1000) return;
+  lastVersionCheck = Date.now();
+  try {
+    const { version } = await api.version();
+    if (knownVersion && version !== knownVersion) {
+      const modalOpen = document.getElementById('modal')?.classList.contains('open');
+      window.ui.toast('CRM-et er oppdatert til ny versjon — laster inn på nytt…', 'info', 5000);
+      if (!modalOpen) setTimeout(() => window.location.reload(), 2000);
+      return;
+    }
+    knownVersion = version;
+  } catch { /* nettverksglipp — prøver igjen ved neste navigasjon */ }
+}
 
 // ── Modal system ──────────────────────────────────────────────────────────────
 window.openModal = function(html, setupFn) {
@@ -355,6 +374,7 @@ async function init() {
 
 // Kjøres etter vellykket autentisering (ved oppstart eller etter login)
 async function bootAuthed() {
+  checkVersion();
   buildSidebar();
   if (state.currentUser?.mustChangePassword) {
     await showChangePasswordModal();

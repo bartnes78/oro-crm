@@ -18,17 +18,41 @@ function formatWeekStamp(stamp) {
   return m ? `${m[1]}, uke ${m[2]}` : stamp;
 }
 
+// Statusrad for nattjobbene: grønn hvis fersk, rød hvis for gammel/mangler
+function statusRow(label, timestamp, maxAgeHours) {
+  let text = 'Aldri kjørt';
+  let ok = false;
+  if (timestamp) {
+    const ageMs = Date.now() - new Date(timestamp).getTime();
+    const hours = ageMs / 36e5;
+    ok = hours <= maxAgeHours;
+    text = hours < 1.5 ? 'For under en time siden'
+         : hours < 48  ? `${Math.round(hours)} timer siden`
+         : `${Math.round(hours / 24)} døgn siden`;
+  }
+  const color = ok ? 'var(--color-signed)' : 'var(--red)';
+  const icon  = ok ? '●' : '⚠';
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:${color};flex-shrink:0">${icon}</span>
+    <span style="flex:1">${window.escHtml(label)}</span>
+    <span style="color:${ok ? 'var(--muted)' : 'var(--red)'};font-weight:${ok ? '400' : '600'}">${window.escHtml(text)}</span>
+  </div>`;
+}
+
 export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted" style="padding:24px">Laster…</p></div>';
 
   let backups = [];
   let exportFiles = [];
+  let sysStatus = null;
   let restoredStamp = null;
   let restoringStamp = null;
 
   async function load() {
     try {
-      [backups, exportFiles] = await Promise.all([api.backups(), api.exports()]);
+      [backups, exportFiles, sysStatus] = await Promise.all([
+        api.backups(), api.exports(), api.systemStatus().catch(() => null),
+      ]);
       buildPage();
     } catch (e) {
       el.innerHTML = `
@@ -60,6 +84,17 @@ export async function render(el, state) {
         <span class="topbar-title">Backup og gjenoppretting</span>
       </div>
       <div class="content">
+        ${sysStatus ? `
+        <div class="card" style="max-width:620px;margin-bottom:20px">
+          <div class="card-title">Systemstatus</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+            Overvåking av de automatiske jobbene. Rød varsling betyr at en jobb ikke har kjørt som forventet — sjekk Railway-loggene.
+          </p>
+          ${statusRow('Daglig backup (hver 24. time)', sysStatus.lastBackup, 25)}
+          ${statusRow('Ukentlig Excel-eksport (mandag 04:00)', sysStatus.lastExport?.mtime, 8 * 24)}
+          ${statusRow('Brreg-synkronisering (mandag 03:00)', sysStatus.lastBrregSync, 8 * 24)}
+          <div style="font-size:11px;color:var(--muted);margin-top:10px">Serverversjon: ${window.escHtml(String(sysStatus.version).slice(0, 10))}</div>
+        </div>` : ''}
         <div class="card" style="max-width:620px">
           <div class="card-title">Automatiske backups</div>
           <p style="font-size:13px;color:var(--muted);margin-bottom:20px">
