@@ -97,6 +97,32 @@ router.get('/api/lookups', (req, res) => res.json({
   advisors: ['Grieg Investor','Mercer','Gabler','Formue','Industrifinans','Søderberg','DNB','Nordea','Handelsbanken','Intervalor'],
 }));
 
+// ── Systemstatus (overvåking av nattjobbene) ──────────────────────────────────
+router.get('/api/system-status', requireAdmin, async (req, res) => {
+  try {
+    const [{ rows: [b] }, { rows: [s] }] = await Promise.all([
+      query('SELECT MAX(created_at) AS last_backup FROM backups'),
+      query(`SELECT MAX(brreg_data->>'synced_at') AS last_brreg
+             FROM investors WHERE org_nr IS NOT NULL AND deleted_at IS NULL`),
+    ]);
+    let lastExport = null;
+    try {
+      const files = (await fs.promises.readdir(EXPORT_DIR)).filter(f => f.endsWith('.xlsx')).sort();
+      if (files.length) {
+        const newest = files[files.length - 1];
+        const st = await fs.promises.stat(path.join(EXPORT_DIR, newest));
+        lastExport = { file: newest, mtime: st.mtime };
+      }
+    } catch { /* eksportmappen finnes ikke ennå */ }
+    res.json({
+      lastBackup:    b.last_backup,
+      lastBrregSync: s.last_brreg,
+      lastExport,
+      version: process.env.RAILWAY_GIT_COMMIT_SHA || 'dev',
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Backup API ────────────────────────────────────────────────────────────────
 router.get('/api/backups', requireAdmin, async (req, res) => {
   try {
@@ -133,9 +159,14 @@ router.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
   const { rows: exists } = await query('SELECT 1 FROM backups WHERE stamp = $1 LIMIT 1', [stamp]);
   if (!exists.length) return res.status(404).json({ error: 'Backup ikke funnet' });
 
+  // Uten en vellykket sikkerhetsbackup av nåværende tilstand er restore et
+  // enveiskjør — avbryt heller enn å fortsette på håp
+  const backupOk = await runBackup();
+  if (!backupOk)
+    return res.status(500).json({ error: 'Sikkerhetsbackup av nåværende tilstand feilet — gjenoppretting avbrutt' });
+
   const client = await pool.connect();
   try {
-    await runBackup();
     await client.query('BEGIN');
 
     const tableMap = [
@@ -147,20 +178,44 @@ router.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
       { name: 'product_investors', isText: false },
       { name: 'declined_offers',   isText: false },
     ];
+    // audit_log og feedback_reports er med i backupen (katastrofekopi) men
+    // gjenopprettes bevisst ikke — historikk skal ikke rulles tilbake
+
+    // Skjemaet kan ha endret seg siden backupen ble tatt (kolonner droppet) —
+    // filtrer radnøklene mot dagens kolonner så gamle backuper fortsatt kan gjenopprettes
+    const { rows: colRows } = await client.query(
+      `SELECT table_name, column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = ANY($1)`,
+      [tableMap.map(t => t.name)]
+    );
+    const colsByTable = {};
+    for (const r of colRows) {
+      if (!colsByTable[r.table_name]) colsByTable[r.table_name] = new Set();
+      colsByTable[r.table_name].add(r.column_name);
+    }
 
     await client.query('TRUNCATE declined_offers, product_investors, contact_log, tasks, products RESTART IDENTITY CASCADE');
     await client.query('DELETE FROM contacts');
     await client.query('DELETE FROM investors');
 
     let restored = 0;
+    const report = {};
     const SKIP_COLS = new Set(['product_interests']);
     for (const t of tableMap) {
       const { rows: bRows } = await client.query(
         'SELECT data FROM backups WHERE stamp = $1 AND table_name = $2', [stamp, t.name]
       );
       if (!bRows.length) continue;
+      const validCols = colsByTable[t.name] || new Set();
+      const droppedCols = new Set();
+      let total = 0, inserted = 0;
       for (const row of bRows[0].data) {
-        const keys = Object.keys(row).filter(k => !SKIP_COLS.has(k));
+        total++;
+        const keys = Object.keys(row).filter(k => {
+          if (SKIP_COLS.has(k)) return false;
+          if (!validCols.has(k)) { droppedCols.add(k); return false; }
+          return true;
+        });
         const cols = keys.join(', ');
         const vals = keys.map((_, i) => `$${i + 1}`).join(', ');
         const data = keys.map(k => {
@@ -169,14 +224,18 @@ router.post('/api/backups/restore/:stamp', requireAdmin, async (req, res) => {
           return v;
         });
         const overriding = t.isText ? '' : 'OVERRIDING SYSTEM VALUE';
-        await client.query(`INSERT INTO ${t.name} (${cols}) ${overriding} VALUES (${vals}) ON CONFLICT DO NOTHING`, data);
+        const r = await client.query(`INSERT INTO ${t.name} (${cols}) ${overriding} VALUES (${vals}) ON CONFLICT DO NOTHING`, data);
+        inserted += r.rowCount;
       }
+      report[t.name] = { total, inserted, droppedColumns: [...droppedCols] };
+      if (inserted < total)
+        console.warn(`[restore] ${t.name}: ${total - inserted} av ${total} rader hoppet over (constraint-konflikt)`);
       restored++;
     }
 
     await client.query('COMMIT');
-    await auditLog(req.currentUser._id, req.currentUser.username, 'restore', 'backup', stamp, null, { stamp }, `Gjenopprettet backup: ${stamp}`);
-    res.json({ ok: true, restored });
+    await auditLog(req.currentUser._id, req.currentUser.username, 'restore', 'backup', stamp, null, { stamp, report }, `Gjenopprettet backup: ${stamp}`);
+    res.json({ ok: true, restored, report });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[restore]', e.message);

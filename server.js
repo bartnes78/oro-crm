@@ -28,15 +28,21 @@ process.on('unhandledRejection', reason => {
 });
 
 // ── Backup ────────────────────────────────────────────────────────────────────
+// Returnerer true/false så kallere (f.eks. restore) kan avbryte hvis sikkerhetsbackupen feiler.
 async function runBackup() {
   const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
   const tables = [
     'investors', 'contacts', 'contact_log', 'tasks',
     'products', 'product_investors', 'declined_offers', 'users',
+    'audit_log', 'feedback_reports',
   ];
+  // Skjermbilder (base64, opptil 8 MB per rapport) ville blåst opp backups-tabellen ×10 snapshots
+  const selectOverride = {
+    feedback_reports: 'SELECT id, page, comment, username, created_at FROM feedback_reports',
+  };
   try {
     for (const name of tables) {
-      const { rows } = await query(`SELECT * FROM ${name}`);
+      const { rows } = await query(selectOverride[name] || `SELECT * FROM ${name}`);
       await query(
         'INSERT INTO backups (stamp, table_name, data) VALUES ($1,$2,$3) ON CONFLICT (stamp, table_name) DO UPDATE SET data = EXCLUDED.data',
         [stamp, name, JSON.stringify(rows)]
@@ -47,8 +53,10 @@ async function runBackup() {
     if (toDelete.length > 0)
       await query('DELETE FROM backups WHERE stamp = ANY($1)', [toDelete]);
     console.log(`[backup] ${stamp}`);
+    return true;
   } catch (e) {
     console.error('[backup] Feilet:', e.message);
+    return false;
   }
 }
 
@@ -242,6 +250,21 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Helse og versjon — uautentisert, registrert før session/auth-kjeden ──────
+// Eksponerer ingen data: health = «lever prosessen + svarer DB», version = git-SHA.
+const APP_VERSION = process.env.RAILWAY_GIT_COMMIT_SHA || 'dev';
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await query('SELECT 1');
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: 'Database utilgjengelig' });
+  }
+});
+
+app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+
 // ── Auth-middleware ───────────────────────────────────────────────────────────
 app.use('/api', apiCors, apiLimiter);
 
@@ -383,6 +406,19 @@ async function init() {
     else
       console.error('[oppstart] Server-feil:', err.stack || err.message);
     process.exit(1);
+  });
+
+  // Railway sender SIGTERM ved hver redeploy — la pågående forespørsler fullføre
+  // før prosessen dør, i stedet for å kappe dem midt i en transaksjon.
+  process.on('SIGTERM', () => {
+    console.log('[shutdown] SIGTERM mottatt — stenger for nye tilkoblinger');
+    server.close(() => {
+      pool.end().then(() => process.exit(0)).catch(() => process.exit(0));
+    });
+    setTimeout(() => {
+      console.error('[shutdown] Tidsavbrudd — tvinger avslutning');
+      process.exit(0);
+    }, 10000).unref();
   });
 }
 
