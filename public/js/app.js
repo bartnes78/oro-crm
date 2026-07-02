@@ -78,6 +78,11 @@ window.escHtml = function(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 };
 
+// tel:-URI tåler ikke mellomrom/parenteser konsekvent på tvers av ringe-apper
+window.telHref = function(phone) {
+  return 'tel:' + String(phone||'').replace(/[^\d+]/g, '');
+};
+
 window.ui = {
   emptyState: (msg) =>
     `<p class="text-muted" style="padding:20px 0;text-align:center;font-size:13px">${window.escHtml(msg)}</p>`,

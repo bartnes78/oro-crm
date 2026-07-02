@@ -281,8 +281,8 @@ function buildKeyFigures(inv, products, piData, tasks) {
               <div style="font-size:12px;font-weight:600">${window.escHtml(primaryCtct.name)}</div>
               ${primaryCtct.title ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.title)}</div>` : ''}
               ${primaryCtct.email ? `<a href="mailto:${window.escHtml(primaryCtct.email)}" style="font-size:11px;color:var(--blue);text-decoration:none;display:block;margin-top:2px">${window.escHtml(primaryCtct.email)}</a>` : ''}
-              ${primaryCtct.phone ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.phone)}</div>` : ''}
-              ${primaryCtct.phone2 ? `<div style="font-size:11px;color:var(--muted)">${window.escHtml(primaryCtct.phone2)}</div>` : ''}
+              ${primaryCtct.phone ? `<a href="${window.telHref(primaryCtct.phone)}" style="font-size:11px;color:var(--blue);text-decoration:none;display:block">${window.escHtml(primaryCtct.phone)}</a>` : ''}
+              ${primaryCtct.phone2 ? `<a href="${window.telHref(primaryCtct.phone2)}" style="font-size:11px;color:var(--blue);text-decoration:none;display:block">${window.escHtml(primaryCtct.phone2)}</a>` : ''}
             </div>` : ''}
         </div>
       </div>
@@ -324,8 +324,8 @@ function buildContactsCard(inv, visInaktive) {
             ${c.title ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${window.escHtml(c.title)}</div>` : ''}
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
               ${c.email ? `<a href="mailto:${window.escHtml(c.email)}" style="font-size:12px;color:var(--blue);text-decoration:none;">&#9993; ${window.escHtml(c.email)}</a>` : ''}
-              ${c.phone ? `<span style="font-size:12px;color:#555;">&#128222; ${window.escHtml(c.phone)}</span>` : ''}
-              ${c.phone2 ? `<span style="font-size:12px;color:#555;">&#128222; ${window.escHtml(c.phone2)}</span>` : ''}
+              ${c.phone ? `<a href="${window.telHref(c.phone)}" style="font-size:12px;color:var(--blue);text-decoration:none;">&#128222; ${window.escHtml(c.phone)}</a>` : ''}
+              ${c.phone2 ? `<a href="${window.telHref(c.phone2)}" style="font-size:12px;color:var(--blue);text-decoration:none;">&#128222; ${window.escHtml(c.phone2)}</a>` : ''}
               ${c.notes ? `<span style="font-size:11px;color:#aaa;font-style:italic;">${window.escHtml(c.notes)}</span>` : ''}
             </div>
           </div>
