@@ -80,6 +80,8 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 - [x] DB: slå sammen 3 investor-duplikater (Statnett SF/SF's Pensjonskasse → INV-004, Mallin/Mallin Eiendom AS → INV-361, Stormbull/Stormbull Eiendom AS → INV-538), audit-logget
 - [x] Manuell test: ny kontakt med telefon 2 (via Brreg-rolle-knapp), redigering av telefon 2, Excel-eksport verifisert med exceljs-parsing («Telefon 2»-kolonne + verdier i Kontakter-arket) *(11. juni)*
 - [x] Bruker: avvis de 2 falske duplikat-forslagene (Aker ASA/Aker Pensjonskasse, Nordea Norge AS/Nordea Norge Pensjonskasse) i Duplikater-siden — begge par skal stå som separate investorer *(19. juni)*
+- [x] **Stille dev-server-krasj diagnostisert + herdet** — krasjet uten stack rett etter en treg kald `/api/me`. Rotårsak: manglet `process.on('uncaughtException'/'unhandledRejection')` + `server.on('error')` på `app.listen` → overlappende nodemon-restart under treg DB-oppstart ga uoppfanget `EADDRINUSE`. Lagt til alle tre handlerne i `server.js` (logger full stack nå). EADDRINUSE-fanging bevist via isolert test. Se lessons.md *(29. juni)*
+- [x] **Klikkbare telefonnumre** — `window.telHref()` i `app.js` sanerer nummeret til `tel:`-URI (beholder ledende `+`, fjerner mellomrom/parenteser). `investor-detalj.js`: telefon + telefon 2 i både kontaktkort og primærkontakt-sidebar er nå `<a href="tel:...">` (samme mønster som mailto-lenkene). Verifisert i browser på INV-149 (`tel:93429043`, 2 anker, ingen konsollfeil) *(kristian, 29. juni)*
 
 ### Brreg-integrasjon
 
@@ -117,6 +119,7 @@ Først deretter: gradvis utflytting fra server.js til rutemoduler (se Teknisk gj
 
 ### Feedback fra brukere (innrapportert via 🐛-knapp)
 
+- [x] **#20 [dashboard]** «Ønsker topp 10 høyest vektet nytt volum, her skal vi ta ut det som er tegnet…» *(kristian, 29. juni)*. Avklart med kristian: vis kun **nytt** volum — vekt bare aktive fundraises (Pipeline/Fundraising) og ekskluder tegnede rader (`committed_amount > 0`). Fikset i `routes/dashboard.js`: ny `invNewMap` for `top10` (globale KPI-ene Aggregert/Vektet volum teller fortsatt alt). Verifisert mot DB (Etablert-tunge navn som Tjelta/Annima/AS Straen faller ut; POA 125,0 på topp) og i browser (10 rader, ingen konsollfeil, KPI-er uendret) *(29. juni)*
 - [x] **[detalj-side]** «Felles prosjekt»-kategorien skal ikke ha dokumenter — skjult i dokumentseksjonen *(kristian, 3. juni)*
 - [x] **[dashboard]** Global kundesøk i topbaren — søkefelt i sidemenyen, Enter navigerer til investorer *(kristian, 3. juni)*
 - [x] **[brukere]** Send velkomstmail til nye brukere — modal med ferdigskrevet velkomstmelding + kopierknapp *(kristian, 4. juni)*
@@ -146,7 +149,7 @@ Implementert *(19. juni)*
 - [x] `logg-kontakt.js` — forhåndsvelger `currentUser.leadName` (fallback: `displayName`)
 - [x] `dashboard.js` — hurtiglogg-modal forhåndsvelger ansvarlig via `leadName`
 - [x] `investorer.js` — ny-investor-modal forhåndsvelger lead via `leadName`
-- [ ] **Gjenstår (admin-oppgave):** sett `lead_name` for `kristian` → Kristian Bartnes og `nikolai` → Nikolai Staubo via Brukeradmin → Rediger
+- [x] **Admin-oppgave fullført:** `lead_name` er satt for alle 5 brukere (kristian, nikolai, andersa, andersbn, gunnar) — verifisert i DB *(29. juni)*
 
 ### Kritisk (før ekte produksjonsdata)
 
@@ -178,7 +181,7 @@ Implementert *(19. juni)*
   - [x] `fmtUser`, `hashPassword`, `verifyPassword` i `lib/helpers.js` (delt med login i server.js).
   - [x] Verifisert: ren serveroppstart, alle 7 endepunkter svarer 200, dashboard rendrer korrekt. server.js 1013 → 563 linjer (−450).
 
-- [ ] **Gjenstående utflytting** — MSG-parse (~35 linjer) og `buildExcelWorkbook` (~120 linjer) ligger fortsatt i server.js. Lokale `fmtRow`/`requireAdmin`/`auditLog`/`validationError` dupliserer lib/helpers — kan ryddes ved neste utflytting.
+- [x] **Gjenstående utflytting fullført** — MSG-parse flyttet til `routes/email.js`, `buildExcelWorkbook` til `lib/excel.js`. server.js nede i **389 linjer** (under ~500-målet), ingen lokale duplikat-helpere igjen. Verifisert 29. juni.
 
   **Utflytting #4 — Kontakter — ferdig (23. juni):**
   - [x] Ny `routes/contacts.js` — 5 ruter: GET/POST `/api/contacts`, PUT/DELETE `/api/contacts/:id`, POST `/api/contacts/merge`. Bruker delte hjelpere fra `lib/helpers.js`.
@@ -205,9 +208,9 @@ Implementert *(19. juni)*
       Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
       route-registrering), regnes utflyttingen som ferdig.
       Etter hver utflytting: full manuell test av berørt sides hovedflyt.
-- [ ] Oppdater ARCHITECTURE.md — beskriver fortsatt én stor server.js, mangler rutemoduler og lib/
-- [ ] Ingen automatiserte tester — vurder enkel integrasjonstest for kjerneruter
-- [ ] CSRF-beskyttelse mangler — nødvendig hvis CRM åpnes bredere enn internt team
+- [x] **Oppdater ARCHITECTURE.md** — full omskriving 29. juni. Gamle versjon var utdatert OG selvmotsigende (beskrev React/Vite + `src/*.jsx`, JSON-fil-«database» i §2 men PostgreSQL i §4, Basic Auth, slettet `seed.js`). Ny versjon matcher faktisk system: vanilla-JS-frontend i `public/js/`, `routes/` + `lib/`-oppdeling, alle 11 tabeller, session-auth, prosess-robusthet, og en egen §10 «Kjent teknisk gjeld». Samtidig: la `SESSION_SECRET` (påkrevd i prod!) og `MS_*` til i `.env.example`.
+- [x] **Automatiserte røyktester (kjerne-middleware)** *(29. juni)* — innebygd `node:test`, null nye avhengigheter. `npm test` kjører 7 ikke-muterende tester på ~2,6s (auth 401, CSRF 403, login 400/401, SPA-fallback 200) → fanger regresjoner i auth/CSRF-kabling uten å skrive til prod-DB. Refaktor: `server.js` guarder `init()` med `require.main === module` + `module.exports = app` (produksjon uendret). `test/helpers.js` starter appen på efemer port. **Fallgruver løst:** (1) node:test kjører *alle* `.js` i `test/` som testfiler → `test/helpers.js` hang; løst med eksplisitt glob `"test/**/*.test.js"`. (2) `connect-pg-simple`-prune-timer + undici keep-alive-sockets holder loopen i live → `--test-force-exit`. Se lessons.md. **Mulig utvidelse senere:** autentiserte/muterende tester krever egen test-DB (skrives ikke til prod).
+- [x] ~~CSRF-beskyttelse mangler~~ — upresist: X-Requested-With-header-vern finnes ([server.js:265](server.js:265)) + SameSite=Lax-cookie gir rimelig vern for same-origin intern app. Kun ekte token-basert CSRF gjenstår, og kun *hvis* appen åpnes bredere enn internt team (dokumentert i ARCHITECTURE §9/§10)
 
 ### Bevisste sikkerhetsbeslutninger (dokumentert etter review 26. juni)
 - **Excel-eksport (`/api/export/excel`)** er åpen for alle innloggede brukere — bevisst, alle 5 brukere er betrodd full dataeksport

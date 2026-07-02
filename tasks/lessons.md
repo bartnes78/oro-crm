@@ -66,6 +66,18 @@ Oppdateres etter korreksjoner fra brukeren. Gjennomgås ved starten av nye økte
 **Rotårsak:** Med nodemon kjørende blir hver Edit en egen restart. En import som dupliserer et navn som fortsatt er deklarert lokalt gir en kortvarig, men ekte, krasj-tilstand.  
 **Regel:** Når en lokal definisjon erstattes med et import: gjør tillegg av import og fjerning av den lokale definisjonen i *samme* edit der det er mulig, eller forvent en forbigående nodemon-krasj og verifiser at den *siste* oppstarten er ren (sjekk `preview_logs` til bunns, ikke bare at serveren svarer).
 
+### [2026-06-29] Dev-serveren krasjet stille uten stack — manglet top-level feilhåndtering
+
+**Hva som gikk galt:** Under verifisering krasjet dev-serveren («[nodemon] app crashed») rett etter et uvanlig tregt `GET /api/me 200 2742ms`, uten noen feilmelding/stack i loggen. Umulig å feilsøke etterpå.
+**Rotårsak:** To hull i feilhåndteringen. (1) Ingen `process.on('uncaughtException')`/`unhandledRejection`-handler i `server.js` → en uoppfanget async-feil drepte prosessen stille (ingen stack). (2) `app.listen(PORT)` hadde ingen `server.on('error')`-listener → ved overlappende nodemon-restarter (rask redigering av flere filer mens forrige prosess fortsatt hang i en treg kald Railway-DB-spørring) feiler bindingen med `EADDRINUSE`, som uten listener blir en uoppfanget exception. `[backup]`-linjen kom aldri i krasj-loggen → oppstart fullførte aldri, konsistent med EADDRINUSE under listen. Merk: `db.js` har allerede `pool.on('error')`, så *idle* pool-feil var ikke årsaken.
+**Regel:** Node-servere skal alltid ha (a) `process.on('uncaughtException', …)` som logger full `err.stack` og `process.exit(1)` (la nodemon/Railway restarte), (b) `process.on('unhandledRejection', …)` som logger stack (lev videre — som regel gjenopprettelig), og (c) `server.on('error', …)` på `app.listen()` med eksplisitt `EADDRINUSE`-melding. Lagt til i `server.js` *(29. juni)*. Ved «stille krasj»-symptomer: sjekk først om disse handlerne finnes — fravær gir tap av stack.
+
+### [2026-06-29] node:test plukker opp alle filer i `test/` + henger på open handles
+
+**Hva som gikk galt:** Første `npm test` (med `node --test`) hang i 60s uten output. To separate årsaker: (1) node:test sin auto-discovery kjører **alle** `.js`-filer i en `test/`-mappe som testfiler — også `test/helpers.js`, som ikke har tester og dermed hang på sin egen open handle til 60s-watchdogen slo inn. (2) Selv `smoke.test.js` alene avsluttet ikke etter at alle 7 tester passerte, fordi `connect-pg-simple` sin prune-`setInterval` og undici (global `fetch`) sine keep-alive-sockets holdt event-loopen i live.
+**Rotårsak:** Default test-glob inkluderer hele `test/`-katalogen, ikke bare `*.test.js`. Og bakgrunns-timere/sockets fra prod-avhengigheter (session-store, fetch) dør ikke av seg selv når testene er ferdige.
+**Regel:** (a) Gi testskriptet en eksplisitt glob som kun matcher testfiler: `node --test "test/**/*.test.js"` (sett-hjelpere i `test/` blir da ikke kjørt som tester). (b) Bruk `--test-force-exit` (Node 22+) når prod-kode lar timere/sockets stå åpne — alternativt lukk dem eksplisitt i `after` (`pool.end()` holder ikke for prune-timer/undici). (c) For å gjøre en auto-bootende server (`init()` på modul-last) importerbar i test: guard oppstarten med `if (require.main === module)` og `module.exports = app`.
+
 ---
 
 ## Format
