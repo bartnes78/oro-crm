@@ -177,7 +177,7 @@ Kopier `.env.example` til `.env` og fyll inn verdier. `.env` skal aldri committe
 | `SESSION_SECRET` | Signerer session-cookies. **Påkrevd i prod** (serveren avbryter oppstart uten den); tilfeldig fallback i dev | I prod |
 | `ALLOWED_ORIGIN` | Tillatt CORS-origin (Railway-domenet). **Påkrevd i prod** | I prod |
 | `CRM_USER` / `CRM_PASS` / `CRM_DISPLAY_NAME` | Admin-konto som opprettes **kun** ved første oppstart med tom `users`-tabell. Ubrukt etter at ekte kontoer finnes | Nei |
-| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_ONEDRIVE_USER`, `MS_ONEDRIVE_FOLDER` | Azure AD-app for opplasting av ukentlig Excel-eksport til OneDrive (valgfritt) | Nei |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DRIVE_FOLDER_ID` | Google Disk-opplasting av ukentlig Excel-eksport (valgfritt — se avsnitt 8) | Nei |
 
 **På Railway:** Legg inn variablene under **Variables**. Ikke bruk `.env`-filer på Railway.
 
@@ -197,11 +197,19 @@ Kopier `.env.example` til `.env` og fyll inn verdier. `.env` skal aldri committe
 
 **Ukentlig Excel-eksport (eksternt lag):**
 - Hver mandag kl. 04:00 (Europe/Oslo), etter Brreg-synk, genereres en full Excel-eksport til `data/exports/ORO_CRM_<år>-W<uke>.xlsx`
-- De 8 siste (~2 måneder) beholdes
+- De 8 siste (~2 måneder) beholdes lokalt — **merk:** `data/exports/` er efemert på Railway og nullstilles ved hver deploy
 - Nedlastbar fra **Backup**-siden (alle innloggede brukere har dataeksport-tilgang — bevisst)
-- Hvis `MS_*`-variablene er satt, lastes filen i tillegg opp til OneDrive via Microsoft Graph (client credentials)
+- Hvis `GOOGLE_*`-variablene er satt, lastes filen i tillegg opp til **Google Disk** (mappen «ORO CRM Backups»). Eksisterende fil med samme navn oppdateres i stedet for å dupliseres
 
-**Reelt eksternt sikkerhetslag:** Admin bør periodisk laste ned siste ukentlige eksport og arkivere den utenfor Railway.
+**Google Disk-oppsett (én gang):**
+1. [console.cloud.google.com](https://console.cloud.google.com) → opprett prosjekt (f.eks. `oro-crm-backup`)
+2. **APIs & Services → Library** → aktiver **Google Drive API**
+3. **OAuth consent screen** → External → fyll inn appnavn og e-post → **Publish app** («In production» — i testmodus utløper refresh-tokenet etter 7 dager)
+4. **Credentials → Create Credentials → OAuth client ID** → type **Desktop app** → kopier Client ID og Client secret
+5. Kjør lokalt: `node scripts/google-drive-auth.js <client_id> <client_secret>` → godkjenn i nettleseren. Skriptet oppretter Disk-mappen og skriver ut `railway variables`-kommandoen som setter de fire variablene
+6. Redeploy — loggen skal vise `[weekly-export] Lastet opp til Google Disk: ...`
+
+Opplastingen bruker OAuth refresh-token (scope `drive.file` — appen ser kun filer den selv har opprettet). Service account brukes bevisst ikke: de mangler lagringskvote på personlige Disk-kontoer.
 
 ---
 

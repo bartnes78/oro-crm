@@ -86,9 +86,9 @@ async function runWeeklyExport() {
     for (const f of toDelete) await fs.promises.unlink(path.join(EXPORT_DIR, f));
 
     console.log(`[weekly-export] ${file}`);
-    if (process.env.MS_TENANT_ID && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
-      uploadToOneDrive(file, path.basename(file)).catch(e =>
-        console.error('[weekly-export] OneDrive-opplasting feilet:', e.message)
+    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN) {
+      uploadToGoogleDrive(file, path.basename(file)).catch(e =>
+        console.error('[weekly-export] Google Disk-opplasting feilet:', e.message)
       );
     }
   } catch (e) {
@@ -96,43 +96,65 @@ async function runWeeklyExport() {
   }
 }
 
-async function uploadToOneDrive(filePath, fileName) {
-  const tokenRes = await fetch(
-    `https://login.microsoftonline.com/${process.env.MS_TENANT_ID}/oauth2/v2.0/token`,
-    {
+// OAuth refresh-token-flyt (ikke service account — de har ikke lagringskvote
+// på personlige Disk-kontoer). Engangs-oppsett: scripts/google-drive-auth.js
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+async function getGoogleAccessToken() {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type:    'refresh_token',
+      client_id:     process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    }),
+  });
+  const { access_token, error, error_description } = await res.json();
+  if (!access_token) throw new Error('Google token feilet: ' + (error_description || error));
+  return access_token;
+}
+
+async function uploadToGoogleDrive(filePath, fileName) {
+  const token    = await getGoogleAccessToken();
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID er ikke satt');
+  const auth    = { Authorization: `Bearer ${token}` };
+  const content = await fs.promises.readFile(filePath);
+
+  // Redeploy regenererer ukens fil — oppdater eksisterende i stedet for å lage duplikat
+  const q = encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`);
+  const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, { headers: auth });
+  const existing = (await listRes.json()).files?.[0];
+
+  let upRes;
+  if (existing) {
+    upRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { ...auth, 'Content-Type': XLSX_MIME },
+      body: content,
+    });
+  } else {
+    const boundary = 'oro-crm-' + crypto.randomBytes(8).toString('hex');
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify({ name: fileName, parents: [folderId] }) +
+        `\r\n--${boundary}\r\nContent-Type: ${XLSX_MIME}\r\n\r\n`),
+      content,
+      Buffer.from(`\r\n--${boundary}--`),
+    ]);
+    upRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type:    'client_credentials',
-        client_id:     process.env.MS_CLIENT_ID,
-        client_secret: process.env.MS_CLIENT_SECRET,
-        scope:         'https://graph.microsoft.com/.default',
-      }),
-    }
-  );
-  const { access_token, error_description } = await tokenRes.json();
-  if (!access_token) throw new Error('MS token feilet: ' + error_description);
-
-  const user   = encodeURIComponent(process.env.MS_ONEDRIVE_USER   || '');
-  const folder = encodeURIComponent(process.env.MS_ONEDRIVE_FOLDER || 'ORO CRM Backups');
-  const fileContent = await fs.promises.readFile(filePath);
-
-  const uploadRes = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${user}/drive/root:/${folder}/${fileName}:/content`,
-    {
-      method:  'PUT',
-      headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'Content-Type':  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      },
-      body: fileContent,
-    }
-  );
-  if (!uploadRes.ok) {
-    const msg = await uploadRes.text().catch(() => uploadRes.status);
-    throw new Error(`Graph API ${uploadRes.status}: ${msg}`);
+      headers: { ...auth, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+    });
   }
-  console.log(`[weekly-export] Lastet opp til OneDrive: ${fileName}`);
+  if (!upRes.ok) {
+    const msg = await upRes.text().catch(() => upRes.status);
+    throw new Error(`Drive API ${upRes.status}: ${msg}`);
+  }
+  console.log(`[weekly-export] Lastet opp til Google Disk: ${fileName}${existing ? ' (oppdatert)' : ''}`);
 }
 
 // ── Passord-hashing ───────────────────────────────────────────────────────────
