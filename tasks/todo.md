@@ -1,5 +1,18 @@
 # ORO CRM — Oppgaveliste
 
+## Robusthetssprint (fra 360-gjennomgang 2. juli)
+
+1. [ ] **Ekstern backup reell** — Railway-vars fikset via CLI: `NODE_ENV` var `Production` (stor P — **hele prod-modus var av**: secure-cookies, CORS-lås, oppstartssjekker), `allowed_origin`/`ms_tenant_id` var lowercase (case-sensitivt på Linux), og tenant-/klient-GUID var **byttet om** (verifisert via AADSTS-feilkoder + dummy-secret-test). Token utstedes nå, men med tom `roles` — **gjenstår: admin-samtykke `Files.ReadWrite.All` (Application) i Entra ID (kristian)** → deretter redeploy og verifiser «Lastet opp til OneDrive» i logg
+2. [x] **Restore-herding** — kolonnefiltrering mot information_schema (gamle backuper med droppede kolonner kan nå gjenopprettes), per-tabell rapport {total, inserted, droppedColumns} i respons + audit, restore avbrytes hvis sikkerhetsbackup feiler (runBackup returnerer nå bool) *(2. juli)*
+3. [x] **Merge-fiks** — declined_offers flyttes nå i merge-transaksjonen (ble CASCADE-slettet); alle beregnede merged-felter skrives (fund_vehicle, source, next_steps, datoer, docs-objektmerge, org_nr/brreg som enhet); drop slettes før keep-UPDATE pga. unik org_nr-indeks; deleted_at ekskludert fra arv. SQL-sekvens verifisert mot DB i rollback-transaksjon *(2. juli)*
+4. [x] **Helse/overvåking** — `GET /api/health` (uautentisert DB-ping, 200/503) + `GET /api/system-status` (admin) + Systemstatus-kort på Backup-siden: daglig backup (rød >25t), ukeseksport og Brreg-synk (rød >8d), serverversjon *(2. juli)*
+5. [x] **CI-gate** — `.github/workflows/ci.yml`: Postgres 16-container, skjema-init (`scripts/init-test-db.js`), full npm test på push/PR. **Gjenstår (kristian): skru på «Wait for CI» i Railway-innstillingene** *(2. juli)*
+6. [x] **Pool-timeouts** — max 10, connectionTimeoutMillis 10s, statement_timeout 30s, keepAlive i db.js; SSL slås av for localhost-URL-er (CI) *(2. juli)*
+7. [x] **Graceful shutdown** — SIGTERM: server.close() + pool.end(), 10s tvangsavslutning med unref *(2. juli)*
+8. [x] **Muterende tester** — `test/crud.test.js`: login, investor-CRUD med validering, merge m/ declined_offers-regresjon, papirkurv/restore. Gated på RUN_MUTATING_TESTS=1 + nekter Railway-URL-er. Kjøres i CI; skipper lokalt *(2. juli — CI-kjøring verifiseres ved første push)*
+9. [x] **Backup-dekning** — audit_log + feedback_reports (uten screenshot-kolonnen, ellers ×10 snapshots av 8MB-bilder) i runBackup; gjenopprettes bevisst ikke i restore. Verifisert: stamp 09-42-30 har alle 10 tabeller, uten skjermbilder *(2. juli)*
+10. [x] **SW-versjonssjekk** — `/api/version` (RAILWAY_GIT_COMMIT_SHA) + checkVersion() i app.js: sjekk ved navigasjon (5 min throttle), info-toast + auto-reload (hopper over reload hvis modal er åpen) *(2. juli)*
+
 ## Fase 1 — stabilisering før ny utvikling *(plan vedtatt 11. juni)*
 
 1. [x] Lukk de fire åpne manuelle testene fra pågående arbeid — gjennomført 11. juni, to bugs funnet og fikset underveis (se «Funn fra QA-runden» under)

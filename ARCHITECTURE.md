@@ -228,8 +228,14 @@ Kopier `.env.example` til `.env` og fyll inn verdier. `.env` skal aldri committe
 
 ## 10. Kjent teknisk gjeld
 
-- **Tester:** `npm test` kjører ikke-muterende røyktester for kjerne-middleware (auth, CSRF, SPA-fallback) via innebygd `node:test` — krever en kjørende dev-DB (`DATABASE_URL`). Utover dette er QA manuell i nettleser. Autentiserte/muterende tester (investor-CRUD, merge) gjenstår og bør kjøres mot en **egen test-DB**, ikke prod.
 - **Token-basert CSRF mangler** — kun relevant hvis appen åpnes bredere enn internt team (se avsnitt 9).
-- **`.env.example`** lister ikke `SESSION_SECRET` og `MS_*`-variablene ennå.
 - **`CRM_PASS`/`CRM_USER`** er ubrukt nå som ekte kontoer finnes — kan ryddes fra Railway-variabler (lav prioritet, ikke en sikkerhetsrisiko).
-- **Railway volume/persistent storage** er ikke satt opp — vurder for å sikre at data overlever Railway-migrasjoner.
+- **Railway volume/persistent storage** er ikke satt opp — `data/exports/` er efemert og nullstilles ved hver deploy. OneDrive-opplastingen er derfor det reelle eksterne arkivet for ukeseksportene.
+
+## 11. Tester og CI
+
+- `npm test` kjører to suiter via innebygd `node:test`:
+  - **Røyktester** (`test/smoke.test.js`) — ikke-muterende, verifiserer auth/CSRF/SPA-fallback. Kjører mot `DATABASE_URL` i `.env`.
+  - **Muterende API-tester** (`test/crud.test.js`) — autentisert investor-CRUD, merge (inkl. declined_offers-flytting) og papirkurv/restore. Gated på `RUN_MUTATING_TESTS=1` og nekter å kjøre mot Railway-URL-er. Kjøres i CI mot engangs-Postgres.
+- **GitHub Actions** (`.github/workflows/ci.yml`): hver push/PR starter en Postgres 16-container, initialiserer skjema (`scripts/init-test-db.js`) og kjører hele testsuiten. Skru på **«Wait for CI»** i Railway-innstillingene for å hindre deploy av rød main.
+- **Overvåking:** `/api/health` (uautentisert, DB-ping) for uptime-sjekker; **Systemstatus**-kortet på Backup-siden viser alder på siste backup, ukeseksport og Brreg-synk med rød varsling. `/api/version` (git-SHA) brukes av frontend til å varsle om ny versjon etter deploy.
