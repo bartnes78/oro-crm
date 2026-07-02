@@ -25,9 +25,10 @@ jobs:
       RUN_MUTATING_TESTS: '1'
     steps:
       - uses: actions/checkout@v4
+      # Node 21+ kreves: node --test med glob-mønster ("test/**/*.test.js")
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       - name: Initialiser skjema i test-DB
         run: node scripts/init-test-db.js
