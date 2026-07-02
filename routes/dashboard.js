@@ -119,7 +119,7 @@ router.get('/api/dashboard', async (req, res) => {
     const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
       query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors WHERE deleted_at IS NULL'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
-      query(`SELECT pi.investor_id, pi.target_ticket, pi.probability
+      query(`SELECT pi.investor_id, pi.product_id, pi.target_ticket, pi.probability, pi.committed_amount
              FROM product_investors pi
              WHERE pi.target_ticket IS NOT NULL
              AND NOT EXISTS (
@@ -179,11 +179,27 @@ router.get('/api/dashboard', async (req, res) => {
       status:    p.status || null,
     }));
 
+    // #20: Topp 10 teller kun NYTT volum — vekter bare aktive fundraises
+    // (Pipeline/Fundraising) og ekskluderer rader som allerede er tegnet
+    // (committed_amount > 0). De globale KPI-ene over teller fortsatt alt.
+    const activeProductIds = new Set(
+      productList.filter(p => p.status === 'Pipeline' || p.status === 'Fundraising').map(p => p.id)
+    );
+    const invNewMap = {};
+    for (const pi of piRows) {
+      if (!activeProductIds.has(pi.product_id)) continue;
+      if (Number(pi.committed_amount) > 0) continue;
+      if (pi.probability == null) continue;
+      if (!invNewMap[pi.investor_id]) invNewMap[pi.investor_id] = { ticket: 0, weighted: 0 };
+      invNewMap[pi.investor_id].ticket   += Number(pi.target_ticket) || 0;
+      invNewMap[pi.investor_id].weighted += Number(pi.target_ticket) * Number(pi.probability);
+    }
+
     const top10 = investors
       .map(i => ({
         ...fmtInvestor(i),
-        target_ticket: (invPiMap[i.id] || {}).ticket  || null,
-        weighted:      (invPiMap[i.id] || {}).weighted || null,
+        target_ticket: (invNewMap[i.id] || {}).ticket  || null,
+        weighted:      (invNewMap[i.id] || {}).weighted || null,
       }))
       .filter(i => i.weighted > 0)
       .sort((a, b) => b.weighted - a.weighted)

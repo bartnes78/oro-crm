@@ -52,19 +52,19 @@ function computeTop10(data, filter) {
 function buildKPIs(data) {
   return `
     <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">Investorer totalt</div>
-        <div class="kpi-value">${fmt(data.total)}</div>
+      <div class="kpi-card kpi-accent">
+        <div class="kpi-label">Vektet volum</div>
+        <div class="kpi-value">${fmt(data.weighted, 1)}</div>
+        <div class="kpi-sub">MNOK (ticket × sannsynlighet)</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Aggregert volum</div>
         <div class="kpi-value">${fmt(data.ticket)}</div>
         <div class="kpi-sub">MNOK målticket</div>
       </div>
-      <div class="kpi-card kpi-accent">
-        <div class="kpi-label">Vektet volum</div>
-        <div class="kpi-value">${fmt(data.weighted, 1)}</div>
-        <div class="kpi-sub">MNOK (ticket × sannsynlighet)</div>
+      <div class="kpi-card">
+        <div class="kpi-label">Investorer totalt</div>
+        <div class="kpi-value">${fmt(data.total)}</div>
       </div>
     </div>`;
 }
@@ -390,7 +390,7 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
   bindTop10Card(newCard, pageRoot, data, investors, filter);
 }
 
-function setupEvents(el, data, investors, filter) {
+function setupEvents(el, data, investors, filter, state) {
   el.querySelectorAll('.dash-logg-btn').forEach(btn => {
     btn.addEventListener('click', () => openQuickLogModal(investors, el, state?.currentUser));
   });
@@ -493,7 +493,7 @@ export async function render(el, state) {
         </div>
       </div>`;
 
-    setupEvents(el, data, investors, filter);
+    setupEvents(el, data, investors, filter, state);
 
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:red">Feil: ${window.escHtml(e.message)}</p></div>`;
