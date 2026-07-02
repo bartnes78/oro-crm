@@ -16,6 +16,17 @@ const { buildExcelWorkbook } = require('./lib/excel');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// Uten disse dør prosessen stille ved en uoppfanget async-feil (ingen stack i loggen).
+// uncaughtException etterlater prosessen i udefinert tilstand → logg stack og avslutt
+// (nodemon/Railway restarter). unhandledRejection er som regel gjenopprettelig → logg, men lev videre.
+process.on('uncaughtException', err => {
+  console.error('[FATAL] uncaughtException:', err && err.stack || err);
+  process.exit(1);
+});
+process.on('unhandledRejection', reason => {
+  console.error('[FATAL] unhandledRejection:', reason && reason.stack || reason);
+});
+
 // ── Backup ────────────────────────────────────────────────────────────────────
 async function runBackup() {
   const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
@@ -362,7 +373,22 @@ async function init() {
     runWeeklyExport().catch(e => console.error('[weekly-export] Uventet feil:', e.message));
   }, { timezone: 'Europe/Oslo' });
 
-  app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
+  const server = app.listen(PORT, () => console.log('ORO CRM → http://localhost:' + PORT));
+  // Under rask redigering rekker ikke den gamle nodemon-prosessen alltid å frigi
+  // porten før den nye starter → EADDRINUSE. Uten denne listeneren ble det en
+  // uoppfanget exception som drepte prosessen uten lesbar stack.
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE')
+      console.error(`[oppstart] Port ${PORT} er opptatt — venter på at forrige prosess frigir den.`);
+    else
+      console.error('[oppstart] Server-feil:', err.stack || err.message);
+    process.exit(1);
+  });
 }
 
-init().catch(err => { console.error('Oppstart feilet:', err.message); process.exit(1); });
+// Kun ved direkte kjøring (node server.js / nodemon) — ved require fra tester
+// importeres `app` ferdig kablet uten å starte schema-init, backup, cron og listen.
+if (require.main === module)
+  init().catch(err => { console.error('Oppstart feilet:', err.message); process.exit(1); });
+
+module.exports = app;

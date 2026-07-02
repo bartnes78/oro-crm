@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "migrate": "node migrate.js"
+    "migrate": "node migrate.js",
+    "test": "node --test --test-force-exit \"test/**/*.test.js\""
   },
   "dependencies": {
     "@kenjiuno/msgreader": "^1.28.0",
