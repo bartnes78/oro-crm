@@ -171,13 +171,6 @@ Implementert *(19. juni)*
 - [x] Verifisert at Railway-deploy bruker HTTPS — HTTP redirecter automatisk til HTTPS på prod-domenet *(kristian, 10. juni)*
 - [x] Admin-rolle avklart — `kristian` har `role='admin'`, full tilgang til backup/brukerstyring/sletting/sammenslåing
 
-### Data
-
-- [ ] Kjør seed/migrasjon på nytt fra oppdatert Excel-fil
-- [ ] Gå gjennom Duplikater-siden og slå sammen like investorer
-- [ ] Gå gjennom DuplikatKontakter-siden og rydd kontaktduplikater
-- [ ] Sett riktige faser og sannsynligheter på alle aktive investorer
-
 ### Teknisk gjeld
 
 - [x] **Brreg-ruter + `brregSyncAll`-cron** — flyttet til `routes/brreg.js`. Delte hjelpere (`auditLog`, `validationError`, `fmtRow`, `requireAdmin`) i `lib/helpers.js`. Duplikert adresse/rolle-parsing konsolidert i `parseAdresser`/`parseRoller`. server.js redusert med ~200 linjer *(19. juni)*
@@ -216,7 +209,7 @@ Implementert *(19. juni)*
   - [x] Mountet via `app.use(require('./routes/products'))` i server.js (ved siden av brreg)
   - [x] Kode flyttet verbatim; bruker delte hjelpere fra `lib/helpers.js` (`fmtRow`, `validationError`, `requireAdmin`, `auditLog`)
   - [x] Verifisert: ren serveroppstart (ingen require-/mountfeil), syntakssjekk OK, alle 11 ruter registrert på router-stacken, ingen rute-rester i server.js. server.js 1961 → 1747 linjer (−214).
-  - [ ] **Gjenstår:** ende-til-ende autentisert HTTP-test (krever innlogget sesjon — dev-`.env`-passordet matcher ikke lenger den ekte `kristian`-kontoen, og jeg unngikk å skrive temp-bruker til prod-DB). Bør bekreftes i nettleser ved neste innlogging: prosjektliste, opprett/rediger prosjekt, registrer interesse/tegning, avlys/fullfør, registrer/slett avslag.
+  - [x] **Autentisert produkt-CRUD-test lagt til i `test/crud.test.js`** *(3. juli)* — dekker admin-only-vern (ikke-admin → 403), manglende navn → 400, full livssyklus (opprett → rediger → negativ ticket → 400 → tegning → avlys flytter tegnet investor til avslått og nuller committed_amount), fullfør (status Fullført) og slett. Kjøres muterende i CI (`RUN_MUTATING_TESTS=1` mot Postgres 16-container); skipper lokalt og nekter Railway-URL. Syntaks + skip-oppførsel verifisert lokalt; muterende kjøring bekreftes ved første CI-push (ingen lokal engangs-DB tilgjengelig).
   - Merk: admin-seed-ruten `/api/admin/seed-pensjon-oro-areal` ble bevisst værende i server.js (admin/seed-konsern, ikke kjerne-produkt-CRUD). Bruker fortsatt `query`/`requireAdmin`/`auditLog` i server.js-scope.
       Når `server.js` er under ~500 linjer (kun oppsett, middleware, SPA-fallback,
       route-registrering), regnes utflyttingen som ferdig.
@@ -232,14 +225,7 @@ Implementert *(19. juni)*
 
 ### Backup-rutine
 
-- [x] Automatisk OneDrive-opplasting — etter ukentlig Excel-eksport lastes filen opp til OROEiendom OneDrive via Microsoft Graph API (client credentials). Aktiveres med Railway-vars `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_ONEDRIVE_USER`, `MS_ONEDRIVE_FOLDER` *(19. juni)*
-- [ ] **Gjenstår (admin-oppgave):** registrer Azure AD-app med `Files.ReadWrite.All`-tillatelse, legg inn Railway-variabler. Se oppsettinstruksjoner nedenfor.
-
-  **Azure AD-oppsett (én gang):**
-  1. portal.azure.com → Azure Active Directory → App-registreringer → Ny registrering
-  2. API-tillatelser → Legg til → Microsoft Graph → Apptillatelser → `Files.ReadWrite.All` → Gi admin-godkjenning
-  3. Sertifikater og hemmeligheter → Ny klienthemmelighet → kopier verdi
-  4. Railway-vars: `MS_TENANT_ID` (katalog-ID), `MS_CLIENT_ID` (program-ID), `MS_CLIENT_SECRET`, `MS_ONEDRIVE_USER` (e-post til OneDrive-eier i OROEiendom), `MS_ONEDRIVE_FOLDER` (f.eks. `ORO CRM Backups`)
+- [x] Ekstern ukentlig backup — Excel-eksporten lastes opp til Google Disk (OAuth refresh-token, `drive.file`). Verifisert i prod 3. juli. Se Robusthetssprint punkt 1. *(OneDrive/Azure-sporet ble skrotet.)*
 - [ ] Vurder om Railway volume/persistent storage bør settes opp
 
 ---

@@ -238,7 +238,7 @@ Opplastingen bruker OAuth refresh-token (scope `drive.file` — appen ser kun fi
 
 - **Token-basert CSRF mangler** — kun relevant hvis appen åpnes bredere enn internt team (se avsnitt 9).
 - **`CRM_PASS`/`CRM_USER`** er ubrukt nå som ekte kontoer finnes — kan ryddes fra Railway-variabler (lav prioritet, ikke en sikkerhetsrisiko).
-- **Railway volume/persistent storage** er ikke satt opp — `data/exports/` er efemert og nullstilles ved hver deploy. OneDrive-opplastingen er derfor det reelle eksterne arkivet for ukeseksportene.
+- **Railway volume/persistent storage** er ikke satt opp — `data/exports/` er efemert og nullstilles ved hver deploy. Google Disk-opplastingen er derfor det reelle eksterne arkivet for ukeseksportene.
 
 ## 11. Tester og CI
 
