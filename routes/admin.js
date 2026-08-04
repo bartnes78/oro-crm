@@ -33,7 +33,7 @@ router.get('/api/audit-log', requireAdmin, async (req, res) => {
 router.get('/api/data-quality', requireAdmin, async (req, res) => {
   try {
     const [{ rows: investors }, { rows: contacts }, { rows: piRows }] = await Promise.all([
-      query('SELECT id, name, phase, lead, last_contact, org_nr FROM investors WHERE deleted_at IS NULL'),
+      query('SELECT id, name, phase, lead, last_contact, org_nr FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE'),
       query('SELECT investor_id, email FROM contacts WHERE active = 1'),
       query('SELECT investor_id, target_ticket, probability FROM product_investors'),
     ]);

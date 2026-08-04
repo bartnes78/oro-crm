@@ -304,3 +304,42 @@ DO $$ BEGIN
     ALTER TABLE users ADD COLUMN lead_name TEXT UNIQUE;
   END IF;
 END $$;
+
+-- Lead sourcing: rå, ukvalifiserte prospekter (staging). Skjules fra operative
+-- visninger via is_lead IS NOT TRUE; promoteres ved å sette is_lead = FALSE.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='is_lead') THEN
+    ALTER TABLE investors ADD COLUMN is_lead BOOLEAN DEFAULT FALSE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='finansinntekt_mnok') THEN
+    ALTER TABLE investors ADD COLUMN finansinntekt_mnok NUMERIC;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='kapitalkilde') THEN
+    ALTER TABLE investors ADD COLUMN kapitalkilde TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='relevans_indikativ') THEN
+    ALTER TABLE investors ADD COLUMN relevans_indikativ TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='provenance') THEN
+    ALTER TABLE investors ADD COLUMN provenance JSONB DEFAULT '{}';
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_investors_is_lead ON investors (is_lead) WHERE is_lead = TRUE;

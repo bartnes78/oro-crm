@@ -13,7 +13,7 @@ router.get('/api/analyse', async (req, res) => {
                SELECT 1 FROM declined_offers d
                WHERE d.investor_id = pi.investor_id AND d.product_id = pi.product_id
              )`),
-      query('SELECT id, phase, investor_type FROM investors WHERE deleted_at IS NULL'),
+      query('SELECT id, phase, investor_type FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE'),
       query(`SELECT DATE_TRUNC('month', date)::date AS month, COUNT(*)::int AS count, responsible
              FROM contact_log
              WHERE date >= NOW() - INTERVAL '13 months'
@@ -92,7 +92,7 @@ router.get('/api/analyse', async (req, res) => {
         invAgg[pi.investor_id].committed += Number(pi.committed_amount);
       }
     });
-    const { rows: invNames } = await query('SELECT id, name FROM investors WHERE deleted_at IS NULL');
+    const { rows: invNames } = await query('SELECT id, name FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE');
     const nameMap = Object.fromEntries(invNames.map(i => [i.id, i.name]));
     const top30 = Object.values(invAgg)
       .map(i => ({ ...i, name: nameMap[i.id] || i.id, weighted: Math.round(i.weighted * 10) / 10, committed: Math.round(i.committed * 10) / 10 }))
@@ -117,7 +117,7 @@ router.get('/api/aktivitetslogg', async (req, res) => {
 router.get('/api/dashboard', async (req, res) => {
   try {
     const [{ rows: investors }, { rows: recent }, { rows: piRows }, { rows: productList }, { rows: piAllRows }] = await Promise.all([
-      query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors WHERE deleted_at IS NULL'),
+      query('SELECT id, name, phase, investor_type, lead, last_contact, updated_at FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE'),
       query('SELECT * FROM contact_log ORDER BY date DESC, created_at DESC LIMIT 8'),
       query(`SELECT pi.investor_id, pi.product_id, pi.target_ticket, pi.probability, pi.committed_amount
              FROM product_investors pi

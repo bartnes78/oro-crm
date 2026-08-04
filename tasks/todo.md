@@ -1,5 +1,21 @@
 # ORO CRM — Oppgaveliste
 
+## Lead sourcing / prospektering *(startet 3. aug)*
+
+Modell vedtatt: leads = `investors` med `phase='Prospekt'` + `is_lead`-flagg (staging).
+Rå, ukvalifiserte leads skjules fra alle operative visninger til de promoteres.
+Kilde batch 1: Finansavisen «De nye pengebingene» 25.07.2026 (21 selskaper, 27 personer).
+
+- [x] **Skjema** — `investors`: `is_lead`, `finansinntekt_mnok`, `kapitalkilde`, `relevans_indikativ`, `provenance JSONB` + partiell indeks på `is_lead` *(skrevet, idempotent — anvendes på prod ved neste deploy)*
+- [x] **Delt dedup-hjelper** — `normalizeName`/`jaccard` flyttet til lib/helpers.js, delt av /api/duplicates og importøren
+- [x] **Skjul leads fra operative visninger** — `is_lead IS NOT TRUE` i liste (default), dashboard (3 spørringer), analyse, data-quality, duplikat-sveip, locations; `?leads=1` viser kun leads. Brreg/detalj/id-oppslag filtreres bevisst IKKE (leads skal enrichmentes)
+- [x] **fmtInvestor + PUT** — lead-felt eksponert; promotering = PUT med `is_lead:false`
+- [x] **Importør** — `scripts/import-leads.js`, dry-run default (`--commit` for skriv), dedup-forhåndssjekk (terskel 0.6, skipper duplikater), kontakter fra `;`-delt navnfelt, provenance JSONB. CSV-parser + dedup logikk verifisert mot ekte fil uten DB (21 rader, 29 kontakter)
+- [ ] **Verifiser mot DB** — BLOKKERT lokalt: eneste konfigurerte DB er Railway prod, ingen lokal Postgres/Docker. Gjenstår: anvend skjema, kjør dry-run, sjekk i nettleser at leads er skjult i liste/dashboard og synlige via `?leads=1`
+- [ ] **Kjør import** — `node scripts/import-leads.js data/leads/finansavisen-2026-07-25.clean.csv` (dry-run), gjennomgå, deretter `--commit`
+
+Backlog (gated på GDPR-signoff for skala): Google Disk-henting av CSV (krever `drive.readonly` — nåværende scope er `drive.file`), semi-automatisk nyhetsinnlesing.
+
 ## Robusthetssprint (fra 360-gjennomgang 2. juli)
 
 1. [x] **Ekstern backup reell** — ✅ **fullført og verifisert 3. juli**: `[weekly-export] Lastet opp til Google Disk: ORO_CRM_2026-W27.xlsx` i prod-loggen. Veien dit: Railway-vars fikset via CLI (`NODE_ENV` var `Production` med stor P — **hele prod-modus var av**; `allowed_origin`/`ms_tenant_id` lowercase; tenant-/klient-GUID byttet om). Azure-sporet skrotet til fordel for Google Disk: `uploadToGoogleDrive` i server.js (OAuth refresh-token, scope `drive.file`, oppdaterer eksisterende fil ved redeploy) + engangs-skript `scripts/google-drive-auth.js`. Fallgruver møtt: OAuth-klient må være **Desktop app** (Web ga redirect_uri_mismatch), consent screen må **publiseres** (Testing ga 403 access_denied), service account ubrukelig (ingen lagringskvote på personlig Disk). *Opprydding: `MS_*`-vars (inkl. lowercase `ms_tenant_id`-duplikat) + `CRM_USER`/`CRM_PASS` slettet fra Railway 3. juli. **Gjenstår:** slett ubrukt service account/Disk-mappe*

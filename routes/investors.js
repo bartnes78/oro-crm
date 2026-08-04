@@ -1,6 +1,6 @@
 const express = require('express');
 const { query, pool } = require('../db');
-const { fmtRow, fmtInvestor, validationError, requireAdmin, auditLog } = require('../lib/helpers');
+const { fmtRow, fmtInvestor, validationError, requireAdmin, auditLog, normalizeName, jaccard } = require('../lib/helpers');
 const { VALID_PHASES, VALID_TYPES, VALID_LEADS, VALID_VEHICLES } = require('../lib/validation');
 
 const router = express.Router();
@@ -36,6 +36,7 @@ router.get('/api/investors', async (req, res) => {
     if (country) { params.push(country);                  where.push(`i.country = $${params.length}`); }
     if (city)    { params.push('%' + city + '%');          where.push(`i.city ILIKE $${params.length}`); }
 
+    where.push(req.query.leads === '1' ? 'i.is_lead = TRUE' : 'i.is_lead IS NOT TRUE');
     where.push('i.deleted_at IS NULL');
     const whereClause = 'WHERE ' + where.join(' AND ');
     let { rows } = await query(`SELECT i.* FROM investors i ${join} ${whereClause}`, params);
@@ -95,7 +96,7 @@ router.get('/api/investors', async (req, res) => {
 
 router.get('/api/locations', async (req, res) => {
   try {
-    const { rows } = await query('SELECT DISTINCT country, city FROM investors WHERE deleted_at IS NULL');
+    const { rows } = await query('SELECT DISTINCT country, city FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE');
     const countries = [...new Set(rows.map(r => r.country).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     const cities    = [...new Set(rows.map(r => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     res.json({ countries, cities });
@@ -199,7 +200,7 @@ router.put('/api/investors/:id', async (req, res) => {
         phase=$7, lead=$8, advisor=$9,
         first_close=$10, source=$11,
         next_steps=$12, last_contact=$13, doc_shared=$14, meeting_date=$15,
-        comments=$16, docs=$17, updated_at=NOW()
+        comments=$16, docs=$17, is_lead=$18, updated_at=NOW()
       WHERE id=$1 RETURNING *
     `, [
       req.params.id,
@@ -208,6 +209,7 @@ router.put('/api/investors/:id', async (req, res) => {
       v('first_close') || 0, vNull('source'), vNull('next_steps'),
       vNull('last_contact'), vNull('doc_shared'), vNull('meeting_date'), vNull('comments'),
       JSON.stringify('docs' in b ? (b.docs || {}) : (cur.docs || {})),
+      'is_lead' in b ? !!b.is_lead : cur.is_lead,
     ]);
 
     let newInterests = null;
@@ -270,24 +272,11 @@ router.post('/api/investors/:id/restore', requireAdmin, async (req, res) => {
 });
 
 // ── Duplikater ────────────────────────────────────────────────────────────────
-function normalizeName(name) {
-  return (name || '').toLowerCase()
-    .replace(/[.,\(\)\/\-]/g, ' ')
-    .replace(/\b(as|asa|is|sa|ans|pk|ab|spk)\b/g, ' ')
-    .replace(/\b(pensjonskasse|pensjon|stiftelse|fond|fondet|forsikring|livsforsikring|kapitalforvaltning|kommunale|kommune|private|banking|management|drift|holding|group|gruppen|invest)\b/g, ' ')
-    .replace(/\s+/g, ' ').trim();
-}
-function jaccard(a, b) {
-  const sa = new Set(a.split(' ').filter(x => x.length > 1));
-  const sb = new Set(b.split(' ').filter(x => x.length > 1));
-  if (!sa.size || !sb.size) return 0;
-  const inter = [...sa].filter(x => sb.has(x)).length;
-  return inter / new Set([...sa, ...sb]).size;
-}
+// normalizeName/jaccard er flyttet til lib/helpers.js (delt med lead-importøren).
 
 router.get('/api/duplicates', async (req, res) => {
   try {
-    const { rows: investors } = await query('SELECT * FROM investors WHERE deleted_at IS NULL');
+    const { rows: investors } = await query('SELECT * FROM investors WHERE deleted_at IS NULL AND is_lead IS NOT TRUE');
     const pairs = [];
     for (let i = 0; i < investors.length; i++) {
       for (let j = i + 1; j < investors.length; j++) {
