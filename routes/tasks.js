@@ -22,9 +22,9 @@ router.post('/api/tasks', async (req, res) => {
   if (errors.length) return validationError(res, errors);
   try {
     const { rows: [task] } = await query(`
-      INSERT INTO tasks (investor_id, investor_name, label, due_date, done, created_at)
-      VALUES ($1,$2,$3,$4,0,CURRENT_DATE) RETURNING *
-    `, [req.body.investor_id || null, req.body.investor_name || null, req.body.label, req.body.due_date]);
+      INSERT INTO tasks (investor_id, investor_name, label, due_date, responsible, done, created_at)
+      VALUES ($1,$2,$3,$4,$5,0,CURRENT_DATE) RETURNING *
+    `, [req.body.investor_id || null, req.body.investor_name || null, req.body.label, req.body.due_date, req.body.responsible || null]);
     res.json(fmtRow(task));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -37,10 +37,10 @@ router.put('/api/tasks/:id', async (req, res) => {
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
     const { rows: [task] } = await query(`
-      UPDATE tasks SET investor_id=$2, investor_name=$3, label=$4, due_date=$5, done=$6
+      UPDATE tasks SET investor_id=$2, investor_name=$3, label=$4, due_date=$5, responsible=$6, done=$7
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id') || null, v('investor_name') || null,
-        v('label'), v('due_date'), 'done' in b ? (b.done ? 1 : 0) : cur.done]);
+        v('label'), v('due_date'), v('responsible') || null, 'done' in b ? (b.done ? 1 : 0) : cur.done]);
     res.json(fmtRow(task));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

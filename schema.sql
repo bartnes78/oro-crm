@@ -220,6 +220,15 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Ansvarlig for oppgave (lead-navn). Frontend har alltid sendt/vist feltet;
+-- kolonnen manglet, så verdien ble stille droppet ved lagring.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='tasks' AND column_name='responsible') THEN
+    ALTER TABLE tasks ADD COLUMN responsible TEXT;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS feedback_reports (
   id         SERIAL PRIMARY KEY,
   page       TEXT,

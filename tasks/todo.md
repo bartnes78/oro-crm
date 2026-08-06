@@ -11,8 +11,11 @@ Kilde batch 1: Finansavisen «De nye pengebingene» 25.07.2026 (21 selskaper, 27
 - [x] **Skjul leads fra operative visninger** — `is_lead IS NOT TRUE` i liste (default), dashboard (3 spørringer), analyse, data-quality, duplikat-sveip, locations; `?leads=1` viser kun leads. Brreg/detalj/id-oppslag filtreres bevisst IKKE (leads skal enrichmentes)
 - [x] **fmtInvestor + PUT** — lead-felt eksponert; promotering = PUT med `is_lead:false`
 - [x] **Importør** — `scripts/import-leads.js`, dry-run default (`--commit` for skriv), dedup-forhåndssjekk (terskel 0.6, skipper duplikater), kontakter fra `;`-delt navnfelt, provenance JSONB. CSV-parser + dedup logikk verifisert mot ekte fil uten DB (21 rader, 29 kontakter)
-- [ ] **Verifiser mot DB** — BLOKKERT lokalt: eneste konfigurerte DB er Railway prod, ingen lokal Postgres/Docker. Gjenstår: anvend skjema, kjør dry-run, sjekk i nettleser at leads er skjult i liste/dashboard og synlige via `?leads=1`
-- [ ] **Kjør import** — `node scripts/import-leads.js data/leads/finansavisen-2026-07-25.clean.csv` (dry-run), gjennomgå, deretter `--commit`
+- [x] **Verifiser mot DB** — skjema anvendt mot prod (5 kolonner + partiell indeks idempotent). Dry-run: 21 settes inn, 0 duplikater (eneste treff INV-760 «Advokat Tore Sveen» ~ «Ring Tore Teigen» 20 %, under terskel). Etter import verifisert i DB: operativ liste = 667 (leads ekskludert via `is_lead IS NOT TRUE`), `?leads=1` = 21 *(6. aug)*
+- [x] **Kjør import** — `--commit` kjørt mot prod 6. aug: 21 leads (INV-745…INV-765, `is_lead=TRUE`, `phase='Prospekt'`) + 29 kontakter (`source='lead-import'`). Batch 1 GDPR-klarert av bruker
+
+- [x] **Oppfølgingsoppgaver batch 1** — 21 oppgaver «Ring for introduksjonsmøte», frist 2026-08-31, ansvarlig Kristian Bartnes, én per lead (koblet til investor). Idempotent skript (hopper over eksisterende). Verifisert i DB *(6. aug)*
+- [x] **Bugfiks: `tasks.responsible` ble aldri lagret** — frontend (`oppgaver.js`) har alltid sendt/vist «Ansvarlig», men kolonnen manglet og POST/PUT `/api/tasks` droppet feltet stille. Lagt til `responsible TEXT` i `schema.sql` (idempotent) + anvendt på prod, og koblet inn i POST/PUT i `routes/tasks.js`. **Route-fiksen er live først etter merge til main + Railway-deploy** (GET viser feltet allerede siden `SELECT *`) *(6. aug)*
 
 Backlog (gated på GDPR-signoff for skala): Google Disk-henting av CSV (krever `drive.readonly` — nåværende scope er `drive.file`), semi-automatisk nyhetsinnlesing.
 
