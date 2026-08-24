@@ -53,6 +53,12 @@ async function checkVersion() {
 }
 
 // ── Modal system ──────────────────────────────────────────────────────────────
+function modalFieldSnapshot(el) {
+  return [...el.querySelectorAll('input, select, textarea')]
+    .map(f => (f.type === 'checkbox' || f.type === 'radio') ? (f.checked ? '1' : '0') : (f.value || ''))
+    .join('');
+}
+
 window.openModal = function(html, setupFn) {
   const el = document.getElementById('modal');
   el.innerHTML = `
@@ -60,8 +66,22 @@ window.openModal = function(html, setupFn) {
       ${html}
     </div>`;
   el.classList.add('open');
-  el.onclick = () => window.closeModal();
   if (setupFn) setupFn();
+
+  // Baseline of form state (after setupFn prefills), to detect unsaved input.
+  const baseline = modalFieldSnapshot(el);
+
+  // Only a press that both starts AND ends on the backdrop dismisses — a
+  // text-selection drag that ends outside the box must not close it.
+  let pressedBackdrop = false;
+  el.onmousedown = (e) => { pressedBackdrop = (e.target === el); };
+  el.onclick = (e) => {
+    if (e.target !== el || !pressedBackdrop) return;
+    pressedBackdrop = false;
+    if (modalFieldSnapshot(el) !== baseline &&
+        !window.confirm('Du har ulagrede endringer. Lukke uten å lagre?')) return;
+    window.closeModal();
+  };
 };
 
 window.closeModal = function() {
