@@ -104,6 +104,42 @@ router.get('/api/analyse', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Min dag (personlig handlingsliste) ─────────────────────────────────────────
+router.get('/api/min-dag', async (req, res) => {
+  try {
+    const u   = req.currentUser || {};
+    const ids = [u.leadName, u.displayName, u.username].filter(Boolean);
+    const idArr = ids.length ? ids : [''];   // ANY([]) matcher aldri — tom fallback
+
+    const taskCols = `id, label, investor_id, investor_name, due_date::text AS due_date`;
+    const [{ rows: overdue }, { rows: dueToday }, { rows: leadRows }] = await Promise.all([
+      query(`SELECT ${taskCols} FROM tasks
+             WHERE done = 0 AND due_date < CURRENT_DATE AND responsible = ANY($1::text[])
+             ORDER BY due_date`, [idArr]),
+      query(`SELECT ${taskCols} FROM tasks
+             WHERE done = 0 AND due_date = CURRENT_DATE AND responsible = ANY($1::text[])
+             ORDER BY id`, [idArr]),
+      query(`SELECT id, name FROM investors
+             WHERE deleted_at IS NULL AND is_lead = TRUE
+             ORDER BY id`),
+    ]);
+
+    res.json({
+      user:    u.displayName || u.username || '',
+      overdue: overdue.map(fmtRow),
+      today:   dueToday.map(fmtRow),
+      leads: {
+        count:      leadRows.length,
+        sampleId:   leadRows[0]?.id   || null,
+        sampleName: leadRows[0]?.name || null,
+      },
+    });
+  } catch (e) {
+    console.error('[min-dag]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/api/aktivitetslogg', async (req, res) => {
   try {
     const { rows } = await query(

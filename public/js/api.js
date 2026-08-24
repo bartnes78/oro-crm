@@ -20,6 +20,7 @@ async function req(method, url, body) {
 
 export const api = {
   dashboard:           ()         => req('GET', '/dashboard'),
+  minDag:              ()         => req('GET', '/min-dag'),
   analyse:             ()         => req('GET', '/analyse'),
   aktivitetslogg:      ()         => req('GET', '/aktivitetslogg'),
   investors:           (params)   => req('GET', '/investors?' + new URLSearchParams(params || {})),

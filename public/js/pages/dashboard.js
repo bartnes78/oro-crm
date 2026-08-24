@@ -257,6 +257,147 @@ function buildRecentActivity(recent) {
     </div>`;
 }
 
+// ── Min dag ─────────────────────────────────────────────────────────────────
+const MINDAG_KEY = 'crm_mindag_collapsed';
+let _minDag = null;
+
+function mdCollapsed() {
+  try { return localStorage.getItem(window.lsKey(MINDAG_KEY)) === '1'; } catch { return false; }
+}
+function setMdCollapsed(v) {
+  localStorage.setItem(window.lsKey(MINDAG_KEY), v ? '1' : '0');
+}
+
+function mdGreeting() {
+  const h = new Date().getHours();
+  return h < 10 ? 'God morgen' : h < 18 ? 'God dag' : 'God kveld';
+}
+
+const MD_MONTHS = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des'];
+function mdDay(d) {
+  if (!d) return '';
+  const [, m, day] = d.split('-').map(Number);
+  return `${day}.<small style="display:block;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase">${MD_MONTHS[m - 1] || ''}</small>`;
+}
+
+function mdTaskRow(t, kind, color) {
+  const lead    = t.investor_name ? esc(t.investor_name) : esc(t.label || '');
+  const sub     = t.investor_name ? esc(t.label || '')   : '';
+  const nav     = t.investor_id ? `data-nav="detalj" data-id="${esc(String(t.investor_id))}"` : `data-nav="oppgaver"`;
+  const dt      = kind === 'today' ? 'I&nbsp;dag' : mdDay(t.due_date);
+  return `
+    <div class="mindag-row" ${nav}
+      style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #EEF3F1;cursor:pointer">
+      <div style="width:44px;flex-shrink:0;font-size:11px;font-weight:700;text-align:center;line-height:1.15;color:${color}">${dt}</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:13px;font-weight:600;color:var(--blue);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lead}</b>
+        ${sub ? `<span style="font-size:11px;color:var(--muted)">${sub}</span>` : ''}
+      </div>
+      <span style="font-size:11px;color:var(--muted);flex-shrink:0">Oppgave</span>
+      <span style="color:#C4D2CE;font-size:14px;flex-shrink:0">›</span>
+    </div>`;
+}
+
+function mdGroup(tag, n, color, bg, hint, rowsHtml) {
+  return `
+    <div style="border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 16px;background:var(--bg)">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${color}">${esc(tag)}</span>
+        <span style="font-size:11px;font-weight:700;color:#fff;background:${color};border-radius:11px;min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center">${n}</span>
+        ${hint ? `<span style="margin-left:auto;font-size:11px;color:var(--muted)">${esc(hint)}</span>` : ''}
+      </div>
+      ${rowsHtml}
+    </div>`;
+}
+
+// Returns the full panel wrapped in .mindag-host (empty string when nothing to show)
+function buildMinDag(md) {
+  if (!md) return '';
+  const nOver = (md.overdue || []).length;
+  const nDue  = (md.today   || []).length;
+  const nLead = md.leads?.count || 0;
+  const total = nOver + nDue + nLead;
+  if (total === 0) return '';
+
+  const chips = [
+    nOver ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;color:#B23B3B;background:#F6E7E6;white-space:nowrap">${nOver} forfalt</span>` : '',
+    nDue  ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;color:#9A6A1E;background:#F6EEDD;white-space:nowrap">${nDue} i dag</span>` : '',
+    nLead ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;color:var(--blue);background:var(--blue-l);white-space:nowrap">${nLead} leads</span>` : '',
+  ].join('');
+
+  if (mdCollapsed()) {
+    return `
+      <div class="mindag-host">
+        <div class="section-label" style="margin-top:0">Min dag</div>
+        <div class="mindag-expand"
+          style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px">
+          <span style="font-size:14px">📋</span>
+          <b style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0">Min dag</b>
+          <span style="display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0">${chips}</span>
+          <span style="color:var(--muted);font-size:13px;flex-shrink:0">▾ Vis</span>
+        </div>
+      </div>`;
+  }
+
+  const overHtml = nOver ? mdGroup('Forfalt', nOver, '#B23B3B', '#F6E7E6', 'over frist',
+    md.overdue.map(t => mdTaskRow(t, 'over', '#B23B3B')).join('')) : '';
+  const dueHtml  = nDue  ? mdGroup('I dag', nDue, '#9A6A1E', '#F6EEDD', 'forfaller i dag',
+    md.today.map(t => mdTaskRow(t, 'today', '#9A6A1E')).join('')) : '';
+  const leadHtml = nLead ? mdGroup('Leads å kvalifisere', nLead, '#267777', '#E0EFEC', 'ukvalifiserte leads',
+    `<div class="mindag-row" data-nav="detalj" data-id="${esc(String(md.leads.sampleId))}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #EEF3F1;cursor:pointer">
+      <div style="width:44px;flex-shrink:0;font-size:11px;font-weight:700;text-align:center;color:#267777">NY</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:13px;font-weight:600;color:var(--blue);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(md.leads.sampleName || 'Lead')}${nLead > 1 ? ` <span style="color:var(--muted);font-weight:400">m.fl.</span>` : ''}</b>
+        <span style="font-size:11px;color:var(--muted)">Ring for introduksjonsmøte</span>
+      </div>
+      <span style="font-size:11px;color:var(--muted);flex-shrink:0">Lead</span>
+      <span style="color:#C4D2CE;font-size:14px;flex-shrink:0">›</span>
+    </div>`) : '';
+
+  return `
+    <div class="mindag-host">
+      <div class="section-label" style="margin-top:0">Min dag</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;padding:15px 16px 12px">
+          <b style="font-size:15px;font-weight:700;color:var(--text)">${esc(mdGreeting())}${md.user ? ', ' + esc(md.user.split(' ')[0]) : ''}</b>
+          <span style="font-size:12px;color:var(--muted)">${(nOver + nDue) > 0 ? `${nOver + nDue} ${(nOver + nDue) === 1 ? 'oppgave' : 'oppgaver'} trenger deg i dag` : 'Ingen oppgaver forfaller'}</span>
+          ${nOver ? `<span style="margin-left:auto;font-size:11px;font-weight:600;color:#B23B3B;background:#F6E7E6;padding:3px 9px;border-radius:20px">${nOver} forfalt</span>` : ''}
+          <button class="mindag-toggle" ${nOver ? '' : 'style="margin-left:auto"'}
+            style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px">▴ Skjul</button>
+        </div>
+        ${overHtml}${dueHtml}${leadHtml}
+      </div>
+    </div>`;
+}
+
+function bindMinDag(pageRoot) {
+  const host = pageRoot.querySelector('.mindag-host');
+  if (!host) return;
+
+  const rerender = () => {
+    const fresh = document.createElement('div');
+    fresh.innerHTML = buildMinDag(_minDag);
+    const newHost = fresh.firstElementChild;
+    host.replaceWith(newHost);
+    bindMinDag(pageRoot);
+  };
+
+  const toggle = host.querySelector('.mindag-toggle');
+  if (toggle) toggle.addEventListener('click', () => { setMdCollapsed(true);  rerender(); });
+
+  const expand = host.querySelector('.mindag-expand');
+  if (expand) expand.addEventListener('click', () => { setMdCollapsed(false); rerender(); });
+
+  host.querySelectorAll('.mindag-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const nav = row.dataset.nav;
+      if (nav === 'detalj' && row.dataset.id) window.navigate('detalj', row.dataset.id);
+      else if (nav) window.navigate(nav);
+    });
+  });
+}
+
 // ── Quick log modal ───────────────────────────────────────────────────────────
 
 function today() {
@@ -391,6 +532,8 @@ function refreshTop10Card(pageRoot, data, investors, filter) {
 }
 
 function setupEvents(el, data, investors, filter, state) {
+  bindMinDag(el);
+
   el.querySelectorAll('.dash-logg-btn').forEach(btn => {
     btn.addEventListener('click', () => openQuickLogModal(investors, el, state?.currentUser));
   });
@@ -438,10 +581,12 @@ export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster…</p></div>';
 
   try {
-    const [data, investorsRaw] = await Promise.all([
+    const [data, investorsRaw, minDag] = await Promise.all([
       api.dashboard(),
       api.investors(),
+      api.minDag().catch(() => null),
     ]);
+    _minDag = minDag;
 
     const investors = Array.isArray(investorsRaw)
       ? investorsRaw
@@ -479,6 +624,7 @@ export async function render(el, state) {
           </div>
           <button class="dash-logg-btn btn btn-green btn-sm" style="min-height:36px;white-space:nowrap">+ Logg</button>
         </div>
+        ${buildMinDag(minDag)}
         ${buildKPIs(data)}
         ${buildGaugeCards(data)}
         <div class="section-label">Pipeline</div>
