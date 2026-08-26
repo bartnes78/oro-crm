@@ -89,3 +89,9 @@ Hvert mønster følger denne strukturen:
 **Hva som gikk galt:** Konkret beskrivelse av feilen.  
 **Rotårsak:** Hvorfor feilen skjedde.  
 **Regel:** Hva som skal gjøres annerledes fremover.
+
+### 2026-08-26 Proff søke-URL var feil
+
+**Hva som gikk galt:** «Sjekk hos Proff»-knappen brukte `https://www.proff.no/søk?q=<orgnr>` → 404-side.
+**Rotårsak:** Antok søkestien uten å verifisere; curl-testing var ubrukelig fordi Proff bot-blokkerer (403 på alt).
+**Regel:** Proffs søkeresultatside er `https://www.proff.no/bransjesøk?q=<term>`. Verifiser eksterne URL-er med WebFetch (ikke curl) siden Proff blokkerer curl med 403.

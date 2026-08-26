@@ -576,7 +576,7 @@ function buildBrregCard(inv) {
       ? new Date(bd.synced_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
       : null;
 
-    const proffUrl  = `https://www.proff.no/søk?q=${encodeURIComponent(inv.org_nr)}`;
+    const proffUrl  = `https://www.proff.no/bransjesøk?q=${encodeURIComponent(inv.org_nr)}`;
     const proffLogo = `
       <svg viewBox="0 0 384 125" height="15" width="46" aria-hidden="true" style="flex-shrink:0;display:block;">
         <path fill="#7E4181" d="M88.1,17.4c-19.3-19.3-50.7-19.3-70,0s-19.3,50.7,0,70c9.7,9.7,22.3,14.5,35,14.5v20.5l34.8-34.8c0.1-0.1,0.2-0.2,0.3-0.3C107.5,68.1,107.5,36.8,88.1,17.4z M74.7,77c-12.2,10.8-31,10.8-43.2,0C17.2,64.4,16.7,42.5,30,29.3c12.8-12.8,33.5-12.8,46.3,0C89.5,42.5,89,64.4,74.7,77z"/>
