@@ -1,4 +1,4 @@
-const CACHE = 'oro-crm-v10';
+const CACHE = 'oro-crm-v11';
 const SHELL = [
   '/',
   '/js/app.js',
