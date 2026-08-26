@@ -95,3 +95,9 @@ Hvert mønster følger denne strukturen:
 **Hva som gikk galt:** «Sjekk hos Proff»-knappen brukte `https://www.proff.no/søk?q=<orgnr>` → 404-side.
 **Rotårsak:** Antok søkestien uten å verifisere; curl-testing var ubrukelig fordi Proff bot-blokkerer (403 på alt).
 **Regel:** Proffs søkeresultatside er `https://www.proff.no/bransjesøk?q=<term>`. Verifiser eksterne URL-er med WebFetch (ikke curl) siden Proff blokkerer curl med 403.
+
+### 2026-08-26 Frontend-fiks nådde ikke brukerne pga. service worker-cache
+
+**Hva som gikk galt:** Rettet Proff-lenken (/søk → /bransjesøk) og deployet, men brukeren fikk fortsatt feil lenke. Koden var riktig i prod.
+**Rotårsak:** `public/service-worker.js` bruker stale-while-revalidate for .js — serverer gammel cachet fil først, henter ny i bakgrunnen. Endringen dukker derfor først opp ved *andre* gangs lasting.
+**Regel:** Hver frontend-endring som må nå brukerne umiddelbart, MÅ følges av en cache-bump i `service-worker.js` (`CACHE = 'oro-crm-vN'` → vN+1). Da installeres ny SW, alle JS-filer precaches på nytt og gammel cache slettes. Ved testing: hard refresh (Ctrl+F5) eller Unregister SW i DevTools.
