@@ -40,12 +40,15 @@ router.put('/api/contacts/:id', async (req, res) => {
     const cur = rows[0];
     const b   = req.body;
     const v   = k => (k in b ? b[k] : cur[k]);
+    // En deaktivert kontakt kan ikke være primærkontakt — nulles alltid.
+    const activeVal    = 'active' in b ? (b.active ?? 1) : (cur.active ?? 1);
+    const isPrimaryVal = activeVal ? (v('is_primary') || 0) : 0;
     const { rows: [c] } = await query(`
       UPDATE contacts SET investor_id=$2, name=$3, title=$4, email=$5, phone=$6, phone2=$7, is_primary=$8, notes=$9, active=$10
       WHERE id=$1 RETURNING *
     `, [parseInt(req.params.id), v('investor_id'), v('name'), v('title') || null,
-        v('email') || null, v('phone') || null, v('phone2') || null, v('is_primary') || 0, v('notes') || null,
-        'active' in b ? (b.active ?? 1) : (cur.active ?? 1)]);
+        v('email') || null, v('phone') || null, v('phone2') || null, isPrimaryVal, v('notes') || null,
+        activeVal]);
     res.json(fmtRow(c));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
