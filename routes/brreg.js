@@ -218,10 +218,11 @@ router.delete('/api/investors/:id/brreg-sync', async (req, res) => {
 
 // ── Ukentlig synkronisering ───────────────────────────────────────────────────
 
-async function brregSyncAll() {
-  const { rows: investors } = await query(
-    `SELECT id FROM investors WHERE org_nr IS NOT NULL AND deleted_at IS NULL`
-  );
+async function brregSyncAll(opts = {}) {
+  const where = opts.onlyMissingRegnskap
+    ? `org_nr IS NOT NULL AND deleted_at IS NULL AND NOT (brreg_data ? 'regnskap')`
+    : `org_nr IS NOT NULL AND deleted_at IS NULL`;
+  const { rows: investors } = await query(`SELECT id FROM investors WHERE ${where}`);
   if (investors.length === 0) return;
 
   console.log(`[brreg-sync] Starter ukentlig synk for ${investors.length} investorer`);
@@ -282,4 +283,5 @@ cron.schedule('0 3 * * 1', () => {
   brregSyncAll().catch(e => console.error('[brreg-sync] Uventet feil:', e.message));
 }, { timezone: 'Europe/Oslo' });
 
+router.brregSyncAll = brregSyncAll;
 module.exports = router;
