@@ -576,6 +576,89 @@ function buildBrregCard(inv) {
       ? new Date(bd.synced_at).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
       : null;
 
+    const proffUrl  = `https://www.proff.no/søk?q=${encodeURIComponent(inv.org_nr)}`;
+    const proffLogo = `
+      <svg viewBox="0 0 384 125" height="15" width="46" aria-hidden="true" style="flex-shrink:0;display:block;">
+        <path fill="#7E4181" d="M88.1,17.4c-19.3-19.3-50.7-19.3-70,0s-19.3,50.7,0,70c9.7,9.7,22.3,14.5,35,14.5v20.5l34.8-34.8c0.1-0.1,0.2-0.2,0.3-0.3C107.5,68.1,107.5,36.8,88.1,17.4z M74.7,77c-12.2,10.8-31,10.8-43.2,0C17.2,64.4,16.7,42.5,30,29.3c12.8-12.8,33.5-12.8,46.3,0C89.5,42.5,89,64.4,74.7,77z"/>
+        <path fill="#7E4181" d="M41,41.2c-5.8,6.2-5.8,16.2,0,22.4c6.4,6.9,17.2,7.1,23.8,0.5c6.4-6.4,6.4-16.9,0-23.3C58.2,34.2,47.4,34.3,41,41.2z"/>
+        <g fill="currentColor">
+          <path d="M136.8,117c0,1.8-0.5,3.3-1.7,4.4c-1.1,1.1-2.6,1.7-4.5,1.7c-1.8,0-3.3-0.5-4.4-1.7s-1.8-2.6-1.8-4.4V41.3c0-1.6,0.5-2.9,1.5-3.9s2.3-1.4,3.7-1.4c2.2,0,3.8,0.6,4.7,1.8s1.6,2.9,2.1,5.2c0.9-1.1,2.1-2.1,3.4-3.1s2.8-1.9,4.4-2.7c1.6-0.8,3.3-1.4,5.1-1.9s3.7-0.7,5.6-0.7c4.1,0,8,0.8,11.8,2.5c3.8,1.6,7.2,3.9,10.1,6.7c2.9,2.8,5.3,6.2,7,10c1.8,3.8,2.6,7.9,2.6,12.3s-0.9,8.4-2.6,12.3s-4.1,7.2-7,10s-6.3,5.1-10.1,6.7s-7.8,2.5-11.8,2.5s-7.6-0.7-10.7-2.1s-5.6-3.2-7.5-5.5L136.8,117L136.8,117z M155,85.2c2.6,0,5.1-0.5,7.5-1.5c2.3-1,4.4-2.4,6.1-4.1c1.7-1.8,3.1-3.8,4.1-6.1c1-2.3,1.5-4.8,1.5-7.4s-0.5-5.1-1.5-7.4c-1-2.3-2.3-4.3-4.1-6.1s-3.7-3.1-6.1-4.1c-2.3-1-4.8-1.5-7.5-1.5c-2.6,0-5,0.5-7.2,1.5s-4.1,2.4-5.8,4.1s-2.9,3.8-3.8,6.1c-0.9,2.3-1.4,4.8-1.4,7.4c0,2.6,0.5,5.1,1.4,7.4s2.2,4.3,3.8,6.1c1.6,1.8,3.6,3.1,5.8,4.1C150.1,84.7,152.5,85.2,155,85.2z"/>
+          <path d="M200.8,36c1.8,0,3.1,0.5,4,1.7c0.9,1.1,1.3,2.6,1.5,4.5c2.1-2.3,4.3-3.9,6.7-4.9s5.2-1.5,8.5-1.5c1.8,0,3.3,0.5,4.4,1.4s1.8,2.5,1.8,4.7c0,1.7-0.4,3.1-1.3,4.1c-0.9,1-2.2,1.6-4.1,1.8c-3.1,0.2-5.6,0.7-7.6,1.4s-3.6,1.7-4.7,2.9s-1.9,2.8-2.3,4.5c-0.4,1.8-0.6,3.7-0.6,5.8v28.1c0,1.6-0.5,2.9-1.7,4c-1.1,1.1-2.6,1.7-4.4,1.7c-1.9,0-3.3-0.5-4.5-1.7s-1.7-2.5-1.7-4.1V42.7c0-1.8,0.4-3.4,1.3-4.8C196.9,36.7,198.5,36,200.8,36z"/>
+          <path d="M258.3,34.6c4.3,0,8.4,0.8,12.3,2.5c3.8,1.7,7.2,3.9,10,6.8s5.1,6.2,6.7,10s2.5,7.9,2.5,12.3s-0.8,8.4-2.5,12.3s-3.9,7.1-6.7,10s-6.2,5-10,6.7c-3.8,1.6-7.9,2.5-12.3,2.5s-8.4-0.8-12.3-2.5s-7.2-3.9-10-6.7s-5.1-6.1-6.7-10c-1.6-3.8-2.5-7.9-2.5-12.3s0.8-8.4,2.5-12.3c1.6-3.8,3.9-7.2,6.7-10s6.2-5.1,10-6.8C249.8,35.5,253.9,34.6,258.3,34.6z M258.3,46.9c-2.7,0-5.2,0.5-7.5,1.5s-4.3,2.4-6,4.1c-1.7,1.8-3.1,3.8-4.1,6.2c-1,2.3-1.5,4.8-1.5,7.5s0.5,5.1,1.5,7.4s2.3,4.3,4.1,6c1.7,1.7,3.7,3.1,6,4.1s4.8,1.5,7.5,1.5c2.6,0,5.1-0.5,7.4-1.5s4.3-2.3,6.1-4.1s3.1-3.7,4.1-6s1.5-4.8,1.5-7.4s-0.5-5.1-1.5-7.5c-1-2.3-2.4-4.4-4.1-6.2s-3.8-3.1-6.1-4.1C263.4,47.4,260.9,46.9,258.3,46.9z"/>
+          <path d="M310.8,48.8V90c0,1.9-0.6,3.4-1.7,4.5s-2.6,1.7-4.6,1.7c-1.7,0-3.2-0.5-4.3-1.7c-1.2-1.1-1.8-2.6-1.8-4.5V48.8c-1.6-0.2-2.9-0.9-3.8-1.9c-0.9-1.1-1.3-2.5-1.3-4.3c0-1.6,0.4-2.9,1.3-4s2.2-1.8,3.8-2v-5.5c0-3.3,0.4-6.1,1.3-8.5s2.1-4.3,3.7-5.9s3.5-2.7,5.6-3.4s4.5-1.1,6.9-1.1c2.3,0,4.1,0.5,5.3,1.5c1.2,1,1.8,2.4,1.8,4.1c0,1.9-0.4,3.3-1.3,4.4s-2.2,1.7-3.8,1.9c-1,0.1-1.9,0.2-2.8,0.4s-1.6,0.6-2.3,1.1s-1.3,1.2-1.7,2c-0.4,0.9-0.6,2-0.6,3.4v5.2h3.8c1.8,0,3.3,0.6,4.4,1.8s1.7,2.6,1.7,4.3c0,1.9-0.6,3.4-1.7,4.5s-2.6,1.7-4.4,1.7L310.8,48.8L310.8,48.8z"/>
+          <path d="M341.8,48.8V90c0,1.9-0.6,3.4-1.7,4.5s-2.6,1.7-4.6,1.7c-1.7,0-3.2-0.5-4.3-1.7c-1.2-1.1-1.8-2.6-1.8-4.5V48.8c-1.6-0.2-2.9-0.9-3.8-1.9c-0.9-1.1-1.3-2.5-1.3-4.3c0-1.6,0.4-2.9,1.3-4s2.2-1.8,3.8-2v-5.5c0-3.3,0.4-6.1,1.3-8.5s2.1-4.3,3.7-5.9s3.5-2.7,5.6-3.4s4.5-1.1,6.9-1.1c2.3,0,4.1,0.5,5.3,1.5c1.2,1,1.8,2.4,1.8,4.1c0,1.9-0.4,3.3-1.3,4.4s-2.2,1.7-3.8,1.9c-1,0.1-1.9,0.2-2.8,0.4s-1.6,0.6-2.3,1.1s-1.3,1.2-1.7,2c-0.4,0.9-0.6,2-0.6,3.4v5.2h3.8c1.8,0,3.3,0.6,4.4,1.8s1.7,2.6,1.7,4.3c0,1.9-0.6,3.4-1.7,4.5s-2.6,1.7-4.4,1.7L341.8,48.8L341.8,48.8z"/>
+        </g>
+      </svg>`;
+    const proffBtn = `
+      <a href="${proffUrl}" target="_blank" rel="noopener" aria-label="Sjekk ${window.escHtml(inv.name)} hos Proff"
+         style="text-decoration:none;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;background:var(--card);border:1px solid var(--border);border-radius:7px;font-size:12px;color:var(--muted);white-space:nowrap;">
+        Sjekk hos ${proffLogo}
+        <span style="font-size:13px;color:var(--muted);">&#8599;</span>
+      </a>`;
+
+    const mnok = v => v == null ? '—' : window.fmt(v / 1e6, 1);
+    const rk = bd.regnskap;
+    let regnskapSection = '';
+    if (rk && Array.isArray(rk.aar) && rk.aar.length) {
+      const siste = rk.aar[0];
+      const arVerdi = siste.aarsresultat;
+      const arFarge = arVerdi == null ? 'var(--text)' : (arVerdi < 0 ? 'var(--red)' : 'var(--color-signed)');
+      const arFortegn = arVerdi != null && arVerdi > 0 ? '+' : '';
+
+      const tile = (label, val, color) => `
+        <div style="background:var(--bg);border-radius:8px;padding:9px 11px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">${label}</div>
+          <div style="font-size:18px;font-weight:700;${color ? `color:${color};` : ''}">${val}<span style="font-size:11px;color:var(--muted);font-weight:400;"> MNOK</span></div>
+        </div>`;
+
+      const rad = (label, key) => `
+        <tr style="border-top:1px solid var(--border);text-align:right;">
+          <td style="text-align:left;color:var(--muted);padding:5px 8px 5px 0;">${label}</td>
+          ${rk.aar.map(y => `<td style="padding:5px 0;">${mnok(y[key])}</td>`).join('')}
+        </tr>`;
+
+      regnskapSection = `
+        <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Regnskapstall <span style="font-weight:400;letter-spacing:0;text-transform:none;">· ${window.escHtml(siste.aar)}</span></div>
+            ${proffBtn}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+            ${tile('Årsresultat', arFortegn + mnok(arVerdi), arFarge)}
+            ${tile('Egenkapital', mnok(siste.egenkapital), null)}
+            ${tile('Sum eiendeler', mnok(siste.sumEiendeler), null)}
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="color:var(--muted);text-align:right;">
+                  <th style="text-align:left;font-weight:400;padding:2px 8px 5px 0;">MNOK</th>
+                  ${rk.aar.map(y => `<th style="font-weight:600;padding:2px 0 5px;">${window.escHtml(y.aar)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${rad('Årsresultat', 'aarsresultat')}
+                ${rad('Egenkapital', 'egenkapital')}
+                ${rad('Sum gjeld', 'sumGjeld')}
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <span style="font-size:10px;color:var(--muted);">Kasse/bank og full historikk finner du hos Proff</span>
+            <span style="font-size:10px;color:var(--muted);">Kilde: Regnskapsregisteret</span>
+          </div>
+        </div>`;
+    } else {
+      regnskapSection = `
+        <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Regnskapstall</div>
+            ${proffBtn}
+          </div>
+          <div style="font-size:12px;color:var(--muted);">Ingen regnskap innsendt i Regnskapsregisteret. Gjelder ofte stiftelser, utenlandske enheter og enkelte pensjonskasser.</div>
+        </div>`;
+    }
+
     return `
       <div class="card" id="brreg-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
@@ -601,6 +684,8 @@ function buildBrregCard(inv) {
           ${bd.stiftet      ? `<span>&#128197; Stiftet ${window.escHtml(bd.stiftet)}</span>` : ''}
           ${bd.ansatte != null ? `<span>&#128101; ${bd.ansatte} ansatte</span>` : ''}
         </div>
+
+        ${regnskapSection}
 
         ${adresser ? `<div style="margin-bottom:12px;">${adresser}</div>` : ''}
 
