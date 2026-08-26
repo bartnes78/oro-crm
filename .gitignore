@@ -5,3 +5,8 @@ data/
 *.bak
 *.tmp
 .claude/
+
+# Excel-arbeidsfiler (frokostmøte-invitasjonsliste) + Excel låse-/temp-filer
+frokostmote-invitasjonsliste.xlsx
+frokostmote-invitasjonsliste-v2.xlsx
+~$*.xlsx
