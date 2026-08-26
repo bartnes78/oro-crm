@@ -24,6 +24,26 @@ function brregGet(path) {
   });
 }
 
+// Regnskapsregisteret ligger på egen base og gir tomt/404 for ikke-regnskapspliktige
+// enheter — derfor egen henter som alltid resolver (aldri reject) med en array.
+function brregRegnskapGet(orgnr) {
+  return new Promise(resolve => {
+    const url = `https://data.brreg.no/regnskapsregisteret/regnskap/${orgnr}`;
+    const req = https.get(url, { headers: { Accept: 'application/json' } }, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve({ status: res.statusCode, body: Array.isArray(parsed) ? parsed : [] });
+        } catch { resolve({ status: res.statusCode, body: [] }); }
+      });
+    });
+    req.on('error', () => resolve({ status: 0, body: [] }));
+    req.setTimeout(8000, () => { req.destroy(); resolve({ status: 0, body: [] }); });
+  });
+}
+
 const SKIP_ROLLER = new Set(['REVI', 'REGN']);
 
 function parseAdresser(e) {
@@ -56,6 +76,23 @@ function parseRoller(rollerBody, skipSet = SKIP_ROLLER) {
     }
   }
   return roller;
+}
+
+function parseRegnskap(body) {
+  if (!Array.isArray(body) || body.length === 0) return null;
+  const aar = body.map(r => ({
+    aar:          (r.regnskapsperiode?.tilDato || '').slice(0, 4),
+    valuta:       r.valuta || 'NOK',
+    aarsresultat: r.resultatregnskapResultat?.aarsresultat        ?? null,
+    egenkapital:  r.egenkapitalGjeld?.egenkapital?.sumEgenkapital  ?? null,
+    sumEiendeler: r.eiendeler?.sumEiendeler                        ?? null,
+    sumGjeld:     r.egenkapitalGjeld?.gjeldOversikt?.sumGjeld      ?? null,
+  }))
+    .filter(y => y.aar)
+    .sort((a, b) => b.aar.localeCompare(a.aar))
+    .slice(0, 5);
+  if (aar.length === 0) return null;
+  return { valuta: aar[0].valuta, aar };
 }
 
 // ── Ruter ─────────────────────────────────────────────────────────────────────
@@ -116,9 +153,10 @@ router.post('/api/investors/:id/brreg-sync', async (req, res) => {
     const { rows: existing } = await client.query('SELECT id FROM investors WHERE org_nr=$1 AND id<>$2', [orgnr, req.params.id]);
     if (existing.length) return validationError(res, [`Org.nr ${orgnr} er allerede koblet til investor ${existing[0].id}`]);
 
-    const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
+    const [{ status, body: e }, { body: rollerBody }, { body: regnskapBody }] = await Promise.all([
       brregGet(`/enheter/${orgnr}`),
       brregGet(`/enheter/${orgnr}/roller`),
+      brregRegnskapGet(orgnr),
     ]);
     if (status === 404) return res.status(404).json({ error: 'Fant ikke org.nr i Brreg' });
 
@@ -132,6 +170,7 @@ router.post('/api/investors/:id/brreg-sync', async (req, res) => {
       ansatte:      e.antallAnsatte                  ?? null,
       adresser,
       roller,
+      regnskap:     parseRegnskap(regnskapBody),
       synced_at:    new Date().toISOString(),
     };
 
@@ -194,9 +233,10 @@ async function brregSyncAll() {
       const orgnr = rows[0]?.org_nr;
       if (!orgnr) continue;
 
-      const [{ status, body: e }, { body: rollerBody }] = await Promise.all([
+      const [{ status, body: e }, { body: rollerBody }, { body: regnskapBody }] = await Promise.all([
         brregGet(`/enheter/${orgnr}`),
         brregGet(`/enheter/${orgnr}/roller`),
+        brregRegnskapGet(orgnr),
       ]);
       if (status !== 200) { feilet++; continue; }
 
@@ -207,6 +247,7 @@ async function brregSyncAll() {
         ansatte:      e.antallAnsatte                  ?? null,
         adresser:     parseAdresser(e),
         roller:       parseRoller(rollerBody),
+        regnskap:     parseRegnskap(regnskapBody),
         synced_at:    new Date().toISOString(),
       };
 
