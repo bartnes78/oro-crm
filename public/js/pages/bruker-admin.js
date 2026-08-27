@@ -147,7 +147,8 @@ export async function render(el, state) {
             <td style="padding:12px 16px">${roleBadgeHtml(u.role)}</td>
             <td style="color:var(--muted);font-size:13px;padding:12px 16px">${window.escHtml(u.leadName || '—')}</td>
             <td style="padding:12px 16px">
-              <div style="display:flex;gap:6px;justify-content:flex-end">
+              <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm welcome-user-btn" data-id="${window.escHtml(u._id)}" style="font-size:11px;min-height:44px">✉ Velkomstmail</button>
                 <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${window.escHtml(u._id)}" style="font-size:11px;min-height:44px">Rediger</button>
                 ${!isSelf ? `<button class="btn btn-ghost btn-sm delete-user-btn" data-id="${window.escHtml(u._id)}" data-name="${window.escHtml(u.displayName || u.username)}" style="font-size:11px;color:#e74c3c;min-height:44px">Slett</button>` : ''}
               </div>
@@ -170,7 +171,7 @@ export async function render(el, state) {
                   <th>Brukernavn</th>
                   <th>Rolle</th>
                   <th>Ansvarlig</th>
-                  <th style="width:140px"></th>
+                  <th style="width:240px"></th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -182,6 +183,14 @@ export async function render(el, state) {
     // Add user
     el.querySelector('#add-user-btn')?.addEventListener('click', () => {
       openUserModal(null);
+    });
+
+    // Velkomstmail — viser velkomsttekst til å kopiere (appen sender ikke e-post selv)
+    el.querySelectorAll('.welcome-user-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const user = users.find(u => String(u._id) === btn.dataset.id);
+        if (user) showWelcomeModal(user.displayName || user.username, user.username);
+      });
     });
 
     // Edit user
