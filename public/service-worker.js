@@ -1,8 +1,9 @@
-const CACHE = 'oro-crm-v11';
+const CACHE = 'oro-crm-v13';
 const SHELL = [
   '/',
   '/js/app.js',
   '/js/api.js',
+  '/js/tutorial.js',
   '/js/pages/dashboard.js',
   '/js/pages/investorer.js',
   '/js/pages/investor-detalj.js',
