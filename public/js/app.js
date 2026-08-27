@@ -24,6 +24,7 @@ const PAGES = {
   datakvalitet:   () => import('./pages/data-kvalitet.js'),
   auditlogg:      () => import('./pages/audit-logg.js'),
   papirkurv:      () => import('./pages/papirkurv.js'),
+  leads:          () => import('./pages/leads.js'),
 };
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -320,6 +321,7 @@ async function renderPage() {
     epost:'E-post import', oppfolging:'Oppfølging', backup:'Backup',
     brukere:'Brukere', analyse:'Analyse',
     datakvalitet:'Datakvalitet', auditlogg:'Audit-logg', papirkurv:'Papirkurv', kanban:'Pipeline Kanban',
+    leads:'Ukvalifiserte leads',
   };
   const mobileTitle = document.getElementById('mobile-title');
   if (mobileTitle) mobileTitle.textContent = titles[page] || 'ORO CRM';

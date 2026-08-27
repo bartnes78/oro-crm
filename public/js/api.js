@@ -28,6 +28,7 @@ export const api = {
   createInvestor:      (data)     => req('POST', '/investors', data),
   updateInvestor:      (id, data) => req('PUT', `/investors/${id}`, data),
   deleteInvestor:      (id)       => req('DELETE', `/investors/${id}`),
+  qualifyLead:         (id)       => req('POST', `/investors/${id}/qualify`),
   contacts:            (invId)    => req('GET', invId ? `/contacts?investorId=${invId}` : '/contacts'),
   addContact:          (data)     => req('POST', '/contacts', data),
   updateContact:       (id, data) => req('PUT', `/contacts/${id}`, data),
