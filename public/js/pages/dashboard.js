@@ -344,7 +344,7 @@ function buildMinDag(md) {
   const dueHtml  = nDue  ? mdGroup('I dag', nDue, '#9A6A1E', '#F6EEDD', 'forfaller i dag',
     md.today.map(t => mdTaskRow(t, 'today', '#9A6A1E')).join('')) : '';
   const leadHtml = nLead ? mdGroup('Leads å kvalifisere', nLead, '#267777', '#E0EFEC', 'ukvalifiserte leads',
-    `<div class="mindag-row" data-nav="detalj" data-id="${esc(String(md.leads.sampleId))}"
+    `<div class="mindag-row" data-nav="leads"
       style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #EEF3F1;cursor:pointer">
       <div style="width:44px;flex-shrink:0;font-size:11px;font-weight:700;text-align:center;color:#267777">NY</div>
       <div style="flex:1;min-width:0">

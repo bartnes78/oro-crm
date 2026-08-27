@@ -1,38 +1,31 @@
-# Ytelse: lazy-lasting av sider + fjerne html2canvas-404
+# Leads å kvalifisere — liste + kvalifiser/forkast-handlinger
 
-## Mål
-Redusere opplevd treghet ved oppstart uten å innføre byggesteg.
+## Kontekst
+Min dag-panelet teller ukvalifiserte leads (is_lead=TRUE) men lenket bare til ett
+lead, og det fantes ingen liste eller kvalifiser-handling i UI. Modell: leads
+promoteres ved å sette is_lead=FALSE. Ved kvalifisering → fase = Prospekt (bekreftet).
 
-## #1 — Lazy-last sidemoduler (største spak)
-- [x] Bytt de 19 statiske `import ... from './pages/*.js'` i app.js mot et `PAGES`-register med `() => import('./pages/*.js')`
-- [x] Gjør `renderPage()` async: last kun siden brukeren navigerer til, med race-guard (`state.page !== page` → avbryt)
-- [x] Behold `api.js` og `tutorial.js` statisk (brukes ved boot)
-- [x] Feilhåndtering hvis en modul ikke lastes
+## Oppgaver
+- [x] Backend: `POST /api/investors/:id/qualify` (authed) → is_lead=FALSE, phase='Prospekt', audit-logg (routes/investors.js)
+- [x] api.js: `qualifyLead(id)`
+- [x] Ny side `public/js/pages/leads.js`: liste over is_lead=TRUE med Navn/Type/Sted/Kilde + knapper «Kvalifiser» (alle) og «Forkast» (kun admin, gjenbruker DELETE→papirkurv); navn-klikk → detalj
+- [x] app.js: registrer `leads`-side (PAGES, titles)
+- [x] dashboard.js: Min dag «Leads å kvalifisere»-rad → `navigate('leads')` i stedet for ett lead
+- [x] service-worker cache v14→v15
 
-## #2 — Fjern html2canvas-404 + lazy-last
-- [x] Kopier `node_modules/html2canvas/dist/html2canvas.min.js` → `public/js/vendor/`
-- [x] Fjern blokkerende `<script src="/js/vendor/html2canvas.min.js">` fra index.html `<head>`
-- [x] Lazy-injiser html2canvas kun når feedback-modalen åpnes (`loadHtml2canvas()`-helper)
-
-## #3 — Cache-invalidering
-- [x] Bump service-worker CACHE v12 → v13 så ny app.js/index.html når klientene
+## Beslutninger
+- Kvalifiser tilgjengelig for alle innloggede (kjerne-lead-arbeid). Forkast (soft-delete
+  til papirkurv) kun admin — gjenbruker eksisterende DELETE, konsistent med app-modellen.
+- Fase ved kvalifisering: **Prospekt**.
 
 ## Verifisering
-- [x] `npm run dev`, last i nettleser — Network på boot: kun `/`, logo.svg, app.js, api.js, tutorial.js, /api/me. Ingen sidemoduler.
-- [x] Naviger mellom sider — verifisert i browser (brukerens innloggede sesjon): klikk Kanban → nøyaktig én `kanban.js`-fetch on-demand, siden tegnet fullt ut (669 investorer).
-- [x] Ingen 404 på html2canvas ved sidelast (fjernet fra `<head>`; serverer 200 on-demand fra /js/vendor/)
-- [x] Åpne feedback (🐛) → verifisert: `html2canvas.min.js` hentet on-demand (200), modal åpnet med gyldig data:image/jpeg-skjermbilde.
-- [x] Ingen konsollfeil (kun forventet 401 på /api/me før login)
+- [x] Røyktest: leads.js parser + eksporterer render (dynamisk import i nettleser)
+- [~] Innlogget render/klikk IKKE testet av Claude — dev treffer prod-DB, kvalifiser/forkast
+      ville mutert ekte data. Testes i prod (deploy-forward).
 
 ## Oppsummering
-Boot-payload gikk fra 22 JS-filer (app.js + api.js + tutorial.js + 19 sider) til 3.
-Sidemoduler lastes nå on-demand ved navigasjon og caches av nettleseren + service worker.
-html2canvas (~200KB) lastes kun når feedback-knappen brukes, ikke på hver sidelast —
-og 404-en på hver boot er borte (feedback-skjermbilder virker igjen).
-
-Gjenstår å teste innlogget i prod: (1) at hver side faktisk tegner ved navigasjon,
-(2) at feedback-skjermbildet tas. Deploy-forward-arbeidsflyt.
-
-Merk (utenfor scope): service-worker SHELL pre-cacher ikke kanban/data-kvalitet/
-audit-logg/papirkurv — de caches likevel ved første navigasjon (stale-while-revalidate),
-så kun relevant for full offline-PWA-bruk. Kan legges til senere ved behov.
+Leads-panelet var halvbygd: talte ukvalifiserte leads (is_lead=TRUE) uten liste eller
+kvalifiser-handling. Nå: Min dag-raden åpner en full liste (`GET /investors?leads=1`),
+hvert lead kan kvalifiseres (→ investor, fase Prospekt, via nytt qualify-endepunkt) eller
+forkastes (admin → papirkurv). Fase-valg bekreftet med bruker: Prospekt.
+Kjørt gjennom deploy-pipelinen som forrige leveranser.

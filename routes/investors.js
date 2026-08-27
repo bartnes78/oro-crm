@@ -260,6 +260,27 @@ router.delete('/api/investors/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Kvalifiser et lead → promoter til ekte investor (is_lead=FALSE, fase Prospekt).
+// Tilgjengelig for alle innloggede — dette er kjerne-lead-arbeidet.
+router.post('/api/investors/:id/qualify', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const { rows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Lead ikke funnet' });
+    const inv = rows[0];
+    if (!inv.is_lead) return res.status(400).json({ error: 'Allerede kvalifisert' });
+    const { rows: [u] } = await query(
+      `UPDATE investors SET is_lead = FALSE, phase = 'Prospekt', updated_at = NOW() WHERE id = $1 RETURNING *`, [id]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', id,
+      { is_lead: true, phase: inv.phase }, { is_lead: false, phase: 'Prospekt' },
+      `Kvalifiserte lead til investor: ${u.name}`);
+    res.json(fmtInvestor(u));
+  } catch (e) {
+    console.error('[POST /qualify]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/api/investors/:id/restore', requireAdmin, async (req, res) => {
   const id = req.params.id;
   try {
