@@ -1,39 +1,38 @@
-# Todo — Regnskapstall fra Brreg + Proff-lenke
+# Ytelse: lazy-lasting av sider + fjerne html2canvas-404
 
-Hente regnskapstall (årsresultat, egenkapital, sum eiendeler, sum gjeld) fra det
-åpne Regnskapsregisteret for investorer som er koblet til Brønnøysund, og vise dem
-i Brønnøysund-kortet. I tillegg en «Sjekk hos Proff»-knapp (søk på org.nr) for
-detaljer som ikke finnes i det åpne API-et (kasse/bank, full historikk).
+## Mål
+Redusere opplevd treghet ved oppstart uten å innføre byggesteg.
 
-## Bakgrunn / funn
-- Åpent API: `https://data.brreg.no/regnskapsregisteret/regnskap/{orgnr}` — gratis, ingen auth.
-- Gir kun sum-nivå: årsresultat, sumEgenkapital, sumGjeld, sumEiendeler, sumOmløpsmidler.
-- Kasse/bank finnes IKKE i åpent API (kun i fullstendig årsrapport → Proff).
-- Ofte kun 1 år tilgjengelig for nyere selskaper.
-- Ikke-regnskapspliktige (stiftelser, utland, mange pensjonskasser) → tomt svar → tom-tilstand.
-- Proff-lenke: `https://www.proff.no/søk?q={org_nr}` (valgt fremfor eksakt deep-link).
+## #1 — Lazy-last sidemoduler (største spak)
+- [x] Bytt de 19 statiske `import ... from './pages/*.js'` i app.js mot et `PAGES`-register med `() => import('./pages/*.js')`
+- [x] Gjør `renderPage()` async: last kun siden brukeren navigerer til, med race-guard (`state.page !== page` → avbryt)
+- [x] Behold `api.js` og `tutorial.js` statisk (brukes ved boot)
+- [x] Feilhåndtering hvis en modul ikke lastes
 
-## Backend — routes/brreg.js
-- [x] `brregRegnskapGet(orgnr)` — henter fra regnskapsregisteret, resolver mykt (404/tomt → `[]`).
-- [x] `parseRegnskap(body)` — plukk år, sorter nyeste først, maks 5 år; null hvis ingen.
-- [x] POST `/investors/:id/brreg-sync`: hent regnskap i Promise.all, lagre `brreg_data.regnskap`.
-- [x] `brregSyncAll` (cron): samme, med regnskap i lagret brregData.
+## #2 — Fjern html2canvas-404 + lazy-last
+- [x] Kopier `node_modules/html2canvas/dist/html2canvas.min.js` → `public/js/vendor/`
+- [x] Fjern blokkerende `<script src="/js/vendor/html2canvas.min.js">` fra index.html `<head>`
+- [x] Lazy-injiser html2canvas kun når feedback-modalen åpnes (`loadHtml2canvas()`-helper)
 
-## Frontend — public/js/pages/investor-detalj.js
-- [x] `buildBrregCard`: bygg regnskapsseksjon fra `bd.regnskap`.
-- [x] Tre nøkkeltall (Årsresultat m/fortegnsfarge, Egenkapital, Sum eiendeler) i MNOK.
-- [x] Historikk-tabell (år vi faktisk har) med Årsresultat, Egenkapital, Sum gjeld.
-- [x] «Sjekk hos Proff»-knapp med ekte Proff-logo (SVG), lenker til søk på org.nr.
-- [x] Tom-tilstand «Ingen regnskap innsendt» + Proff-knapp når regnskap mangler.
-- [x] Plasser seksjonen rett under stamdata-metalinjen, over adresser.
+## #3 — Cache-invalidering
+- [x] Bump service-worker CACHE v12 → v13 så ny app.js/index.html når klientene
 
 ## Verifisering
-- [x] Syntakssjekk `node --check` på begge filer — OK.
-- [x] `parseRegnskap` mot ekte API (925781630): 137,1 / 819,6 / 837,8 / 18,2 MNOK ✓.
-- [x] Tom-svar (enkeltpersonforetak) → `[]` → tom-tilstand ✓.
-- [x] Server starter uten crash (`[db] Skjema klar`).
-- [ ] UI-sjekk i nettleser — krever innlogging (bruker logger inn, så synk en investor).
-- [ ] Bekreft at Proff-knappen åpner søk på org.nr.
+- [x] `npm run dev`, last i nettleser — Network på boot: kun `/`, logo.svg, app.js, api.js, tutorial.js, /api/me. Ingen sidemoduler.
+- [x] Naviger mellom sider — verifisert i browser (brukerens innloggede sesjon): klikk Kanban → nøyaktig én `kanban.js`-fetch on-demand, siden tegnet fullt ut (669 investorer).
+- [x] Ingen 404 på html2canvas ved sidelast (fjernet fra `<head>`; serverer 200 on-demand fra /js/vendor/)
+- [x] Åpne feedback (🐛) → verifisert: `html2canvas.min.js` hentet on-demand (200), modal åpnet med gyldig data:image/jpeg-skjermbilde.
+- [x] Ingen konsollfeil (kun forventet 401 på /api/me før login)
 
 ## Oppsummering
-(fylles ut når ferdig)
+Boot-payload gikk fra 22 JS-filer (app.js + api.js + tutorial.js + 19 sider) til 3.
+Sidemoduler lastes nå on-demand ved navigasjon og caches av nettleseren + service worker.
+html2canvas (~200KB) lastes kun når feedback-knappen brukes, ikke på hver sidelast —
+og 404-en på hver boot er borte (feedback-skjermbilder virker igjen).
+
+Gjenstår å teste innlogget i prod: (1) at hver side faktisk tegner ved navigasjon,
+(2) at feedback-skjermbildet tas. Deploy-forward-arbeidsflyt.
+
+Merk (utenfor scope): service-worker SHELL pre-cacher ikke kanban/data-kvalitet/
+audit-logg/papirkurv — de caches likevel ved første navigasjon (stale-while-revalidate),
+så kun relevant for full offline-PWA-bruk. Kan legges til senere ved behov.

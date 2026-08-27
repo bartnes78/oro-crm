@@ -1,23 +1,30 @@
 import { api } from './api.js';
-import { render as renderDashboard }       from './pages/dashboard.js';
-import { render as renderInvestorer }      from './pages/investorer.js';
-import { render as renderInvestorDetalj }  from './pages/investor-detalj.js';
-import { render as renderLogg }            from './pages/logg-kontakt.js';
-import { render as renderOppgaver }        from './pages/oppgaver.js';
-import { render as renderProsjekter }      from './pages/prosjekter.js';
-import { render as renderProsjektDetalj }  from './pages/prosjekt-detalj.js';
-import { render as renderDuplikater }      from './pages/duplikater.js';
-import { render as renderDupKontakter }    from './pages/duplikat-kontakter.js';
-import { render as renderBulk }            from './pages/bulkredigering.js';
-import { render as renderEpost }           from './pages/epost-import.js';
-import { render as renderOppfolging }      from './pages/oppfolging.js';
-import { render as renderBackup }          from './pages/backup.js';
-import { render as renderBrukere }         from './pages/bruker-admin.js';
-import { render as renderAnalyse }         from './pages/analyse.js';
-import { render as renderKanban }          from './pages/kanban.js';
-import { render as renderDataKvalitet }    from './pages/data-kvalitet.js';
-import { render as renderAuditLogg }       from './pages/audit-logg.js';
-import { render as renderPapirkurv }       from './pages/papirkurv.js';
+import { openTutorial, maybeShowTutorialOnFirstLogin } from './tutorial.js';
+
+// Sidemoduler lastes on-demand (dynamic import) — kun siden brukeren navigerer
+// til hentes/parses, ikke alle 19 ved oppstart. Modulene caches av nettleseren
+// etter første last, så senere navigasjon til samme side er umiddelbar.
+const PAGES = {
+  dashboard:      () => import('./pages/dashboard.js'),
+  investorer:     () => import('./pages/investorer.js'),
+  detalj:         () => import('./pages/investor-detalj.js'),
+  logg:           () => import('./pages/logg-kontakt.js'),
+  oppgaver:       () => import('./pages/oppgaver.js'),
+  prosjekter:     () => import('./pages/prosjekter.js'),
+  prosjektDetalj: () => import('./pages/prosjekt-detalj.js'),
+  duplikater:     () => import('./pages/duplikater.js'),
+  dupkontakter:   () => import('./pages/duplikat-kontakter.js'),
+  bulk:           () => import('./pages/bulkredigering.js'),
+  epost:          () => import('./pages/epost-import.js'),
+  oppfolging:     () => import('./pages/oppfolging.js'),
+  backup:         () => import('./pages/backup.js'),
+  brukere:        () => import('./pages/bruker-admin.js'),
+  analyse:        () => import('./pages/analyse.js'),
+  kanban:         () => import('./pages/kanban.js'),
+  datakvalitet:   () => import('./pages/data-kvalitet.js'),
+  auditlogg:      () => import('./pages/audit-logg.js'),
+  papirkurv:      () => import('./pages/papirkurv.js'),
+};
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const state = { page: 'dashboard', id: null, currentUser: null };
@@ -229,6 +236,9 @@ function buildSidebar() {
     arrow.textContent = open ? '▾' : '▸';
   });
 
+  const tutorialBtn = document.getElementById('tutorial-btn');
+  if (tutorialBtn) tutorialBtn.onclick = () => { window.closeSidebar(); openTutorial(); };
+
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) logoutBtn.onclick = async () => {
     logoutBtn.disabled = true;
@@ -295,12 +305,12 @@ window.closeSidebar = function() {
 };
 
 // ── Render ────────────────────────────────────────────────────────────────────
-function renderPage() {
+async function renderPage() {
   updateSidebarActive();
   window.closeSidebar();
 
   const el = document.getElementById('page-container');
-  const { page, id } = state;
+  const { page } = state;
 
   const titles = {
     dashboard:'Dashboard', investorer:'Investorer', detalj:'Investor',
@@ -314,35 +324,43 @@ function renderPage() {
   const mobileTitle = document.getElementById('mobile-title');
   if (mobileTitle) mobileTitle.textContent = titles[page] || 'ORO CRM';
 
-  switch (page) {
-    case 'dashboard':      renderDashboard(el, state);       break;
-    case 'investorer':     renderInvestorer(el, state);      break;
-    case 'detalj':         renderInvestorDetalj(el, state);  break;
-    case 'logg':           renderLogg(el, state);            break;
-    case 'oppgaver':       renderOppgaver(el, state);        break;
-    case 'prosjekter':     renderProsjekter(el, state);      break;
-    case 'prosjektDetalj': renderProsjektDetalj(el, state);  break;
-    case 'duplikater':     renderDuplikater(el, state);      break;
-    case 'dupkontakter':   renderDupKontakter(el, state);    break;
-    case 'bulk':           renderBulk(el, state);            break;
-    case 'epost':          renderEpost(el, state);           break;
-    case 'oppfolging':     renderOppfolging(el, state);      break;
-    case 'backup':         renderBackup(el, state);          break;
-    case 'brukere':        renderBrukere(el, state);         break;
-    case 'analyse':        renderAnalyse(el, state);         break;
-    case 'kanban':         renderKanban(el, state);           break;
-    case 'datakvalitet':   renderDataKvalitet(el, state);    break;
-    case 'auditlogg':      renderAuditLogg(el, state);       break;
-    case 'papirkurv':      renderPapirkurv(el, state);       break;
-    default:
-      el.innerHTML = '<div class="content"><p class="text-muted">Side ikke funnet.</p></div>';
+  const loader = PAGES[page];
+  if (!loader) {
+    el.innerHTML = '<div class="content"><p class="text-muted">Side ikke funnet.</p></div>';
+    return;
+  }
+  try {
+    const mod = await loader();
+    // Brukeren kan ha navigert videre mens modulen lastet — ikke tegn over ny side
+    if (state.page !== page) return;
+    mod.render(el, state);
+  } catch (e) {
+    if (state.page !== page) return;
+    el.innerHTML = '<div class="content"><p class="text-muted">Kunne ikke laste siden. Prøv å laste inn på nytt.</p></div>';
   }
 }
 
 // ── Feedback ──────────────────────────────────────────────────────────────────
+// html2canvas (~200KB) lastes kun når feedback-modalen faktisk åpnes, ikke på boot
+let html2canvasPromise = null;
+function loadHtml2canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (!html2canvasPromise) {
+    html2canvasPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/js/vendor/html2canvas.min.js';
+      s.onload  = () => resolve(window.html2canvas);
+      s.onerror = () => { html2canvasPromise = null; reject(new Error('html2canvas kunne ikke lastes')); };
+      document.head.appendChild(s);
+    });
+  }
+  return html2canvasPromise;
+}
+
 window.openFeedback = async function() {
   let screenshotDataUrl = null;
   try {
+    const html2canvas = await loadHtml2canvas();
     const canvas = await html2canvas(document.body, { scale: 0.6, useCORS: true, logging: false });
     screenshotDataUrl = canvas.toDataURL('image/jpeg', 0.7);
   } catch { /* skip screenshot on error */ }
@@ -400,6 +418,7 @@ async function bootAuthed() {
     await showChangePasswordModal();
   }
   renderPage();
+  maybeShowTutorialOnFirstLogin();
 }
 
 // Utløpt eller manglende sesjon → vis login (idempotent: kalles både fra init og fra api-401-hook)
@@ -454,6 +473,7 @@ function showLogin() {
 }
 
 window.onUnauthorized = showLogin;
+window.openTutorial = openTutorial;
 
 function showChangePasswordModal() {
   return new Promise(resolve => {
