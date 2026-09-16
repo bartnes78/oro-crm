@@ -67,6 +67,7 @@ export const api = {
   merge:               (keep_id, drop_id) => req('POST', '/merge', { keep_id, drop_id }),
   submitFeedback:      (data)     => req('POST', '/feedback', data),
   getFeedback:         ()         => req('GET', '/feedback'),
+  resolveFeedback:     (id, resolved) => req('PUT', `/feedback/${id}/resolve`, { resolved }),
   getFeedbackScreenshot: (id)    => req('GET', `/feedback/${id}/screenshot`),
   auditLog:            (params)   => req('GET', '/audit-log?' + new URLSearchParams(params || {})),
   dataQuality:         ()         => req('GET', '/data-quality'),

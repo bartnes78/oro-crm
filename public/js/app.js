@@ -25,6 +25,7 @@ const PAGES = {
   auditlogg:      () => import('./pages/audit-logg.js'),
   papirkurv:      () => import('./pages/papirkurv.js'),
   leads:          () => import('./pages/leads.js'),
+  feedback:       () => import('./pages/feedback.js'),
 };
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ function buildSidebar() {
   <div id="admin-items" style="display:none">
     ${NAV_ADMIN.map(i => navItem(i)).join('')}
     ${isAdmin ? navItem({ id:'brukere', icon:'👤', label:'Brukere', iconColor:'#8E44AD' }) : ''}
+    ${isAdmin ? navItem({ id:'feedback', icon:'💬', label:'Tilbakemeldinger', iconColor:'#2980B9' }) : ''}
   </div>`;
   // Global investor search
   html += `
@@ -257,7 +259,7 @@ function navItem(i) {
   </button>`;
 }
 
-const ADMIN_PAGES = new Set(['prosjekter','prosjektDetalj','bulk','duplikater','dupkontakter','backup','brukere','papirkurv','datakvalitet','auditlogg']);
+const ADMIN_PAGES = new Set(['prosjekter','prosjektDetalj','bulk','duplikater','dupkontakter','backup','brukere','papirkurv','datakvalitet','auditlogg','feedback']);
 
 function updateSidebarActive() {
   const cur = state.page === 'detalj' ? 'investorer'

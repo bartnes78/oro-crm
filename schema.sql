@@ -238,6 +238,21 @@ CREATE TABLE IF NOT EXISTS feedback_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Behandlet-markering (beholder historikk i stedet for å slette)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='feedback_reports' AND column_name='resolved_at') THEN
+    ALTER TABLE feedback_reports ADD COLUMN resolved_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='feedback_reports' AND column_name='resolved_by') THEN
+    ALTER TABLE feedback_reports ADD COLUMN resolved_by TEXT;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id          SERIAL PRIMARY KEY,
   user_id     INTEGER,

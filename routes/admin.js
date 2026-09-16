@@ -303,9 +303,29 @@ router.post('/api/feedback', require('express').json({ limit: '8mb' }), async (r
 router.get('/api/feedback', requireAdmin, async (req, res) => {
   try {
     const { rows } = await query(
-      'SELECT id, page, comment, username, created_at FROM feedback_reports ORDER BY created_at DESC'
+      `SELECT id, page, comment, username, created_at, resolved_at, resolved_by,
+              (screenshot IS NOT NULL) AS has_screenshot
+       FROM feedback_reports ORDER BY created_at DESC`
     );
     res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/api/feedback/:id/resolve', requireAdmin, async (req, res) => {
+  try {
+    const resolved = !!req.body.resolved;
+    const { rows } = await query(
+      `UPDATE feedback_reports
+       SET resolved_at = ${resolved ? 'NOW()' : 'NULL'}, resolved_by = $2
+       WHERE id = $1 RETURNING id, page, comment, username, created_at, resolved_at, resolved_by`,
+      [req.params.id, resolved ? (req.currentUser?.username || null) : null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Ikke funnet' });
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'feedback', req.params.id,
+      null, { resolved }, `${resolved ? 'Markerte' : 'Gjenåpnet'} feedback #${req.params.id}`);
+    res.json(rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
