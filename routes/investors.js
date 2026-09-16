@@ -14,13 +14,30 @@ function validateInvestorBody(body, requireName = true) {
   if (body.fund_vehicle  && !VALID_VEHICLES.includes(body.fund_vehicle))errors.push(`Ugyldig kjøretøy: ${body.fund_vehicle}`);
   if (body.product_interests != null && !Array.isArray(body.product_interests))
     errors.push('product_interests må være en liste');
+  if (body.tags != null && (!Array.isArray(body.tags) || body.tags.some(t => typeof t !== 'string')))
+    errors.push('tags må være en liste med tekst');
   return errors;
+}
+
+// Trim, dropp tomme, dedupliser (case-insensitivt, behold første skrivemåte)
+function normalizeTags(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const t of (Array.isArray(arr) ? arr : [])) {
+    const s = String(t).trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
 }
 
 // ── Investorer ────────────────────────────────────────────────────────────────
 router.get('/api/investors', async (req, res) => {
   try {
-    const { search, phase, type, lead, product, country, city } = req.query;
+    const { search, phase, type, lead, product, country, city, tag } = req.query;
     const params = [];
     const where  = [];
     let join     = '';
@@ -35,6 +52,7 @@ router.get('/api/investors', async (req, res) => {
     if (lead)    { params.push(lead);                     where.push(`i.lead = $${params.length}`); }
     if (country) { params.push(country);                  where.push(`i.country = $${params.length}`); }
     if (city)    { params.push('%' + city + '%');          where.push(`i.city ILIKE $${params.length}`); }
+    if (tag)     { params.push(JSON.stringify([tag]));     where.push(`i.tags @> $${params.length}`); }
 
     where.push(req.query.leads === '1' ? 'i.is_lead = TRUE' : 'i.is_lead IS NOT TRUE');
     where.push('i.deleted_at IS NULL');
@@ -101,6 +119,22 @@ router.get('/api/locations', async (req, res) => {
     const cities    = [...new Set(rows.map(r => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nb'));
     res.json({ countries, cities });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Distinkte tags på tvers av aktive investorer — brukes til autocomplete/filter
+router.get('/api/tags', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT DISTINCT tag
+      FROM investors, jsonb_array_elements_text(COALESCE(tags, '[]'::jsonb)) AS tag
+      WHERE deleted_at IS NULL AND is_lead IS NOT TRUE
+      ORDER BY tag
+    `);
+    res.json(rows.map(r => r.tag));
+  } catch (e) {
+    console.error('[GET /tags]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -200,7 +234,7 @@ router.put('/api/investors/:id', async (req, res) => {
         phase=$7, lead=$8, advisor=$9,
         first_close=$10, source=$11,
         next_steps=$12, last_contact=$13, doc_shared=$14, meeting_date=$15,
-        comments=$16, docs=$17, is_lead=$18, updated_at=NOW()
+        comments=$16, docs=$17, is_lead=$18, tags=$19, updated_at=NOW()
       WHERE id=$1 RETURNING *
     `, [
       req.params.id,
@@ -210,6 +244,7 @@ router.put('/api/investors/:id', async (req, res) => {
       vNull('last_contact'), vNull('doc_shared'), vNull('meeting_date'), vNull('comments'),
       JSON.stringify('docs' in b ? (b.docs || {}) : (cur.docs || {})),
       'is_lead' in b ? !!b.is_lead : cur.is_lead,
+      JSON.stringify('tags' in b ? normalizeTags(b.tags) : (cur.tags || [])),
     ]);
 
     let newInterests = null;

@@ -121,7 +121,7 @@ function buildTableRows(investors, products) {
   }).join('');
 }
 
-function buildFilterBar(lookups, products, locations, filter) {
+function buildFilterBar(lookups, products, locations, filter, tags) {
   const makeSelect = (key, placeholder, opts) => {
     const options = opts
       .map(o => `<option value="${esc(o)}"${filter[key] === o ? ' selected' : ''}>${esc(o)}</option>`)
@@ -143,7 +143,7 @@ function buildFilterBar(lookups, products, locations, filter) {
     <option value="">Alle produkter</option>${productOpts}
   </select>`;
 
-  const hasFilter = filter.phase || filter.type || filter.lead || filter.product || filter.country || filter.city;
+  const hasFilter = filter.phase || filter.type || filter.lead || filter.product || filter.country || filter.city || filter.tag;
   const resetBtn = hasFilter
     ? `<button id="inv-reset-filter" class="btn btn-ghost btn-sm" style="min-height:36px">× Nullstill</button>`
     : '';
@@ -155,6 +155,7 @@ function buildFilterBar(lookups, products, locations, filter) {
       ${makeSelect('lead',    'ORO Kontakt', lookups.leads   || [])}
       ${productSel}
       ${makeSelect('country', 'Alle land',   locations.countries || [])}
+      ${(tags || []).length ? makeSelect('tag', 'Alle tags', tags) : ''}
       <input id="inv-city-input" class="inv-city" type="text"
         value="${esc(filter.city || '')}"
         placeholder="By…"
@@ -177,6 +178,7 @@ async function loadData(search, filter) {
   if (filter.product) params.product = filter.product;
   if (filter.country) params.country = filter.country;
   if (filter.city)    params.city    = filter.city;
+  if (filter.tag)     params.tag     = filter.tag;
 
   const raw = await api.investors(params);
   return Array.isArray(raw) ? raw : (raw.investors || []);
@@ -259,13 +261,13 @@ function setupEvents(el) {
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       if (!_state) return;
-      _state.filter = { phase: '', type: '', lead: '', product: '', country: '', city: '' };
+      _state.filter = { phase: '', type: '', lead: '', product: '', country: '', city: '', tag: '' };
       saveFilter(_state.search, _state.filter);
       // Re-render filter bar and reload
       const filterBar = el.querySelector('#inv-filterbar');
       if (filterBar) {
         const tmp = document.createElement('div');
-        tmp.innerHTML = buildFilterBar(_state.lookups, _state.products, _state.locations, _state.filter);
+        tmp.innerHTML = buildFilterBar(_state.lookups, _state.products, _state.locations, _state.filter, _state.tags);
         filterBar.replaceWith(tmp.firstElementChild);
         // Re-bind the newly rendered filter bar
         el.querySelectorAll('.inv-filter').forEach(sel => {
@@ -317,19 +319,21 @@ export async function render(el, state) {
       product: '',
       country: '',
       city:    '',
+      tag:     '',
       ...(saved.filter || {}),
     };
 
-    // Fetch lookups, locations, products and initial investor list in parallel
-    const [lookups, locations, products, investors] = await Promise.all([
+    // Fetch lookups, locations, products, tags and initial investor list in parallel
+    const [lookups, locations, products, tags, investors] = await Promise.all([
       api.lookups(),
       api.locations(),
       api.products(),
+      api.tags(),
       loadData(search, filter),
     ]);
 
     // Store in module state for event handlers
-    _state = { investors, lookups, products, locations, search, filter, currentUser: state?.currentUser };
+    _state = { investors, lookups, products, locations, tags, search, filter, currentUser: state?.currentUser };
 
     const tableRows = buildTableRows(investors, products);
 
@@ -349,7 +353,7 @@ export async function render(el, state) {
         <button id="inv-ny-btn" class="btn btn-primary btn-sm" style="min-height:36px">+ Ny investor</button>
       </div>
       <div class="content">
-        ${buildFilterBar(lookups, products, locations, filter)}
+        ${buildFilterBar(lookups, products, locations, filter, tags)}
         <div class="card inv-table-wrap" style="padding:0;overflow:hidden">
           <div class="table-wrap">
             <table>

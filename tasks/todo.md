@@ -1,31 +1,36 @@
-# Leads å kvalifisere — liste + kvalifiser/forkast-handlinger
+# Tag-felt på investorer
 
-## Kontekst
-Min dag-panelet teller ukvalifiserte leads (is_lead=TRUE) men lenket bare til ett
-lead, og det fantes ingen liste eller kvalifiser-handling i UI. Modell: leads
-promoteres ved å sette is_lead=FALSE. Ved kvalifisering → fase = Prospekt (bekreftet).
+Frie tekst-tags på investorer, med autocomplete-forslag fra eksisterende tags.
+Lagres som JSONB-array på `investors`. Vises på investor-detalj + som filter i investorlista.
 
-## Oppgaver
-- [x] Backend: `POST /api/investors/:id/qualify` (authed) → is_lead=FALSE, phase='Prospekt', audit-logg (routes/investors.js)
-- [x] api.js: `qualifyLead(id)`
-- [x] Ny side `public/js/pages/leads.js`: liste over is_lead=TRUE med Navn/Type/Sted/Kilde + knapper «Kvalifiser» (alle) og «Forkast» (kun admin, gjenbruker DELETE→papirkurv); navn-klikk → detalj
-- [x] app.js: registrer `leads`-side (PAGES, titles)
-- [x] dashboard.js: Min dag «Leads å kvalifisere»-rad → `navigate('leads')` i stedet for ett lead
-- [x] service-worker cache v14→v15
+## Backend
+- [x] `schema.sql`: idempotent `ALTER TABLE investors ADD COLUMN tags JSONB DEFAULT '[]'` + GIN-indeks
+- [x] `lib/helpers.js`: `fmtInvestor` returnerer `tags`
+- [x] `routes/investors.js`:
+  - [x] valider at `tags` er liste med tekst
+  - [x] `normalizeTags()` — trim, dropp tomme, dedupliser (case-insensitivt)
+  - [x] PUT lagrer `tags`
+  - [x] GET `/api/investors` støtter `?tag=`-filter (`tags @> $n`)
+  - [x] ny rute GET `/api/tags` → distinkte tags for autocomplete
 
-## Beslutninger
-- Kvalifiser tilgjengelig for alle innloggede (kjerne-lead-arbeid). Forkast (soft-delete
-  til papirkurv) kun admin — gjenbruker eksisterende DELETE, konsistent med app-modellen.
-- Fase ved kvalifisering: **Prospekt**.
+## Frontend
+- [x] `public/js/api.js`: `tags()` + (updateInvestor finnes)
+- [x] `public/js/pages/investor-detalj.js`: Tags-kort med chips + input m/ `<datalist>`, legg til/fjern → lagre inline
+- [x] `public/js/pages/investorer.js`: tag-filter i filterlinja
 
 ## Verifisering
-- [x] Røyktest: leads.js parser + eksporterer render (dynamisk import i nettleser)
-- [~] Innlogget render/klikk IKKE testet av Claude — dev treffer prod-DB, kvalifiser/forkast
-      ville mutert ekte data. Testes i prod (deploy-forward).
+- [x] `npm run dev` starter rent — `[db] Skjema klar` (migrering kjørte OK mot prod-DB)
+- [x] `GET /api/tags` → 200, tom liste → populert etter add
+- [x] Detalj: legg til tag via UI (persisteres, chip vises)
+- [x] Dedup: «vip-test» duplikat av «VIP-test» → ikke lagt til
+- [x] Detalj: fjern tag via ×-knapp (persisteres)
+- [x] Liste: «Alle tags»-filter vises, filtrerer korrekt (tag → 1 treff)
+- [x] Opprydding: testtags fjernet fra INV-033 (`tags: []`)
 
 ## Oppsummering
-Leads-panelet var halvbygd: talte ukvalifiserte leads (is_lead=TRUE) uten liste eller
-kvalifiser-handling. Nå: Min dag-raden åpner en full liste (`GET /investors?leads=1`),
-hvert lead kan kvalifiseres (→ investor, fase Prospekt, via nytt qualify-endepunkt) eller
-forkastes (admin → papirkurv). Fase-valg bekreftet med bruker: Prospekt.
-Kjørt gjennom deploy-pipelinen som forrige leveranser.
+Frie tekst-tags på investorer levert. JSONB-kolonne `tags` + GIN-indeks, `fmtInvestor`,
+validering + `normalizeTags` (trim/dedup case-insensitivt), PUT-lagring, `?tag=`-filter og
+`GET /api/tags`. Frontend: Tags-kort på detalj (chips + `<datalist>`-autocomplete, inline
+lagring med optimistisk revert ved feil) og tag-filter i investorlista (gated på at tags finnes).
+Verifisert ende-til-ende i nettleser mot prod-DB; alle testtags ryddet opp.
+Ikke commitet/deployet ennå — venter på klarsignal.

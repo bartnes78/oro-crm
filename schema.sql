@@ -352,3 +352,13 @@ DO $$ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_investors_is_lead ON investors (is_lead) WHERE is_lead = TRUE;
+
+-- Frie tekst-tags på investorer (JSONB-array av strenger)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='tags') THEN
+    ALTER TABLE investors ADD COLUMN tags JSONB DEFAULT '[]';
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_investors_tags ON investors USING GIN (tags);

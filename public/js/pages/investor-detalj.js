@@ -74,6 +74,31 @@ function buildDetailHeader(inv, products) {
   `;
 }
 
+function buildTagsCard(inv, allTags) {
+  const tags = inv.tags || [];
+  const chips = tags.map(t => `
+    <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 11px;border-radius:20px;
+      background:rgba(52,152,219,.1);color:var(--blue);font-size:12px;font-weight:600;">
+      ${window.escHtml(t)}
+      <button class="tag-remove-btn" data-tag="${window.escHtml(t)}" title="Fjern"
+        style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;">&times;</button>
+    </span>`).join('');
+  const datalist = (allTags || []).map(t => `<option value="${window.escHtml(t)}"></option>`).join('');
+
+  return `
+    <div class="card" id="tags-card">
+      <div class="card-title">🏷️ Tags</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;${tags.length ? 'margin-bottom:10px;' : ''}">${chips}</div>
+      <div style="display:flex;gap:6px;">
+        <input id="tag-input" list="tag-suggestions" type="text" placeholder="Legg til tag&hellip;" autocomplete="off"
+          style="flex:1;font-size:13px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);" />
+        <datalist id="tag-suggestions">${datalist}</datalist>
+        <button class="btn btn-ghost btn-sm" id="tag-add-btn" style="min-height:36px;white-space:nowrap;">+ Legg til</button>
+      </div>
+    </div>
+  `;
+}
+
 function buildPipelineCard(inv, lookups) {
   const phaseOptions = (lookups.phases || []).map(p =>
     `<option ${inv.phase === p ? 'selected' : ''}>${window.escHtml(p)}</option>`
@@ -1388,14 +1413,15 @@ function setupDeclinedPills(containerId) {
 export async function render(el, state) {
   el.innerHTML = '<div class="content"><p class="text-muted">Laster&hellip;</p></div>';
 
-  let inv, tasks, lookups, products, piData;
+  let inv, tasks, lookups, products, piData, allTags;
   try {
-    [inv, tasks, lookups, products, piData] = await Promise.all([
+    [inv, tasks, lookups, products, piData, allTags] = await Promise.all([
       api.investor(state.id),
       api.tasks({ investorId: state.id }),
       api.lookups(),
       api.products(),
       api.productInvestors(state.id),
+      api.tags(),
     ]);
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:#c0392b;">Feil: ${window.escHtml(e.message)}</p></div>`;
@@ -1423,6 +1449,7 @@ export async function render(el, state) {
         <div class="inv-detail-layout" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
             <div class="section-label">Kjerneinformasjon</div>
+            ${buildTagsCard(inv, allTags)}
             <div class="grid-2">
               ${buildPipelineCard(inv, lookups)}
               ${buildProductCard(inv, products, piData)}
@@ -1461,6 +1488,49 @@ export async function render(el, state) {
         await api.deleteInvestor(inv.id);
         window.navigate('investorer');
       } catch (e) { window.ui.toast('Feil ved sletting: ' + e.message, 'error'); }
+    });
+  }
+
+  function rerenderTags() {
+    const card = el.querySelector('#tags-card');
+    if (!card) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = buildTagsCard(inv, allTags);
+    card.replaceWith(tmp.firstElementChild);
+    bindTags();
+  }
+
+  function bindTags() {
+    const input  = el.querySelector('#tag-input');
+    const addBtn = el.querySelector('#tag-add-btn');
+    if (!input) return;
+
+    const saveTags = async (newTags) => {
+      const prev = inv.tags || [];
+      try {
+        await api.updateInvestor(inv.id, { tags: newTags });
+        inv.tags = newTags;
+        newTags.forEach(t => { if (!allTags.includes(t)) allTags.push(t); });
+        allTags.sort((a, b) => a.localeCompare(b, 'nb'));
+        rerenderTags();
+      } catch (e) {
+        inv.tags = prev;
+        window.ui.toast('Feil: ' + e.message, 'error');
+      }
+    };
+
+    const addTag = () => {
+      const raw = input.value.trim();
+      if (!raw) return;
+      if ((inv.tags || []).some(t => t.toLowerCase() === raw.toLowerCase())) { input.value = ''; return; }
+      saveTags([...(inv.tags || []), raw]);
+    };
+
+    addBtn.addEventListener('click', addTag);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+
+    el.querySelectorAll('.tag-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => saveTags((inv.tags || []).filter(t => t !== btn.dataset.tag)));
     });
   }
 
@@ -1874,6 +1944,7 @@ export async function render(el, state) {
 
   function bindEvents() {
     bindTopbar();
+    bindTags();
     bindPipeline();
     bindProducts();
     bindDocs();
