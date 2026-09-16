@@ -96,11 +96,21 @@ router.get('/api/investors', async (req, res) => {
           aggMap[pi.investor_id].weighted_total += Number(pi.target_ticket) * Number(pi.probability);
         }
       });
+      const { rows: meetRows } = await query(
+        `SELECT investor_id, MIN(date) AS next_meeting
+         FROM contact_log
+         WHERE investor_id = ANY($1) AND status = 'planlagt'
+           AND log_type = 'Møte' AND date >= CURRENT_DATE
+         GROUP BY investor_id`, [ids]
+      );
+      const meetMap = Object.fromEntries(meetRows.map(m => [m.investor_id, m.next_meeting]));
+
       rows = rows.map(r => ({
         ...r,
         product_interests: (piMap[r.id] || []).sort((a, b) => a - b),
         committed_total: aggMap[r.id]?.committed_total || 0,
         weighted_total:  aggMap[r.id]?.weighted_total  || 0,
+        next_meeting:    meetMap[r.id] || null,
       }));
     }
 

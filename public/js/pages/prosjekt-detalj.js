@@ -7,8 +7,8 @@ const PHASE_MAP = {
 };
 const STALE_PHASES = ['Prospekt', 'Aktiv dialog'];
 const DECLINE_REASONS = [
-  'For høy risiko', 'Allerede eksponert', 'Timing', 'Manglende kapital',
-  'Ikke aktuelt nå', 'Ingen svar', 'Annet',
+  'Ønsker ikke fond', 'Timing', 'For høy risiko', 'Allerede eksponert',
+  'Manglende kapital', 'Ikke aktuelt nå', 'Ingen svar', 'Annet',
 ];
 const TYPES    = ['Fond', 'Prosjekt', 'Co-invest', 'Annet'];
 const STATUSES = ['Fundraising', 'Aktiv', 'Avsluttet', 'Pipeline'];

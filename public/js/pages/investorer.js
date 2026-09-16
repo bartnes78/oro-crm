@@ -90,7 +90,7 @@ function openNyInvestorModal(lookups, currentUser) {
 
 function buildTableRows(investors, products) {
   if (investors.length === 0) {
-    return `<tr><td colspan="8" class="empty-state">Ingen investorer funnet.</td></tr>`;
+    return `<tr><td colspan="9" class="empty-state">Ingen investorer funnet.</td></tr>`;
   }
 
   const prodMap = Object.fromEntries(products.map(p => [p._id, p.name]));
@@ -117,6 +117,7 @@ function buildTableRows(investors, products) {
         <td class="text-right hide-sm" style="font-weight:600">${weighted}</td>
         <td class="hide-sm"><div class="prod-pills">${prodPills}</div></td>
         <td class="hide-sm" style="font-size:12px;color:#717D87">${esc(inv.last_contact || '—')}</td>
+        <td class="hide-sm" style="font-size:12px;${inv.next_meeting ? 'color:var(--blue);font-weight:600' : 'color:#717D87'}">${inv.next_meeting ? '📅 ' + esc(inv.next_meeting) : '—'}</td>
       </tr>`;
   }).join('');
 }
@@ -367,6 +368,7 @@ export async function render(el, state) {
                   <th class="text-right hide-sm">Vektet (M)</th>
                   <th class="hide-sm">Produkter</th>
                   <th class="hide-sm">Sist kontaktet</th>
+                  <th class="hide-sm">Neste møte</th>
                 </tr>
               </thead>
               <tbody class="inv-tbody">${tableRows}</tbody>

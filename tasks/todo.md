@@ -1,36 +1,42 @@
-# Tag-felt på investorer
+# Neste bolk — åpne feedback-saker
 
-Frie tekst-tags på investorer, med autocomplete-forslag fra eksisterende tags.
-Lagres som JSONB-array på `investors`. Vises på investor-detalj + som filter i investorlista.
+Fra `feedback_reports` i DB. Tag-feltet er levert og deployet (commit ca6db86).
 
-## Backend
-- [x] `schema.sql`: idempotent `ALTER TABLE investors ADD COLUMN tags JSONB DEFAULT '[]'` + GIN-indeks
-- [x] `lib/helpers.js`: `fmtInvestor` returnerer `tags`
-- [x] `routes/investors.js`:
-  - [x] valider at `tags` er liste med tekst
-  - [x] `normalizeTags()` — trim, dropp tomme, dedupliser (case-insensitivt)
-  - [x] PUT lagrer `tags`
-  - [x] GET `/api/investors` støtter `?tag=`-filter (`tags @> $n`)
-  - [x] ny rute GET `/api/tags` → distinkte tags for autocomplete
+---
 
-## Frontend
-- [x] `public/js/api.js`: `tags()` + (updateInvestor finnes)
-- [x] `public/js/pages/investor-detalj.js`: Tags-kort med chips + input m/ `<datalist>`, legg til/fjern → lagre inline
-- [x] `public/js/pages/investorer.js`: tag-filter i filterlinja
+## #21 — Møtedato / neste møte (feedback 2026-09-09, investor-detalj) ✅
+
+**Funn:** `meeting_date`-kolonnen var død. Valg (bruker): utled «neste møte» fra planlagte
+møte-aktiviteter i loggen — én sannhet, ingen dobbeltføring.
+
+**Levert:**
+- [x] Backend: GET `/api/investors` aggregerer neste planlagte `Møte` (status=planlagt, date ≥ i dag) per investor → `next_meeting`
+- [x] `fmtInvestor` eksponerer `next_meeting`
+- [x] Investorliste: ny «Neste møte»-kolonne (📅, blå når satt)
+- [x] Investor-detalj: «📅 Neste møte» i sidebar-nøkkeltall (utledet fra `inv.log`)
+- [x] `meeting_date`-kolonnen latt ligge dormant (kun 1 gammel verdi) — destruktiv DROP tas
+      som egen, bevisst opprydding med backup, ikke i denne commiten
+- [ ] (utsatt) Kommende møter i «Min dag» — sidepanelet viser alt planlagte/forfalte
+
+## #22 — Raskere avslagsregistrering (feedback 2026-09-15, prosjektDetalj) ✅
+
+**Funn:** avslags-modalen på prosjektsiden har en nedtrekksliste (`DECLINE_REASONS`) som
+manglet «Ønsker ikke fond» — grunnen bruker sier er vanligst.
+
+**Levert:**
+- [x] La til «Ønsker ikke fond» øverst i `DECLINE_REASONS` + flyttet «Timing» opp (vanligst først)
+
+---
 
 ## Verifisering
-- [x] `npm run dev` starter rent — `[db] Skjema klar` (migrering kjørte OK mot prod-DB)
-- [x] `GET /api/tags` → 200, tom liste → populert etter add
-- [x] Detalj: legg til tag via UI (persisteres, chip vises)
-- [x] Dedup: «vip-test» duplikat av «VIP-test» → ikke lagt til
-- [x] Detalj: fjern tag via ×-knapp (persisteres)
-- [x] Liste: «Alle tags»-filter vises, filtrerer korrekt (tag → 1 treff)
-- [x] Opprydding: testtags fjernet fra INV-033 (`tags: []`)
+- [x] Server startet rent (nodemon), ingen feil i logg
+- [x] #21 API returnerer `next_meeting` (4 investorer med planlagt møte)
+- [x] #21 liste: kolonne + datoer vises (INV-003 06.10, INV-220 12.10)
+- [x] #21 detalj: «Neste møte 06. okt. 2026» i sidebar (INV-003)
+- [x] #22 modal: «Ønsker ikke fond» først i nedtrekkslista
 
-## Oppsummering
-Frie tekst-tags på investorer levert. JSONB-kolonne `tags` + GIN-indeks, `fmtInvestor`,
-validering + `normalizeTags` (trim/dedup case-insensitivt), PUT-lagring, `?tag=`-filter og
-`GET /api/tags`. Frontend: Tags-kort på detalj (chips + `<datalist>`-autocomplete, inline
-lagring med optimistisk revert ved feil) og tag-filter i investorlista (gated på at tags finnes).
-Verifisert ende-til-ende i nettleser mot prod-DB; alle testtags ryddet opp.
-Ikke commitet/deployet ennå — venter på klarsignal.
+## Merk
+- Service-worker-cache må tømmes ved testing for å se ny JS (kjent felle).
+- Lagret listefilter i localStorage kan beholde en tag/verdi som ikke lenger finnes →
+  tom liste til «Nullstill» trykkes. Liten pre-eksisterende UX-glipp, verdt å rydde senere.
+- De ~20 eldre feedback-sakene (juni 2026) ser ut som allerede løst — bør ryddes/markeres.

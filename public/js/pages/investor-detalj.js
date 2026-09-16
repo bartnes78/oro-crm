@@ -253,6 +253,12 @@ function buildKeyFigures(inv, products, piData, tasks) {
   const todayIso    = new Date().toISOString().slice(0, 10);
   const planned     = allLog.filter(l => l.status === 'planlagt');
   const overdue     = planned.filter(l => l.date < todayIso);
+  const nextMeeting = planned
+    .filter(l => l.log_type === 'Møte' && l.date >= todayIso)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const nextMeetingStr = nextMeeting
+    ? new Date(nextMeeting.date).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
   const activityCnt = allLog.filter(l => l.status !== 'planlagt').length;
   const primaryCtct = (inv.contacts || []).find(c => c.is_primary === 1 && c.active !== 0);
   const lastContactStr = inv.last_contact
@@ -288,6 +294,11 @@ function buildKeyFigures(inv, products, piData, tasks) {
             <span style="font-size:12px;color:var(--muted)">📋 Aktiviteter</span>
             <span style="font-size:13px;font-weight:600">${activityCnt}</span>
           </div>
+          ${nextMeetingStr ? `
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:var(--blue)">📅 Neste møte</span>
+              <span style="font-size:13px;font-weight:600;color:var(--blue)">${window.escHtml(nextMeetingStr)}</span>
+            </div>` : ''}
           ${planned.length > 0 ? `
             <div style="display:flex;align-items:center;justify-content:space-between">
               <span style="font-size:12px;color:${overdue.length > 0 ? '#e74c3c' : 'var(--blue)'}">📅 Planlagte</span>
