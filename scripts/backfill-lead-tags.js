@@ -9,6 +9,13 @@
 require('dotenv').config();
 const { query, pool } = require('../db');
 
+// Rene tag-labels for kjente kilder. Ukjente kilder faller tilbake til source ordrett.
+const SOURCE_TAG_MAP = {
+  'Finansavisen 25.07.2026': 'FA 25.7.2026',
+  'FBN Norsk Familieeierskap (fbn.no/vare-medlemmer)': 'FBN medlemmer 2026',
+};
+const tagFor = source => SOURCE_TAG_MAP[source] || source;
+
 async function run() {
   const commit = process.argv.includes('--commit');
   console.log(commit ? '\nMODUS: --commit (skriver)\n' : '\nMODUS: dry-run (ingen skriv — bruk --commit)\n');
@@ -22,14 +29,16 @@ async function run() {
       AND (is_lead = TRUE OR provenance ? 'kilde')
   `);
 
-  const toTag = rows.filter(r => {
-    const tags = Array.isArray(r.tags) ? r.tags : [];
-    return !tags.some(t => t.toLowerCase() === r.source.toLowerCase());
-  });
+  const toTag = rows
+    .map(r => ({ ...r, tag: tagFor(r.source) }))
+    .filter(r => {
+      const tags = Array.isArray(r.tags) ? r.tags : [];
+      return !tags.some(t => t.toLowerCase() === r.tag.toLowerCase());
+    });
 
   console.log(`${rows.length} lead-opprinnede rader, ${toTag.length} mangler kilde-tag.\n`);
   for (const r of toTag) {
-    console.log(`  ${r.id}  ${r.name.padEnd(30)} +#${r.source}${r.is_lead ? '  (lead)' : ''}`);
+    console.log(`  ${r.id}  ${r.name.padEnd(30)} +#${r.tag}${r.is_lead ? '  (lead)' : ''}`);
   }
 
   if (!commit) {
@@ -46,7 +55,7 @@ async function run() {
          SET tags = CASE WHEN tags @> $2 THEN tags ELSE COALESCE(tags,'[]'::jsonb) || $2 END,
              updated_at = NOW()
          WHERE id = $1`,
-        [r.id, JSON.stringify([r.source])]
+        [r.id, JSON.stringify([r.tag])]
       );
     }
     await client.query('COMMIT');

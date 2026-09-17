@@ -17,11 +17,14 @@
 - [x] Back-fill dry-run: 216 lead-rader mangler kilde-tag
 - [x] Kvalifiser fra kort: is_lead→false, banner forsvinner (testet på INV-754, revertert)
 
+## Back-fill kjørt ✅
+- [x] Labels avklart: `Finansavisen 25.07.2026`→«FA 25.7.2026», `FBN …`→«FBN medlemmer 2026»
+- [x] `backfill-lead-tags.js --commit` mot prod: 216 rader tagget, idempotent (0 gjenstår)
+- [x] `/api/tags` viser begge; tag-filter på leads virker
+
 ## Gjenstår (venter på brukeren)
-- [ ] Kjøre back-fill --commit mot prod — MEN kilde-verdiene er ordrike
-      («FBN Norsk Familieeierskap (fbn.no/vare-medlemmer)»). Avklar om vi bruker source
-      ordrett, eller korte labels (f.eks. «Finansavisen 2026», «FBN 2026»).
-- [ ] Kjøre reell K400 2025-import med `--tag="K400 2025"` når CSV er klar.
+- [ ] Kjøre reell K400 2025-import med `--tag="K400 2025"` når CSV er klar
+      (overlapp mot eksisterende blir automatisk union'et, ingen dubletter).
 
 ## Oppsummering
 Kode levert: importør tagger + slår sammen overlapp (kun sikre treff), back-fill-skript,
