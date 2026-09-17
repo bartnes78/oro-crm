@@ -368,6 +368,22 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_investors_is_lead ON investors (is_lead) WHERE is_lead = TRUE;
 
+-- Forkastede leads: avvist men beholdt (ikke papirkurv). Skjules fra aktiv leads-liste
+-- via discarded_at IS NULL; re-surfaces hvis de treffer i en ny import.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='discarded_at') THEN
+    ALTER TABLE investors ADD COLUMN discarded_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='discarded_by') THEN
+    ALTER TABLE investors ADD COLUMN discarded_by TEXT;
+  END IF;
+END $$;
+
 -- Frie tekst-tags på investorer (JSONB-array av strenger)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns

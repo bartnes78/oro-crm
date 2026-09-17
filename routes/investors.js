@@ -54,7 +54,12 @@ router.get('/api/investors', async (req, res) => {
     if (city)    { params.push('%' + city + '%');          where.push(`i.city ILIKE $${params.length}`); }
     if (tag)     { params.push(JSON.stringify([tag]));     where.push(`i.tags @> $${params.length}`); }
 
-    where.push(req.query.leads === '1' ? 'i.is_lead = TRUE' : 'i.is_lead IS NOT TRUE');
+    if (req.query.leads === '1') {
+      where.push('i.is_lead = TRUE');
+      if (req.query.includeDiscarded !== '1') where.push('i.discarded_at IS NULL');
+    } else {
+      where.push('i.is_lead IS NOT TRUE');
+    }
     where.push('i.deleted_at IS NULL');
     const whereClause = 'WHERE ' + where.join(' AND ');
     let { rows } = await query(`SELECT i.* FROM investors i ${join} ${whereClause}`, params);
@@ -322,6 +327,28 @@ router.post('/api/investors/:id/qualify', async (req, res) => {
     res.json(fmtInvestor(u));
   } catch (e) {
     console.error('[POST /qualify]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Forkast/gjenopprett et lead (avvist men beholdt — ikke papirkurv).
+router.post('/api/investors/:id/discard', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  const discarded = !!req.body.discarded;
+  try {
+    const { rows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Ikke funnet' });
+    const { rows: [u] } = await query(
+      `UPDATE investors SET discarded_at = ${discarded ? 'NOW()' : 'NULL'}, discarded_by = $2, updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [id, discarded ? (req.currentUser?.username || null) : null]
+    );
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', id,
+      { discarded: !discarded }, { discarded },
+      `${discarded ? 'Forkastet' : 'Gjenopprettet'} lead: ${u.name}`);
+    res.json(fmtInvestor(u));
+  } catch (e) {
+    console.error('[POST /discard]', e.message);
     res.status(500).json({ error: e.message });
   }
 });

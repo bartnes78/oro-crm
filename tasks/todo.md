@@ -1,33 +1,34 @@
-# Duplikat-håndtering i leads-lista
+# Forkast = avvist men beholdes (ikke papirkurv)
+
+Forkastede leads blir liggende som ukvalifiserte (is_lead=TRUE, discarded_at satt),
+skjult fra aktiv liste men hentbare via filter — og re-surfacer hvis de treffer i ny import.
 
 ## Backend
-- [ ] Fiks `/api/merge`: union tags (keep + drop, dedup case-insensitivt) — bevar kilde ved merge
-- [ ] Ny rute `GET /api/leads/duplicates`: per lead, beste treff mot ALLE ikke-slettede
-      (investorer + andre leads), jaccard ≥ 0.6, ekskluder seg selv → {lead_id: {id,name,score,is_lead}}
+- [ ] `schema.sql`: `discarded_at TIMESTAMPTZ` + `discarded_by TEXT` på investors (idempotent)
+- [ ] `fmtInvestor`: returner `discarded_at`
+- [ ] GET `/api/investors`: `leads=1` = aktive (discarded_at IS NULL) som default;
+      `includeDiscarded=1` tar med forkastede
+- [ ] Ny rute `POST /api/investors/:id/discard` (body `{discarded}`) — sett/nullstill
+      discarded_at + discarded_by + auditLog
+- [ ] `import-leads.js`: sikre treff mot forkastet lead → union tag OG nullstill discarded_at
+      (re-surface), rapporter det
 
 ## Frontend
-- [ ] `api.js`: `leadDuplicates()`
-- [ ] `leads.js`: last leads + dup-map parallelt; «⚠ ligner X (n%)»-badge på rad;
-      «Slå sammen» (admin, keep=match, drop=lead) + Forkast; «Kun duplikater»-filter; dup først
-
-## Backend ✅ / Frontend ✅
+- [ ] `api.js`: `discardLead(id, discarded)`
+- [ ] `leads.js`: last aktive + forkastede i ett kall; «Vis forkastede (N)»-filter;
+      Forkast = discard (ut av aktiv); forkastet-rad → Gjenopprett + Slett (papirkurv, admin);
+      behold Slett for søppel i aktiv (admin)
 
 ## Verifisering
-- [x] Merge bevarer tags: keep[FBN]+drop[K400,FBN] → [FBN,K400] (union, dedup) — testrader ryddet
-- [x] `/api/leads/duplicates`: 26 leads med treff (mest 100% mot eksisterende investorer), ~2,3s
-- [x] Leads-lista: 26 badges + 26 «Slå sammen», «Kun duplikater (26)»-filter virker, dup øverst
-- [x] Skjermbilde bekreftet
+- [x] Backend: discard tar ut av aktiv (125→124), includeDiscarded tar med, gjenopprett tilbake
+- [x] Import re-surface: forkastet lead treffes → «[re-surfaces fra forkastet]» i rapport;
+      --commit nullstilte discarded_at + union'et ny tag (testlead ryddet)
+- [x] UI: Forkast → «Forkastede leads»-visning m/notat + Gjenopprett + Slett; Gjenopprett → aktiv
+- [x] Slett → papirkurv (uendret)
 
 ## Oppsummering
-Live duplikat-flagging i leads-lista: nytt `/api/leads/duplicates` (per lead beste treff mot
-alle ikke-slettede, jaccard ≥ 0.6, investor foretrekkes ved lik score), badge «⚠ ligner X (n%)»,
-«Slå sammen»-knapp (admin → /api/merge), «Kun duplikater»-filter, dup sortert øverst. Fikset
-`/api/merge` til å union'e tags (kilde bevares ved sammenslåing). Deployet.
-NB: én testrad «ZZ Merge Keep Test» (INV-992) ligger igjen i papirkurven — kan tømmes manuelt.
-
-## Tillegg — «Slå sammen alle 100%»-knapp ✅
-- [x] Bulk-knapp i leads-lista (admin): fletter alle 100%-treff MOT KVALIFISERT investor
-      (is_lead=false, unngår kjede-/rekkefølgeproblemer) inn i sine investorer, med
-      antall-bekreftelse + progress; 60–99% og lead-mot-lead beholder én-og-én-knappen.
-- [x] Verifisert: knapp «⚡ Slå sammen alle 100% (26)» rendres, avbryt-sti trygg.
-      Selve masse-mergen ikke kjørt mot prod (brukerens å utløse).
+«Forkast» er nå en lett avvist-men-behold-tilstand (`discarded_at`), ikke papirkurv: leadet
+beholdes som ukvalifisert, skjules fra aktiv liste, hentes via «Vis forkastede (N)» med
+Gjenopprett — og re-surfacer automatisk (discarded_at nullstilles) hvis det treffer i en ny
+import. Egen «Slett» (papirkurv, admin) beholdt for søppel. Deployet.
+NB testrader i papirkurv: INV-992 (forrige økt) + INV-993 (denne) — kan tømmes manuelt.

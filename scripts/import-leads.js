@@ -92,7 +92,7 @@ async function run() {
 
   // Alle eksisterende (leads OG kvalifiserte) for dedup + overlapp-håndtering.
   const { rows: existing } = await query(
-    'SELECT id, name, org_nr, is_lead, tags FROM investors WHERE deleted_at IS NULL'
+    'SELECT id, name, org_nr, is_lead, tags, discarded_at FROM investors WHERE deleted_at IS NULL'
   );
   const existingNorm = existing.map(e => ({ ...e, norm: normalizeName(e.name) }));
 
@@ -126,7 +126,8 @@ async function run() {
     // Sikkert treff (nær identisk navn): union kilde-tag på eksisterende, ingen dublett.
     if (isSure && tag) {
       const alreadyTagged = Array.isArray(dup.entry.tags) && dup.entry.tags.some(t => t.toLowerCase() === tag.toLowerCase());
-      tagMerges.push({ id: dup.id, name: dup.name, tag, alreadyTagged, isLead: dup.entry.is_lead, score: dup.score });
+      const wasDiscarded = !!dup.entry.discarded_at;
+      tagMerges.push({ id: dup.id, name: dup.name, tag, alreadyTagged, wasDiscarded, isLead: dup.entry.is_lead, score: dup.score });
       continue;
     }
     // Usikkert treff (0.6–0.9): flagg for manuell merge (som før).
@@ -175,7 +176,7 @@ async function run() {
     console.log(`\n${tagMerges.length} sikkert treff → kilde-tag legges på eksisterende (ingen dublett):`);
     tagMerges.forEach(m => console.log(
       `  ↳ ${m.name} (${m.id}, ${Math.round(m.score * 100)}%${m.isLead ? ', lead' : ''})  +#${m.tag}` +
-      (m.alreadyTagged ? '  [har taggen alt — hopper over]' : '')));
+      (m.alreadyTagged ? '  [har taggen alt — hopper over]' : m.wasDiscarded ? '  [re-surfaces fra forkastet]' : '')));
   }
   if (skipped.length) {
     console.log(`\n${skipped.length} rad(er) HOPPET OVER (usikkert duplikat ${Math.round(DUP_THRESHOLD * 100)}–${Math.round(AUTO_MERGE_THRESHOLD * 100)}% mot eksisterende):`);
@@ -211,9 +212,11 @@ async function run() {
     }
     // Union kilde-tag på sikre treff (idempotent: @> hopper over hvis taggen finnes).
     for (const m of tagUpdates) {
+      // Nytt kilde-treff => union tag, og re-surface hvis leadet var forkastet.
       await client.query(
         `UPDATE investors
          SET tags = CASE WHEN tags @> $2 THEN tags ELSE COALESCE(tags,'[]'::jsonb) || $2 END,
+             discarded_at = NULL,
              updated_at = NOW()
          WHERE id = $1`,
         [m.id, JSON.stringify([m.tag])]
