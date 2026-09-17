@@ -74,6 +74,21 @@ function buildDetailHeader(inv, products) {
   `;
 }
 
+function buildLeadBanner(inv, isAdmin) {
+  return `
+    <div id="lead-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      background:rgba(38,119,119,.1);border:1px solid #267777;border-radius:10px;
+      padding:12px 16px;margin-bottom:16px;">
+      <span style="font-size:18px;">🌱</span>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-size:13px;font-weight:700;color:#267777;">Ukvalifisert lead</div>
+        <div style="font-size:12px;color:var(--muted);">Ikke synlig i vanlige visninger ennå. Kvalifiser for å ta inn som investor (fase «Prospekt»).</div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="lead-qualify-btn" style="min-height:36px;white-space:nowrap;">✓ Kvalifiser</button>
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="lead-discard-btn" style="min-height:36px;color:#e74c3c;white-space:nowrap;">Forkast</button>` : ''}
+    </div>`;
+}
+
 function buildTagsCard(inv, allTags) {
   const tags = inv.tags || [];
   const chips = tags.map(t => `
@@ -1456,6 +1471,7 @@ export async function render(el, state) {
         <button class="btn btn-ghost btn-sm" id="delete-btn" style="color:#e74c3c;margin-left:auto;min-height:36px;">Slett investor</button>
       </div>
       <div class="content">
+        ${inv.is_lead ? buildLeadBanner(inv, state.currentUser?.role === 'admin') : ''}
         ${buildDetailHeader(inv, products)}
         <div class="inv-detail-layout" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
@@ -1953,8 +1969,44 @@ export async function render(el, state) {
     doSearch();
   }
 
+  function bindLeadBanner() {
+    const qualifyBtn = el.querySelector('#lead-qualify-btn');
+    if (qualifyBtn) {
+      qualifyBtn.addEventListener('click', async () => {
+        qualifyBtn.disabled = true;
+        qualifyBtn.textContent = 'Kvalifiserer…';
+        try {
+          await api.qualifyLead(inv.id);
+          window.ui.toast(`${inv.name} er nå investor (Prospekt)`, 'success');
+          await reload();
+        } catch (e) {
+          qualifyBtn.disabled = false;
+          qualifyBtn.textContent = '✓ Kvalifiser';
+          window.ui.toast('Kunne ikke kvalifisere: ' + e.message, 'error');
+        }
+      });
+    }
+
+    const discardBtn = el.querySelector('#lead-discard-btn');
+    if (discardBtn) {
+      discardBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Forkaste ${inv.name}?\n\nLeadet flyttes til papirkurven.`)) return;
+        discardBtn.disabled = true;
+        try {
+          await api.deleteInvestor(inv.id);
+          window.ui.toast('Lead forkastet', 'info');
+          window.navigate('leads');
+        } catch (e) {
+          discardBtn.disabled = false;
+          window.ui.toast('Kunne ikke forkaste: ' + e.message, 'error');
+        }
+      });
+    }
+  }
+
   function bindEvents() {
     bindTopbar();
+    bindLeadBanner();
     bindTags();
     bindPipeline();
     bindProducts();
