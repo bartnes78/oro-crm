@@ -173,6 +173,21 @@ function buildRelatedPersonsCard(inv) {
 }
 
 function buildLeadBanner(inv, isAdmin) {
+  const slettBtn = isAdmin ? `<button class="btn btn-ghost btn-sm" id="lead-delete-btn" style="min-height:36px;color:#e74c3c;white-space:nowrap;">Slett</button>` : '';
+  if (inv.discarded_at) {
+    // Dvale: forkastet, men beholdt (dukker opp igjen ved ny import).
+    return `
+      <div id="lead-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+        background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+        <span style="font-size:18px;">💤</span>
+        <div style="flex:1;min-width:180px;">
+          <div style="font-size:13px;font-weight:700;color:var(--muted);">Forkastet lead (i dvale)</div>
+          <div style="font-size:12px;color:var(--muted);">Beholdt, men skjult fra aktiv liste. Dukker opp igjen automatisk hvis den treffer i en ny import.</div>
+        </div>
+        <button class="btn btn-green btn-sm" id="lead-restore-btn" style="min-height:36px;white-space:nowrap;">↩ Gjenopprett</button>
+        ${slettBtn}
+      </div>`;
+  }
   return `
     <div id="lead-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
       background:rgba(38,119,119,.1);border:1px solid #267777;border-radius:10px;
@@ -183,7 +198,8 @@ function buildLeadBanner(inv, isAdmin) {
         <div style="font-size:12px;color:var(--muted);">Ikke synlig i vanlige visninger ennå. Kvalifiser for å ta inn som investor (fase «Prospekt»).</div>
       </div>
       <button class="btn btn-primary btn-sm" id="lead-qualify-btn" style="min-height:36px;white-space:nowrap;">✓ Kvalifiser</button>
-      ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="lead-discard-btn" style="min-height:36px;color:#e74c3c;white-space:nowrap;">Forkast</button>` : ''}
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="lead-discard-btn" style="min-height:36px;color:#e67e22;white-space:nowrap;">Forkast</button>` : ''}
+      ${slettBtn}
     </div>`;
 }
 
@@ -2090,15 +2106,45 @@ export async function render(el, state) {
     const discardBtn = el.querySelector('#lead-discard-btn');
     if (discardBtn) {
       discardBtn.addEventListener('click', async () => {
-        if (!window.confirm(`Forkaste ${inv.name}?\n\nLeadet flyttes til papirkurven.`)) return;
         discardBtn.disabled = true;
         try {
-          await api.deleteInvestor(inv.id);
-          window.ui.toast('Lead forkastet', 'info');
-          window.navigate('leads');
+          await api.discardLead(inv.id, true);
+          window.ui.toast('Lead forkastet (beholdes, kan hentes fram igjen)', 'info');
+          await reload();
         } catch (e) {
           discardBtn.disabled = false;
           window.ui.toast('Kunne ikke forkaste: ' + e.message, 'error');
+        }
+      });
+    }
+
+    const restoreBtn = el.querySelector('#lead-restore-btn');
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', async () => {
+        restoreBtn.disabled = true;
+        try {
+          await api.discardLead(inv.id, false);
+          window.ui.toast('Lead gjenopprettet', 'success');
+          await reload();
+        } catch (e) {
+          restoreBtn.disabled = false;
+          window.ui.toast('Kunne ikke gjenopprette: ' + e.message, 'error');
+        }
+      });
+    }
+
+    const deleteLeadBtn = el.querySelector('#lead-delete-btn');
+    if (deleteLeadBtn) {
+      deleteLeadBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Slette ${inv.name}?\n\nLeadet flyttes til papirkurven.`)) return;
+        deleteLeadBtn.disabled = true;
+        try {
+          await api.deleteInvestor(inv.id);
+          window.ui.toast('Lead slettet (papirkurv)', 'info');
+          window.navigate('leads');
+        } catch (e) {
+          deleteLeadBtn.disabled = false;
+          window.ui.toast('Kunne ikke slette: ' + e.message, 'error');
         }
       });
     }
