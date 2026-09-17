@@ -27,6 +27,17 @@ function argVal(args, name, fallback) {
   return p !== undefined ? p.slice(name.length + 3) : fallback;
 }
 
+// Nye leads har rang/formue i comments-sammendraget («#336 Navn (1.55 mrd, Eiendom)»),
+// ikke i meta. Parse det ut → strukturert list_meta, så Kommentar-feltet holdes fritt.
+function parsePersonerFromComment(comment) {
+  if (!comment) return [];
+  const personer = [];
+  const re = /#(\d+)\s+(.+?)\s+\(([\d.]+)\s*mrd,\s*([^)]+)\)/g;
+  let m;
+  while ((m = re.exec(comment))) personer.push({ rank: parseInt(m[1]), person: m[2].trim(), formue_mrd: parseFloat(m[3]), bransje: m[4].trim() });
+  return personer;
+}
+
 async function run() {
   const args = process.argv.slice(2);
   const apply = args.includes('--apply');
@@ -161,13 +172,15 @@ async function run() {
     await client.query('BEGIN');
     for (const u of allUnions) await setTagMeta(client, u.id, u.meta);
     for (const { id, lead } of toInsert) {
+      const parsed = parsePersonerFromComment(lead.comments);
+      const personer = parsed.length ? parsed : (lead.meta?.personer || []);
       await client.query(
         `INSERT INTO investors
            (id, name, country, phase, is_lead, source, next_steps, comments, provenance, tags, list_meta, updated_at)
-         VALUES ($1,$2,$3,'Prospekt',TRUE,$4,$5,$6,$7,$8,$9,NOW())`,
-        [id, lead.name, lead.country || 'Norge', KILDE, lead.next_steps || null, lead.comments || null,
+         VALUES ($1,$2,$3,'Prospekt',TRUE,$4,$5,NULL,$6,$7,$8,NOW())`,
+        [id, lead.name, lead.country || 'Norge', KILDE, lead.next_steps || null,
          JSON.stringify({ batch: BATCH, kilde: KILDE, importert_dato: IMPORT_DATO }),
-         tagArr, JSON.stringify({ [TAG]: lead.meta || {} })]
+         tagArr, JSON.stringify({ [TAG]: { ...(lead.meta || {}), personer } })]
       );
       const contacts = lead.contacts || [];
       for (let i = 0; i < contacts.length; i++) {
