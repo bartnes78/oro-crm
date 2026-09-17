@@ -1,31 +1,21 @@
-# Kapital 400 2025-import (tag + meta)
+# Kapital 400 2026 + relaterte selskaper
 
-Bruk tags (ikke kategori-tabeller). «K400 2025» = tag (medlemskap/filter). Rang/formue i
-`list_meta["K400 2025"]` (én nøkkel per år → siste år trumfer, eldre ligger igjen). Persondata
-committes ALDRI til repoet.
+## Kapital 400 2026 ✅
+- [x] Backup (2026-09-17_10-56-24) → `--apply`: 352 tagget, 14 nye leads, 1 flagget (TH Holm), 0 manglende
+- [x] År-sammenligning bekreftet: Ferd 2026 #7/55 mrd gjeldende, 2025 #6/53 mrd (+2,0). 350 på begge år.
 
-## Kode
-- [x] `scripts/import-kapital400.js` — leser Cowork-JSON, tag_existing (by id) → tag+meta,
-      new_leads → dedup (gjenbruker helpers): sikre→union, usikre→rapporter, rene→opprett.
-      Dry-run default, `--apply` skriver. År/tag parametrisert (gjenbruk for 2026).
-- [x] `schema.sql`: `list_meta JSONB` på investors
-- [x] `fmtInvestor`: returnerer `list_meta`
-- [x] Rapport: svake treff (40–60%) logges (NorgesGruppen m.fl.) — opprettes, manuell vurdering
+## Relaterte selskaper (kjerne) ✅
+- [x] Schema: `persons` + `person_companies` (relation/rolle/verified, investor_id nullable)
+- [x] Importør Fase C: leser `related_companies`, upsert person (dedup på navn) + koblinger
+      (verified=true når crm_id satt); relation settes manuelt, DO UPDATE bevarer den
+- [x] API: `related_persons` i GET /api/investors/:id; POST /persons/:id/main (hovedselskap);
+      POST /persons/:id/create-lead (opprett lead fra relatert selskap)
+- [x] UI: «🔗 Personer og relaterte selskaper»-kort — klikkbare CRM-selskaper, «Sett som hoved»,
+      «Opprett som lead» for de utenfor CRM
+- [x] Verifisert: Johan Johannson på INV-312/INV-997 + 6 selskaper utenfor CRM; set-hoved gir
+      ★-badge (testet + nullstilt så bruker velger selv)
 
-## Dry-run (verifisert)
-- [x] 159 tag_existing: alle funnet, 0 manglende
-- [x] 214 nye: alle opprettes, 0 sikre/usikre duplikater (dedup sanity-sjekket)
-- [x] 5 svake treff rapportert (NorgesGruppen → manuell)
-
-## Kjøring (GDPR OK gitt) ✅
-- [x] Commit + push (735bd69) → list_meta-kolonnen i prod bekreftet
-- [x] Backup av prod: stamp 2026-09-17_10-32-21 (10 tabeller)
-- [x] `--apply`: 159 tagget, 214 nye leads
-- [x] Stikkprøver: Ferd INV-220 (rank 6, 53 mrd), Canica INV-685 (rank 9, 33.1 mrd),
-      Hemen Holding INV-994 (nytt lead, tag + kontakt m/tittel). Totalt tag «K400 2025» = 373.
-
-## Følger etter (egen jobb)
-- [x] UI-utkast: «Formuesliste»-kort på investordetalj (rang/formue/personer, gjeldende=nyeste år,
-      «Tidligere år»-seksjon klar for 2025-vs-2026). Verifisert på Ferd INV-220 + A.Jenssen INV-076.
-- [ ] Evt. rang-chip i leads/investor-lista + tooltip (spec), tallformat-finpuss
-- [ ] Kapital 400 2026 når Cowork er ferdig (samme kommando, 2026-JSON)
+## Følger etter (egen jobb / Fase 2)
+- [ ] contacts.person_id-kobling + egen person-detaljside (mest verdi når flere personer fylt ut)
+- [ ] Evt. rang-chip i leads/investor-lista
+- [ ] Fyll ut related_companies for flere personer (John Fredriksen/Geveran m.fl.) i Cowork

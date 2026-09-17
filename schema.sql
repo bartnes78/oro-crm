@@ -368,6 +368,29 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_investors_is_lead ON investors (is_lead) WHERE is_lead = TRUE;
 
+-- Relaterte selskaper: én person → flere selskaper (rolle/relasjon). Aktivitet spores
+-- mot ett hovedselskap (relation='hovedselskap'), men koblingen synliggjør resten.
+CREATE TABLE IF NOT EXISTS persons (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,
+  kapital_id  INTEGER,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_name ON persons (name);
+
+CREATE TABLE IF NOT EXISTS person_companies (
+  person_id    INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+  investor_id  TEXT REFERENCES investors(id) ON DELETE SET NULL,  -- NULL = ikke i CRM ennå
+  company_name TEXT NOT NULL,
+  org_nr       TEXT,
+  relation     TEXT,            -- 'hovedselskap' | 'investeringsselskap' | 'eiendom' | 'konsern' | 'familie' | 'annet'
+  rolle        TEXT,            -- 'Styreleder', 'Daglig leder', ...
+  source       TEXT,
+  verified     BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (person_id, company_name)
+);
+CREATE INDEX IF NOT EXISTS idx_person_companies_investor ON person_companies (investor_id);
+
 -- Forkastede leads: avvist men beholdt (ikke papirkurv). Skjules fra aktiv leads-liste
 -- via discarded_at IS NULL; re-surfaces hvis de treffer i en ny import.
 DO $$ BEGIN

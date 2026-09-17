@@ -224,7 +224,22 @@ router.get('/api/investors/:id', async (req, res) => {
       product_interests: piRows.map(r => r.product_id).sort((a, b) => a - b),
       declined_offers:   declinedRows,
     };
-    res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow) });
+    // Relaterte personer: alle personer koblet til denne investoren, + hver persons øvrige selskaper
+    const { rows: relRows } = await query(`
+      SELECT pc.person_id, p.name AS person_name, pc.company_name, pc.investor_id,
+             pc.rolle, pc.relation, pc.verified, i.name AS crm_name, i.is_lead AS crm_is_lead
+      FROM person_companies pc
+      JOIN persons p ON p.id = pc.person_id
+      LEFT JOIN investors i ON i.id = pc.investor_id AND i.deleted_at IS NULL
+      WHERE pc.person_id IN (SELECT person_id FROM person_companies WHERE investor_id = $1)
+      ORDER BY p.name, (pc.investor_id IS NULL), pc.company_name
+    `, [req.params.id]);
+    const personMap = {};
+    for (const r of relRows) {
+      (personMap[r.person_id] = personMap[r.person_id] || { person_id: r.person_id, name: r.person_name, companies: [] })
+        .companies.push({ company_name: r.company_name, investor_id: r.investor_id, crm_name: r.crm_name, crm_is_lead: r.crm_is_lead, rolle: r.rolle, relation: r.relation, verified: r.verified });
+    }
+    res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow), related_persons: Object.values(personMap) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -537,6 +552,45 @@ router.post('/api/merge', requireAdmin, async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// ── Personer / relaterte selskaper ────────────────────────────────────────────
+router.post('/api/persons/:id/main', async (req, res) => {
+  const personId = req.params.id;
+  const { investor_id } = req.body;
+  if (!investor_id) return validationError(res, ['investor_id er påkrevd']);
+  try {
+    await query(`UPDATE person_companies SET relation = NULL WHERE person_id = $1 AND relation = 'hovedselskap'`, [personId]);
+    const { rowCount } = await query(`UPDATE person_companies SET relation = 'hovedselskap' WHERE person_id = $1 AND investor_id = $2`, [personId, investor_id]);
+    if (!rowCount) return res.status(404).json({ error: 'Kobling ikke funnet' });
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'person', personId, null, { hovedselskap: investor_id }, `Satte hovedselskap for person ${personId}: ${investor_id}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/api/persons/:id/create-lead', async (req, res) => {
+  const personId = req.params.id;
+  const { company_name } = req.body;
+  if (!company_name) return validationError(res, ['company_name er påkrevd']);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: pcRows } = await client.query('SELECT * FROM person_companies WHERE person_id=$1 AND company_name=$2', [personId, company_name]);
+    if (!pcRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kobling ikke funnet' }); }
+    if (pcRows[0].investor_id) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Selskapet er allerede i CRM' }); }
+    const { rows: last } = await client.query(`SELECT id FROM investors WHERE id ~ '^INV-\\d+$' ORDER BY CAST(SUBSTRING(id FROM 5) AS INTEGER) DESC LIMIT 1 FOR UPDATE`);
+    const id = 'INV-' + String((last.length ? parseInt(last[0].id.slice(4)) : 0) + 1).padStart(3, '0');
+    const { rows: [inv] } = await client.query(
+      `INSERT INTO investors (id, name, country, phase, is_lead, source, updated_at) VALUES ($1,$2,'Norge','Prospekt',TRUE,$3,NOW()) RETURNING *`,
+      [id, String(company_name).trim(), 'relatert selskap']
+    );
+    await client.query(`UPDATE person_companies SET investor_id=$1, verified=TRUE WHERE person_id=$2 AND company_name=$3`, [id, personId, company_name]);
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'investor', id, null, { name: inv.name, from_person: personId }, `Opprettet lead fra relatert selskap: ${inv.name}`);
+    res.json(fmtInvestor(inv));
+  } catch (e) {
+    await client.query('ROLLBACK'); console.error('[create-lead]', e.message); res.status(500).json({ error: e.message });
+  } finally { client.release(); }
 });
 
 module.exports = router;

@@ -135,6 +135,43 @@ function buildListMetaCard(inv) {
     </div>`;
 }
 
+function buildRelatedPersonsCard(inv) {
+  const persons = inv.related_persons || [];
+  if (!persons.length) return '';
+
+  const sections = persons.map(p => {
+    const rows = p.companies.map(c => {
+      const isThis = c.investor_id === inv.id;
+      const isMain = c.relation === 'hovedselskap';
+      const nameHtml = c.investor_id
+        ? `<button class="rel-nav" data-id="${window.escHtml(String(c.investor_id))}" style="background:none;border:none;padding:0;cursor:pointer;color:var(--blue);font-weight:600;font-size:13px;text-align:left">${window.escHtml(c.crm_name || c.company_name)}</button>`
+        : `<span style="font-size:13px;color:var(--muted)">${window.escHtml(c.company_name)} <span style="font-size:11px">(ikke i CRM)</span></span>`;
+      const action = isMain
+        ? `<span style="font-size:10px;padding:1px 8px;border-radius:10px;background:rgba(26,138,106,.12);color:var(--color-signed);font-weight:700;white-space:nowrap">★ Hovedselskap</span>`
+        : c.investor_id
+          ? `<button class="rel-setmain btn btn-ghost btn-sm" data-person="${p.person_id}" data-id="${window.escHtml(String(c.investor_id))}" style="font-size:10px;min-height:28px;padding:1px 8px;white-space:nowrap">Sett som hoved</button>`
+          : `<button class="rel-createlead btn btn-ghost btn-sm" data-person="${p.person_id}" data-name="${window.escHtml(c.company_name)}" style="font-size:10px;min-height:28px;padding:1px 8px;color:var(--blue);white-space:nowrap">+ Opprett som lead</button>`;
+      return `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)">
+          <span style="flex:1;min-width:150px">${nameHtml}${isThis ? ' <span style="font-size:10px;color:var(--muted)">· denne</span>' : ''}</span>
+          ${c.rolle ? `<span style="font-size:11px;color:var(--muted)">${window.escHtml(c.rolle)}</span>` : ''}
+          ${action}
+        </div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:2px">👤 ${window.escHtml(p.name)}</div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">🔗 Personer og relaterte selskaper</div>
+      ${sections}
+    </div>`;
+}
+
 function buildLeadBanner(inv, isAdmin) {
   return `
     <div id="lead-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -1549,6 +1586,7 @@ export async function render(el, state) {
               ${buildDocsCard(inv, products)}
               ${buildContactsCard(inv, visInaktive)}
             </div>
+            ${buildRelatedPersonsCard(inv)}
             ${!inv.org_nr ? buildBrregCard(inv) : ''}
             <div class="section-label">Historikk</div>
             ${buildLogCard(inv, products)}
@@ -2066,10 +2104,34 @@ export async function render(el, state) {
     }
   }
 
+  function bindRelatedPersons() {
+    el.querySelectorAll('.rel-nav').forEach(btn =>
+      btn.addEventListener('click', () => window.navigate('detalj', btn.dataset.id)));
+
+    el.querySelectorAll('.rel-setmain').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api.personSetMain(btn.dataset.person, btn.dataset.id);
+        await reload();
+      } catch (e) { btn.disabled = false; window.ui.toast('Feil: ' + e.message, 'error'); }
+    }));
+
+    el.querySelectorAll('.rel-createlead').forEach(btn => btn.addEventListener('click', async () => {
+      if (!window.confirm(`Opprette «${btn.dataset.name}» som nytt lead og koble til personen?`)) return;
+      btn.disabled = true; btn.textContent = 'Oppretter…';
+      try {
+        const inv2 = await api.personCreateLead(btn.dataset.person, btn.dataset.name);
+        window.ui.toast(`${inv2.name} opprettet som lead`, 'success');
+        await reload();
+      } catch (e) { btn.disabled = false; btn.textContent = '+ Opprett som lead'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    }));
+  }
+
   function bindEvents() {
     bindTopbar();
     bindLeadBanner();
     bindTags();
+    bindRelatedPersons();
     bindPipeline();
     bindProducts();
     bindDocs();

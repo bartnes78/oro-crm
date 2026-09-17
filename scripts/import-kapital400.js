@@ -43,6 +43,7 @@ async function run() {
   const IMPORT_DATO = new Date().toISOString().slice(0, 10);
   const tagExisting = data.tag_existing || [];
   const newLeads = data.new_leads || [];
+  const relatedCompanies = data.related_companies || [];
 
   console.log(`\nKapital 400-import  ·  tag="${TAG}"  ·  kilde="${KILDE}"  ·  batch=${BATCH}`);
   console.log(apply ? 'MODUS: --apply (skriver til databasen)\n' : 'MODUS: dry-run (ingen skriv — bruk --apply)\n');
@@ -115,6 +116,16 @@ async function run() {
     weakMatches.forEach(w => console.log(`    ~ ${w.name}  ~  ${w.matchName} (${w.matchId}, ${w.score}%)`));
   }
   if (resurfacing.length) console.log(`\n  ${resurfacing.length} forkastede re-surfacer: ${resurfacing.map(r => r.id).join(', ')}`);
+
+  const relLinks = relatedCompanies.flatMap(p => (p.companies || []).map(c => ({ ...c, person: p.person })));
+  const relInCrm = relLinks.filter(c => c.crm_id);
+  if (relatedCompanies.length) {
+    console.log(`\nFase C — relaterte selskaper: ${relatedCompanies.length} person(er), ${relLinks.length} selskapskoblinger (${relInCrm.length} i CRM):`);
+    relatedCompanies.forEach(p => {
+      console.log(`  ${p.person}:`);
+      (p.companies || []).forEach(c => console.log(`    · ${c.company_name || c.name}${c.crm_id ? ` [${c.crm_id}]` : ' (ikke i CRM)'}${c.rolle ? ` — ${c.rolle}` : ''}`));
+    });
+  }
   console.log(`\nOppsummering: ${tagById.filter(t => !t.alreadyTagged).length + newLeadUnions.length} eksisterende får tag, ${toInsert.length} nye leads, ${candidates.length} flagget, ${missingIds.length} manglende id.`);
 
   const report = {
@@ -122,6 +133,7 @@ async function run() {
     counts: { tag_existing: tagById.length, new_inserted: toInsert.length, new_unions: newLeadUnions.length, duplicate_candidates: candidates.length, missing_ids: missingIds.length, resurfaced: resurfacing.length },
     duplicate_candidates: candidates,
     weak_matches: weakMatches,
+    related: { persons: relatedCompanies.length, links: relLinks.length, in_crm: relInCrm.length },
     missing_ids: missingIds,
     inserted: toInsert.map(t => ({ id: t.id, name: t.lead.name })),
     unions: allUnions.map(u => ({ id: u.id, name: u.name })),
@@ -163,6 +175,31 @@ async function run() {
           `INSERT INTO contacts (investor_id, name, title, is_primary, source) VALUES ($1,$2,$3,$4,'kapital400-import')`,
           [id, contacts[i].name, contacts[i].title || null, i === 0 ? 1 : 0]
         );
+      }
+    }
+    // Fase C: personer + selskapskoblinger (relation settes manuelt i UI; DO UPDATE bevarer den)
+    for (const rp of relatedCompanies) {
+      const personName = (rp.person || '').trim();
+      if (!personName) continue;
+      let { rows: pr } = await client.query('SELECT id FROM persons WHERE name = $1', [personName]);
+      let personId = pr[0]?.id;
+      if (!personId) {
+        const ins = await client.query('INSERT INTO persons (name, kapital_id) VALUES ($1,$2) RETURNING id', [personName, rp.kapital_id || null]);
+        personId = ins.rows[0].id;
+      }
+      for (const c of (rp.companies || [])) {
+        const cname = (c.company_name || c.name || '').trim();
+        if (!cname) continue;
+        await client.query(`
+          INSERT INTO person_companies (person_id, investor_id, company_name, org_nr, rolle, source, verified)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
+          ON CONFLICT (person_id, company_name) DO UPDATE SET
+            investor_id = COALESCE(EXCLUDED.investor_id, person_companies.investor_id),
+            org_nr      = COALESCE(EXCLUDED.org_nr, person_companies.org_nr),
+            rolle       = COALESCE(EXCLUDED.rolle, person_companies.rolle),
+            source      = COALESCE(EXCLUDED.source, person_companies.source),
+            verified    = EXCLUDED.verified OR person_companies.verified
+        `, [personId, c.crm_id || null, cname, c.org_nr || null, c.rolle || null, KILDE, !!c.crm_id]);
       }
     }
     await client.query('COMMIT');

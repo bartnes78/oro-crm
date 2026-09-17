@@ -30,6 +30,8 @@ export const api = {
   deleteInvestor:      (id)       => req('DELETE', `/investors/${id}`),
   qualifyLead:         (id)       => req('POST', `/investors/${id}/qualify`),
   discardLead:         (id, discarded) => req('POST', `/investors/${id}/discard`, { discarded }),
+  personSetMain:       (personId, investor_id) => req('POST', `/persons/${personId}/main`, { investor_id }),
+  personCreateLead:    (personId, company_name) => req('POST', `/persons/${personId}/create-lead`, { company_name }),
   contacts:            (invId)    => req('GET', invId ? `/contacts?investorId=${invId}` : '/contacts'),
   addContact:          (data)     => req('POST', '/contacts', data),
   updateContact:       (id, data) => req('PUT', `/contacts/${id}`, data),
