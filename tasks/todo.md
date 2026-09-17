@@ -1,34 +1,28 @@
-# Forkast = avvist men beholdes (ikke papirkurv)
+# Kapital 400 2025-import (tag + meta)
 
-Forkastede leads blir liggende som ukvalifiserte (is_lead=TRUE, discarded_at satt),
-skjult fra aktiv liste men hentbare via filter — og re-surfacer hvis de treffer i ny import.
+Bruk tags (ikke kategori-tabeller). «K400 2025» = tag (medlemskap/filter). Rang/formue i
+`list_meta["K400 2025"]` (én nøkkel per år → siste år trumfer, eldre ligger igjen). Persondata
+committes ALDRI til repoet.
 
-## Backend
-- [ ] `schema.sql`: `discarded_at TIMESTAMPTZ` + `discarded_by TEXT` på investors (idempotent)
-- [ ] `fmtInvestor`: returner `discarded_at`
-- [ ] GET `/api/investors`: `leads=1` = aktive (discarded_at IS NULL) som default;
-      `includeDiscarded=1` tar med forkastede
-- [ ] Ny rute `POST /api/investors/:id/discard` (body `{discarded}`) — sett/nullstill
-      discarded_at + discarded_by + auditLog
-- [ ] `import-leads.js`: sikre treff mot forkastet lead → union tag OG nullstill discarded_at
-      (re-surface), rapporter det
+## Kode
+- [x] `scripts/import-kapital400.js` — leser Cowork-JSON, tag_existing (by id) → tag+meta,
+      new_leads → dedup (gjenbruker helpers): sikre→union, usikre→rapporter, rene→opprett.
+      Dry-run default, `--apply` skriver. År/tag parametrisert (gjenbruk for 2026).
+- [x] `schema.sql`: `list_meta JSONB` på investors
+- [x] `fmtInvestor`: returnerer `list_meta`
+- [x] Rapport: svake treff (40–60%) logges (NorgesGruppen m.fl.) — opprettes, manuell vurdering
 
-## Frontend
-- [ ] `api.js`: `discardLead(id, discarded)`
-- [ ] `leads.js`: last aktive + forkastede i ett kall; «Vis forkastede (N)»-filter;
-      Forkast = discard (ut av aktiv); forkastet-rad → Gjenopprett + Slett (papirkurv, admin);
-      behold Slett for søppel i aktiv (admin)
+## Dry-run (verifisert)
+- [x] 159 tag_existing: alle funnet, 0 manglende
+- [x] 214 nye: alle opprettes, 0 sikre/usikre duplikater (dedup sanity-sjekket)
+- [x] 5 svake treff rapportert (NorgesGruppen → manuell)
 
-## Verifisering
-- [x] Backend: discard tar ut av aktiv (125→124), includeDiscarded tar med, gjenopprett tilbake
-- [x] Import re-surface: forkastet lead treffes → «[re-surfaces fra forkastet]» i rapport;
-      --commit nullstilte discarded_at + union'et ny tag (testlead ryddet)
-- [x] UI: Forkast → «Forkastede leads»-visning m/notat + Gjenopprett + Slett; Gjenopprett → aktiv
-- [x] Slett → papirkurv (uendret)
+## Kjøring (GDPR OK gitt)
+- [ ] Commit + push → Railway deployer (list_meta-kolonnen opprettes)
+- [ ] Backup av prod
+- [ ] `--apply`: 159 tagget, 214 nye leads
+- [ ] Stikkprøver: Ferd (INV-220), Canica (INV-685), et nytt lead; «K400 2025»-filter
 
-## Oppsummering
-«Forkast» er nå en lett avvist-men-behold-tilstand (`discarded_at`), ikke papirkurv: leadet
-beholdes som ukvalifisert, skjules fra aktiv liste, hentes via «Vis forkastede (N)» med
-Gjenopprett — og re-surfacer automatisk (discarded_at nullstilles) hvis det treffer i en ny
-import. Egen «Slett» (papirkurv, admin) beholdt for søppel. Deployet.
-NB testrader i papirkurv: INV-992 (forrige økt) + INV-993 (denne) — kan tømmes manuelt.
+## Følger etter (egen jobb)
+- [ ] UI: vis rang/formue fra list_meta (gjeldende = nyeste år) + 2025-vs-2026-sammenligning
+- [ ] Kapital 400 2026 når Cowork er ferdig (samme kommando, 2026-JSON)

@@ -393,3 +393,13 @@ DO $$ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_investors_tags ON investors USING GIN (tags);
+
+-- Strukturert meta per liste-tag (f.eks. Kapital 400): list_meta["K400 2025"] =
+-- {personer:[{rank,person,formue_mrd,bransje}]}. Én nøkkel per år → siste år trumfer,
+-- eldre år ligger igjen som historikk. Tag styrer medlemskap/filter; dette er tallene.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_name='investors' AND column_name='list_meta') THEN
+    ALTER TABLE investors ADD COLUMN list_meta JSONB DEFAULT '{}';
+  END IF;
+END $$;
