@@ -17,11 +17,12 @@ committes ALDRI til repoet.
 - [x] 214 nye: alle opprettes, 0 sikre/usikre duplikater (dedup sanity-sjekket)
 - [x] 5 svake treff rapportert (NorgesGruppen → manuell)
 
-## Kjøring (GDPR OK gitt)
-- [ ] Commit + push → Railway deployer (list_meta-kolonnen opprettes)
-- [ ] Backup av prod
-- [ ] `--apply`: 159 tagget, 214 nye leads
-- [ ] Stikkprøver: Ferd (INV-220), Canica (INV-685), et nytt lead; «K400 2025»-filter
+## Kjøring (GDPR OK gitt) ✅
+- [x] Commit + push (735bd69) → list_meta-kolonnen i prod bekreftet
+- [x] Backup av prod: stamp 2026-09-17_10-32-21 (10 tabeller)
+- [x] `--apply`: 159 tagget, 214 nye leads
+- [x] Stikkprøver: Ferd INV-220 (rank 6, 53 mrd), Canica INV-685 (rank 9, 33.1 mrd),
+      Hemen Holding INV-994 (nytt lead, tag + kontakt m/tittel). Totalt tag «K400 2025» = 373.
 
 ## Følger etter (egen jobb)
 - [ ] UI: vis rang/formue fra list_meta (gjeldende = nyeste år) + 2025-vs-2026-sammenligning
