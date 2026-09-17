@@ -25,5 +25,7 @@ committes ALDRI til repoet.
       Hemen Holding INV-994 (nytt lead, tag + kontakt m/tittel). Totalt tag «K400 2025» = 373.
 
 ## Følger etter (egen jobb)
-- [ ] UI: vis rang/formue fra list_meta (gjeldende = nyeste år) + 2025-vs-2026-sammenligning
+- [x] UI-utkast: «Formuesliste»-kort på investordetalj (rang/formue/personer, gjeldende=nyeste år,
+      «Tidligere år»-seksjon klar for 2025-vs-2026). Verifisert på Ferd INV-220 + A.Jenssen INV-076.
+- [ ] Evt. rang-chip i leads/investor-lista + tooltip (spec), tallformat-finpuss
 - [ ] Kapital 400 2026 når Cowork er ferdig (samme kommando, 2026-JSON)

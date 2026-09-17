@@ -74,6 +74,67 @@ function buildDetailHeader(inv, products) {
   `;
 }
 
+const LIST_FAMILY_LABELS = { 'K400': 'Kapital 400' };
+
+function buildListMetaCard(inv) {
+  const lm = inv.list_meta || {};
+  const keys = Object.keys(lm).filter(k => lm[k] && (lm[k].personer || []).length);
+  if (!keys.length) return '';
+
+  // Gruppér nøkler på liste-familie (uten årstall), f.eks. «K400 2025» + «K400 2026» → «K400».
+  const families = {};
+  keys.forEach(k => {
+    const m = k.match(/^(.*?)\s*(\d{4})\s*$/);
+    const fam = m ? m[1].trim() : k;
+    const year = m ? parseInt(m[2]) : null;
+    (families[fam] = families[fam] || []).push({ year, data: lm[k] });
+  });
+
+  const sumFormue = ps => ps.reduce((s, p) => s + (p.formue_mrd || 0), 0);
+
+  const sections = Object.entries(families).map(([fam, entries]) => {
+    entries.sort((a, b) => (b.year || 0) - (a.year || 0));
+    const current  = entries[0];                        // nyeste år = gjeldende
+    const personer = current.data.personer || [];
+    const totalF   = sumFormue(personer);
+    const bestRank = Math.min(...personer.map(p => (p.rank != null ? p.rank : Infinity)));
+    const label    = LIST_FAMILY_LABELS[fam] || fam;
+
+    const personRows = personer.map(p => `
+      <div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px;border-top:1px solid var(--border)">
+        <span>${p.rank != null ? `<b style="color:var(--blue)">#${p.rank}</b> ` : ''}${window.escHtml(p.person || '')}${p.bransje ? ` <span style="color:var(--muted);font-size:11px">· ${window.escHtml(p.bransje)}</span>` : ''}</span>
+        ${p.formue_mrd != null ? `<span style="font-weight:600;white-space:nowrap">${window.fmt(p.formue_mrd, 1)} mrd</span>` : ''}
+      </div>`).join('');
+
+    const history = entries.slice(1).map(e => {
+      const f = sumFormue(e.data.personer || []);
+      const delta = totalF - f;
+      const deltaStr = (delta && f) ? ` <span style="color:${delta > 0 ? 'var(--color-signed)' : 'var(--red)'};font-weight:600">${delta > 0 ? '+' : ''}${window.fmt(delta, 1)}</span>` : '';
+      return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:2px 0"><span>${e.year ?? '—'}</span><span>${window.fmt(f, 1)} mrd${deltaStr}</span></div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+          <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">${window.escHtml(label)}</span>
+          ${current.year ? `<span style="font-size:11px;color:var(--muted)">${current.year} · gjeldende</span>` : ''}
+          <span style="margin-left:auto;display:flex;gap:10px;align-items:baseline">
+            ${isFinite(bestRank) ? `<span style="font-size:15px;font-weight:800;color:var(--blue)">#${bestRank}</span>` : ''}
+            ${totalF ? `<span style="font-size:15px;font-weight:800">${window.fmt(totalF, 1)}<span style="font-size:10px;color:var(--muted);font-weight:400"> mrd</span></span>` : ''}
+          </span>
+        </div>
+        ${personRows}
+        ${history ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:2px">Tidligere år</div>${history}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">📊 Formuesliste</div>
+      ${sections}
+    </div>`;
+}
+
 function buildLeadBanner(inv, isAdmin) {
   return `
     <div id="lead-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -1477,6 +1538,7 @@ export async function render(el, state) {
           <div style="flex:1;min-width:0">
             <div class="section-label">Kjerneinformasjon</div>
             ${buildTagsCard(inv, allTags)}
+            ${buildListMetaCard(inv)}
             <div class="grid-2">
               ${buildPipelineCard(inv, lookups)}
               ${buildProductCard(inv, products, piData)}
