@@ -356,6 +356,33 @@ router.get('/api/duplicates', async (req, res) => {
   }
 });
 
+// Per lead: beste duplikat-treff mot ALLE ikke-slettede (investorer + andre leads).
+// Brukes i leads-lista for å flagge overlapp raskt før kvalifisering.
+router.get('/api/leads/duplicates', async (req, res) => {
+  try {
+    const { rows: all } = await query('SELECT id, name, is_lead FROM investors WHERE deleted_at IS NULL');
+    const norm = all.map(r => ({ ...r, n: normalizeName(r.name) }));
+    const leads = norm.filter(r => r.is_lead);
+    const result = {};
+    for (const lead of leads) {
+      let best = null;
+      for (const other of norm) {
+        if (other.id === lead.id) continue;
+        const score = jaccard(lead.n, other.n);
+        if (score < 0.6) continue;
+        // Høyest score vinner; ved lik score foretrekk kvalifisert investor (klart merge-mål).
+        const better = !best || score > best.score || (score === best.score && best.is_lead && !other.is_lead);
+        if (better) best = { id: other.id, name: other.name, is_lead: other.is_lead, score };
+      }
+      if (best) result[lead.id] = { ...best, score: Math.round(best.score * 100) };
+    }
+    res.json(result);
+  } catch (e) {
+    console.error('[GET /leads/duplicates]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/api/duplicate-contacts', async (req, res) => {
   try {
     const [{ rows: contacts }, { rows: investors }] = await Promise.all([
@@ -431,6 +458,10 @@ router.post('/api/merge', requireAdmin, async (req, res) => {
       merged.brreg_data = drop.brreg_data;
     }
     merged.docs = { ...(drop.docs || {}), ...(keep.docs || {}) };
+    // Union tags (bevar kilde-tags fra begge) — dedup case-insensitivt
+    const seenTag = new Set();
+    merged.tags = [...(keep.tags || []), ...(drop.tags || [])]
+      .filter(t => { const k = String(t).toLowerCase(); if (seenTag.has(k)) return false; seenTag.add(k); return true; });
 
     await client.query('BEGIN');
     await client.query('UPDATE contacts SET investor_id=$1 WHERE investor_id=$2', [keep_id, drop_id]);
@@ -456,13 +487,13 @@ router.post('/api/merge', requireAdmin, async (req, res) => {
       UPDATE investors SET name=$2, country=$3, city=$4, investor_type=$5, fund_vehicle=$6,
         phase=$7, lead=$8, advisor=$9, source=$10, next_steps=$11,
         last_contact=$12, doc_shared=$13, meeting_date=$14, comments=$15, docs=$16,
-        org_nr=$17, brreg_navn=$18, brreg_data=$19, updated_at=NOW()
+        org_nr=$17, brreg_navn=$18, brreg_data=$19, tags=$20, updated_at=NOW()
       WHERE id=$1
     `, [keep_id, merged.name, merged.country, merged.city, merged.investor_type, merged.fund_vehicle,
         merged.phase, merged.lead, merged.advisor, merged.source, merged.next_steps,
         merged.last_contact, merged.doc_shared, merged.meeting_date, merged.comments,
         JSON.stringify(merged.docs || {}), merged.org_nr || null, merged.brreg_navn || null,
-        JSON.stringify(merged.brreg_data || {})]);
+        JSON.stringify(merged.brreg_data || {}), JSON.stringify(merged.tags || [])]);
     await client.query('COMMIT');
     await auditLog(req.currentUser._id, req.currentUser.username, 'merge', 'investor', keep_id,
       { dropped_id: drop_id, dropped_name: drop.name },

@@ -1,32 +1,26 @@
-# Lead-kilde som tag + kvalifisering fra investorkortet
+# Duplikat-håndtering i leads-lista
 
-## Del 1 — Kilde blir tag ved import, med overlapp-håndtering ✅
-- [x] `scripts/import-leads.js`: `--tag=`-flagg (fallback per-rad `kilde`)
-- [x] Dedup-pool = ALLE ikke-slettede (leads + investorer), henter org_nr + tags
-- [x] Sikkert treff (navn ≥ 0.9) → union tag på eksisterende, ingen dublett
-- [x] Usikkert treff (0.6–0.9) → flagg for manuell merge (som før)
-- [x] Ingen/lavt treff → ny lead med `tags=[tag]`
-- [x] Rapport viser innsatt / tag-union / flagget
-- [x] `scripts/backfill-lead-tags.js` (dry-run + --commit), idempotent
+## Backend
+- [ ] Fiks `/api/merge`: union tags (keep + drop, dedup case-insensitivt) — bevar kilde ved merge
+- [ ] Ny rute `GET /api/leads/duplicates`: per lead, beste treff mot ALLE ikke-slettede
+      (investorer + andre leads), jaccard ≥ 0.6, ekskluder seg selv → {lead_id: {id,name,score,is_lead}}
 
-## Del 2 — Kvalifiser direkte fra investorkortet ✅
-- [x] `investor-detalj.js`: banner + Kvalifiser/Forkast når `inv.is_lead`, kaller qualifyLead + reload
+## Frontend
+- [ ] `api.js`: `leadDuplicates()`
+- [ ] `leads.js`: last leads + dup-map parallelt; «⚠ ligner X (n%)»-badge på rad;
+      «Slå sammen» (admin, keep=match, drop=lead) + Forkast; «Kun duplikater»-filter; dup først
+
+## Backend ✅ / Frontend ✅
 
 ## Verifisering
-- [x] Importør dry-run: 198 union-tag, 2 innsatt, 0 dublett (fbn-CSV + --tag=«K400 2025»)
-- [x] Back-fill dry-run: 216 lead-rader mangler kilde-tag
-- [x] Kvalifiser fra kort: is_lead→false, banner forsvinner (testet på INV-754, revertert)
-
-## Back-fill kjørt ✅
-- [x] Labels avklart: `Finansavisen 25.07.2026`→«FA 25.7.2026», `FBN …`→«FBN medlemmer 2026»
-- [x] `backfill-lead-tags.js --commit` mot prod: 216 rader tagget, idempotent (0 gjenstår)
-- [x] `/api/tags` viser begge; tag-filter på leads virker
-
-## Gjenstår (venter på brukeren)
-- [ ] Kjøre reell K400 2025-import med `--tag="K400 2025"` når CSV er klar
-      (overlapp mot eksisterende blir automatisk union'et, ingen dubletter).
+- [x] Merge bevarer tags: keep[FBN]+drop[K400,FBN] → [FBN,K400] (union, dedup) — testrader ryddet
+- [x] `/api/leads/duplicates`: 26 leads med treff (mest 100% mot eksisterende investorer), ~2,3s
+- [x] Leads-lista: 26 badges + 26 «Slå sammen», «Kun duplikater (26)»-filter virker, dup øverst
+- [x] Skjermbilde bekreftet
 
 ## Oppsummering
-Kode levert: importør tagger + slår sammen overlapp (kun sikre treff), back-fill-skript,
-og Kvalifiser/Forkast rett fra investorkortet. Ingen prod-data skrevet ennå av del 1
-(kun dry-run) — venter på avklaring om tag-labels før back-fill.
+Live duplikat-flagging i leads-lista: nytt `/api/leads/duplicates` (per lead beste treff mot
+alle ikke-slettede, jaccard ≥ 0.6, investor foretrekkes ved lik score), badge «⚠ ligner X (n%)»,
+«Slå sammen»-knapp (admin → /api/merge), «Kun duplikater»-filter, dup sortert øverst. Fikset
+`/api/merge` til å union'e tags (kilde bevares ved sammenslåing). Deployet.
+NB: én testrad «ZZ Merge Keep Test» (INV-992) ligger igjen i papirkurven — kan tømmes manuelt.

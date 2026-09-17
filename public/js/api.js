@@ -54,6 +54,7 @@ export const api = {
   cancelProduct:       (id, data) => req('POST',   `/products/${id}/cancel`, data),
   completeProduct:     (id)       => req('POST',   `/products/${id}/complete`),
   duplicates:          ()         => req('GET', '/duplicates'),
+  leadDuplicates:      ()         => req('GET', '/leads/duplicates'),
   duplicateContacts:   ()         => req('GET', '/duplicate-contacts'),
   mergeContacts:       (keep_id, drop_id) => req('POST', '/contacts/merge', { keep_id, drop_id }),
   declinedOffers:      (productId)        => req('GET', `/declined-offers?productId=${productId}`),

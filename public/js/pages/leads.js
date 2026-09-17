@@ -6,10 +6,14 @@ export async function render(el, state) {
   const isAdmin = state?.currentUser?.role === 'admin';
   el.innerHTML = '<div class="content"><p class="text-muted">Laster…</p></div>';
 
-  let leads;
+  let leads, dupMap;
   try {
-    const raw = await api.investors({ leads: 1 });
+    const [raw, dups] = await Promise.all([
+      api.investors({ leads: 1 }),
+      api.leadDuplicates().catch(() => ({})),
+    ]);
     leads = Array.isArray(raw) ? raw : (raw.investors || []);
+    dupMap = dups || {};
   } catch (e) {
     el.innerHTML = `<div class="content"><p style="color:#c0392b">Feil: ${esc(e.message)}</p></div>`;
     return;
@@ -17,10 +21,16 @@ export async function render(el, state) {
 
   // Distinkte tagger på tvers av leadene — bygger filter-alternativene.
   const allTags = [...new Set(leads.flatMap(l => l.tags || []))].sort((a, b) => a.localeCompare(b, 'nb'));
+  const dupCount = leads.filter(l => dupMap[l.id]).length;
   let tagFilter = '';
+  let dupOnly = false;
 
   function visible() {
-    return tagFilter ? leads.filter(l => (l.tags || []).includes(tagFilter)) : leads;
+    let list = leads;
+    if (tagFilter) list = list.filter(l => (l.tags || []).includes(tagFilter));
+    if (dupOnly)   list = list.filter(l => dupMap[l.id]);
+    // Mulige duplikater først (høyest score øverst), så resten.
+    return [...list].sort((a, b) => (dupMap[b.id]?.score || 0) - (dupMap[a.id]?.score || 0));
   }
 
   function kildeCell(l) {
@@ -31,47 +41,64 @@ export async function render(el, state) {
     ).join('')}</div>`;
   }
 
+  function dupBadge(l) {
+    const d = dupMap[l.id];
+    if (!d) return '';
+    return `<div style="font-size:11px;color:#c0392b;margin-top:3px">⚠ ligner <b>${esc(d.name)}</b> (${d.score}%${d.is_lead ? ', lead' : ''})</div>`;
+  }
+
   function buildRows(list) {
     if (!list.length)
-      return `<tr><td colspan="5" class="empty-state">${tagFilter ? 'Ingen leads med denne taggen.' : 'Ingen ukvalifiserte leads igjen. 🎉'}</td></tr>`;
-    return list.map(l => `
-      <tr data-id="${esc(String(l.id))}">
+      return `<tr><td colspan="5" class="empty-state">${dupOnly ? 'Ingen mulige duplikater. 🎉' : tagFilter ? 'Ingen leads med denne taggen.' : 'Ingen ukvalifiserte leads igjen. 🎉'}</td></tr>`;
+    return list.map(l => {
+      const d = dupMap[l.id];
+      return `
+      <tr data-id="${esc(String(l.id))}"${d ? ' style="background:rgba(192,57,43,.03)"' : ''}>
         <td style="font-weight:600;padding:11px 14px">
           <span class="lead-name" style="color:var(--blue);cursor:pointer">${esc(l.name || '—')}</span>${window.brregBadge(l)}
+          ${dupBadge(l)}
         </td>
         <td style="color:var(--muted);font-size:13px;padding:11px 14px">${esc(l.investor_type || '—')}</td>
         <td style="color:var(--muted);font-size:13px;padding:11px 14px">${esc(l.city || l.country || '—')}</td>
         <td style="padding:11px 14px">${kildeCell(l)}</td>
         <td style="padding:11px 14px">
           <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            ${d && isAdmin ? `<button class="btn btn-ghost btn-sm lead-merge" data-id="${esc(String(l.id))}" data-keep="${esc(String(d.id))}" data-keepname="${esc(d.name)}" style="min-height:36px;color:#8e44ad">Slå sammen</button>` : ''}
             <button class="btn btn-primary btn-sm lead-qualify" data-id="${esc(String(l.id))}" style="min-height:36px">Kvalifiser</button>
             ${isAdmin ? `<button class="btn btn-ghost btn-sm lead-discard" data-id="${esc(String(l.id))}" data-name="${esc(l.name || '')}" style="min-height:36px;color:#e74c3c">Forkast</button>` : ''}
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
-  const filterBar = allTags.length ? `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <label style="font-size:12px;color:var(--muted)">Kilde/tag:</label>
-      <select id="lead-tag-filter" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;min-height:36px">
-        <option value="">Alle kilder</option>
-        ${allTags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
-      </select>
+  const filterBar = (allTags.length || dupCount) ? `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      ${allTags.length ? `
+        <label style="font-size:12px;color:var(--muted)">Kilde/tag:</label>
+        <select id="lead-tag-filter" style="font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;min-height:36px">
+          <option value="">Alle kilder</option>
+          ${allTags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+        </select>` : ''}
+      ${dupCount ? `
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="lead-dup-only" style="width:15px;height:15px;cursor:pointer">
+          ⚠ Kun mulige duplikater (${dupCount})
+        </label>` : ''}
     </div>` : '';
 
   el.innerHTML = `
     <div class="topbar"><span class="topbar-title">Ukvalifiserte leads (<span id="lead-count">${leads.length}</span>)</span></div>
     <div class="content">
       <p class="text-muted" style="font-size:13px;margin-bottom:12px">
-        Importerte prospekter som ennå ikke er tatt inn i CRM-et. <b>Kvalifiser</b> gjør leadet til en investor i fasen «Prospekt».${isAdmin ? ' <b>Forkast</b> flytter det til papirkurven.' : ''}
+        Importerte prospekter som ennå ikke er tatt inn i CRM-et. <b>Kvalifiser</b> gjør leadet til en investor i fasen «Prospekt».${isAdmin ? ' <b>Slå sammen</b> fletter et duplikat inn i den eksisterende (kilde-tags bevares). <b>Forkast</b> flytter til papirkurven.' : ''}
       </p>
       ${filterBar}
       <div class="card" style="padding:0;overflow:hidden">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Navn</th><th>Type</th><th>Sted</th><th>Kilde</th><th style="width:180px"></th></tr></thead>
-            <tbody class="lead-tbody">${buildRows(leads)}</tbody>
+            <thead><tr><th>Navn</th><th>Type</th><th>Sted</th><th>Kilde</th><th style="width:240px"></th></tr></thead>
+            <tbody class="lead-tbody">${buildRows(visible())}</tbody>
           </table>
         </div>
       </div>
@@ -88,6 +115,7 @@ export async function render(el, state) {
 
   function removeRow(id) {
     leads = leads.filter(l => String(l.id) !== String(id));
+    delete dupMap[id];
     refresh();
   }
 
@@ -110,6 +138,24 @@ export async function render(el, state) {
       });
     });
 
+    tbody.querySelectorAll('.lead-merge').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const dropId = btn.dataset.id;
+        const keepId = btn.dataset.keep;
+        const lead   = leads.find(l => String(l.id) === String(dropId));
+        if (!window.confirm(`Slå «${lead?.name}» sammen inn i «${btn.dataset.keepname}»?\n\nKontakter, logg og kilde-tags flyttes over, og lead-raden fjernes.`)) return;
+        btn.disabled = true; btn.textContent = 'Slår sammen…';
+        try {
+          await api.merge(keepId, dropId);
+          window.ui.toast(`Slått sammen inn i ${btn.dataset.keepname}`, 'success');
+          removeRow(dropId);
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Slå sammen';
+          window.ui.toast('Kunne ikke slå sammen: ' + e.message, 'error');
+        }
+      });
+    });
+
     tbody.querySelectorAll('.lead-discard').forEach(btn => {
       btn.addEventListener('click', async () => {
         const name = btn.dataset.name || 'dette leadet';
@@ -128,9 +174,10 @@ export async function render(el, state) {
   }
 
   const tagSelect = el.querySelector('#lead-tag-filter');
-  if (tagSelect) {
-    tagSelect.addEventListener('change', () => { tagFilter = tagSelect.value; refresh(); });
-  }
+  if (tagSelect) tagSelect.addEventListener('change', () => { tagFilter = tagSelect.value; refresh(); });
+
+  const dupToggle = el.querySelector('#lead-dup-only');
+  if (dupToggle) dupToggle.addEventListener('change', () => { dupOnly = dupToggle.checked; refresh(); });
 
   bind();
 }
