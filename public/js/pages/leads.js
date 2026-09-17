@@ -22,6 +22,9 @@ export async function render(el, state) {
   // Distinkte tagger på tvers av leadene — bygger filter-alternativene.
   const allTags = [...new Set(leads.flatMap(l => l.tags || []))].sort((a, b) => a.localeCompare(b, 'nb'));
   const dupCount = leads.filter(l => dupMap[l.id]).length;
+  // Trygge for bulk-merge: 100%-treff der målet er en KVALIFISERT investor (ikke et annet lead)
+  // — da forsvinner ikke merge-målet under batchen.
+  const sureIds = () => leads.filter(l => dupMap[l.id]?.score === 100 && !dupMap[l.id].is_lead);
   let tagFilter = '';
   let dupOnly = false;
 
@@ -85,6 +88,10 @@ export async function render(el, state) {
           <input type="checkbox" id="lead-dup-only" style="width:15px;height:15px;cursor:pointer">
           ⚠ Kun mulige duplikater (${dupCount})
         </label>` : ''}
+      ${isAdmin && sureIds().length ? `
+        <button id="lead-merge-all" class="btn btn-ghost btn-sm" style="min-height:36px;color:#8e44ad;border-color:#8e44ad;margin-left:auto">
+          ⚡ Slå sammen alle 100% (${sureIds().length})
+        </button>` : ''}
     </div>` : '';
 
   el.innerHTML = `
@@ -178,6 +185,24 @@ export async function render(el, state) {
 
   const dupToggle = el.querySelector('#lead-dup-only');
   if (dupToggle) dupToggle.addEventListener('change', () => { dupOnly = dupToggle.checked; refresh(); });
+
+  const mergeAllBtn = el.querySelector('#lead-merge-all');
+  if (mergeAllBtn) {
+    mergeAllBtn.addEventListener('click', async () => {
+      const targets = sureIds();
+      if (!targets.length) return;
+      if (!window.confirm(`Slå sammen ${targets.length} lead${targets.length === 1 ? '' : 's'} med 100 %-treff inn i sine eksisterende investorer?\n\nKontakter, logg og kilde-tags flyttes over, og lead-radene fjernes. Treff på 60–99 % må vurderes manuelt.`)) return;
+      mergeAllBtn.disabled = true;
+      let ok = 0, fail = 0;
+      for (const l of targets) {
+        mergeAllBtn.textContent = `Slår sammen… (${ok + fail + 1}/${targets.length})`;
+        try { await api.merge(dupMap[l.id].id, l.id); ok++; }
+        catch { fail++; }
+      }
+      window.ui.toast(`Slo sammen ${ok} duplikat${ok === 1 ? '' : 'er'}${fail ? `, ${fail} feilet` : ''}`, fail ? 'error' : 'success');
+      await render(el, state);
+    });
+  }
 
   bind();
 }

@@ -24,3 +24,10 @@ alle ikke-slettede, jaccard ≥ 0.6, investor foretrekkes ved lik score), badge 
 «Slå sammen»-knapp (admin → /api/merge), «Kun duplikater»-filter, dup sortert øverst. Fikset
 `/api/merge` til å union'e tags (kilde bevares ved sammenslåing). Deployet.
 NB: én testrad «ZZ Merge Keep Test» (INV-992) ligger igjen i papirkurven — kan tømmes manuelt.
+
+## Tillegg — «Slå sammen alle 100%»-knapp ✅
+- [x] Bulk-knapp i leads-lista (admin): fletter alle 100%-treff MOT KVALIFISERT investor
+      (is_lead=false, unngår kjede-/rekkefølgeproblemer) inn i sine investorer, med
+      antall-bekreftelse + progress; 60–99% og lead-mot-lead beholder én-og-én-knappen.
+- [x] Verifisert: knapp «⚡ Slå sammen alle 100% (26)» rendres, avbryt-sti trygg.
+      Selve masse-mergen ikke kjørt mot prod (brukerens å utløse).
