@@ -11,9 +11,12 @@ async function req(method, url, body) {
     // Utløpt/manglende sesjon midt i bruk → vis login på nytt (men ikke for selve login-kallet)
     if (res.status === 401 && url !== '/login') window.onUnauthorized?.();
     const text = await res.text();
-    let msg;
-    try { msg = JSON.parse(text).error; } catch { msg = text; }
-    throw new Error(msg || `HTTP ${res.status}`);
+    let msg, payload;
+    try { payload = JSON.parse(text); msg = payload.error; } catch { msg = text; }
+    const err = new Error(msg || `HTTP ${res.status}`);
+    err.status = res.status;
+    if (payload) err.payload = payload;
+    throw err;
   }
   return res.json();
 }

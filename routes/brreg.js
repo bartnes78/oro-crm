@@ -150,8 +150,11 @@ router.post('/api/investors/:id/brreg-sync', async (req, res) => {
     const { rows } = await client.query('SELECT * FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
 
-    const { rows: existing } = await client.query('SELECT id FROM investors WHERE org_nr=$1 AND id<>$2', [orgnr, req.params.id]);
-    if (existing.length) return validationError(res, [`Org.nr ${orgnr} er allerede koblet til investor ${existing[0].id}`]);
+    const { rows: existing } = await client.query('SELECT id, name, is_lead FROM investors WHERE org_nr=$1 AND id<>$2 AND deleted_at IS NULL', [orgnr, req.params.id]);
+    if (existing.length) return res.status(409).json({
+      error: `Org.nr ${orgnr} er allerede koblet til ${existing[0].name} (${existing[0].id})`,
+      conflict: { id: existing[0].id, name: existing[0].name, is_lead: !!existing[0].is_lead, org_nr: orgnr },
+    });
 
     const [{ status, body: e }, { body: rollerBody }, { body: regnskapBody }] = await Promise.all([
       brregGet(`/enheter/${orgnr}`),

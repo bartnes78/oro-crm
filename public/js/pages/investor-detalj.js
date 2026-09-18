@@ -2061,6 +2061,38 @@ export async function render(el, state) {
                 window.ui.toast(msg);
                 await reload();
               } catch (err) {
+                // Org.nr ligger allerede på en annen post → tilby sammenslåing i stedet for blindvei
+                const conflict = err.status === 409 && err.payload && err.payload.conflict;
+                if (conflict) {
+                  const isAdmin = state.currentUser?.role === 'admin';
+                  if (!isAdmin) {
+                    window.ui.toast(`${conflict.name} (${conflict.id}) har allerede dette org.nr. Be en admin slå sammen postene.`, 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Koble';
+                    return;
+                  }
+                  // Behold den mest etablerte posten (ikke-lead vinner) så en investor
+                  // ikke nedgraderes til lead-fase ved sammenslåing
+                  const keepConflict = !conflict.is_lead && inv.is_lead;
+                  const keepId  = keepConflict ? conflict.id : inv.id;
+                  const dropId  = keepConflict ? inv.id : conflict.id;
+                  const survName = keepConflict ? conflict.name : inv.name;
+                  if (window.confirm(`«${conflict.name}» (${conflict.id}) ligger allerede i systemet med dette org.nr.\n\nSlå sammen «${inv.name}» og «${conflict.name}» til én post?\n\nAlt samles på «${survName}». Tags, kontakter, logg, oppgaver og produktkoblinger flyttes over, og org.nr + Brønnøysund-data følger med.`)) {
+                    btn.textContent = 'Slår sammen…';
+                    try {
+                      await api.merge(keepId, dropId);
+                      window.ui.toast(`Slått sammen til «${survName}»`, 'success');
+                      if (String(keepId) === String(inv.id)) await reload();
+                      else window.navigate('detalj', keepId);
+                      return;
+                    } catch (e2) {
+                      window.ui.toast('Sammenslåing feilet: ' + e2.message, 'error');
+                    }
+                  }
+                  btn.disabled = false;
+                  btn.textContent = 'Koble';
+                  return;
+                }
                 window.ui.toast('Feil: ' + err.message, 'error');
                 btn.disabled = false;
                 btn.textContent = 'Koble';
