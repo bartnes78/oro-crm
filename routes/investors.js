@@ -256,7 +256,21 @@ router.get('/api/investors/:id', async (req, res) => {
       (personMap[r.person_id] = personMap[r.person_id] || { person_id: r.person_id, name: r.person_name, companies: [] })
         .companies.push({ company_name: r.company_name, investor_id: r.investor_id, crm_name: r.crm_name, crm_is_lead: r.crm_is_lead, rolle: r.rolle, relation: r.relation, verified: r.verified });
     }
-    res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow), related_persons: Object.values(personMap) });
+    // Assosierte selskaper (direkte selskap-til-selskap, begge retninger)
+    const { rows: assocRows } = await query(`
+      SELECT CASE WHEN a.a_id = $1 THEN a.b_id ELSE a.a_id END AS other_id,
+             a.relation, a.note,
+             i.name AS other_name, i.is_lead AS other_is_lead, i.phase AS other_phase
+      FROM investor_associations a
+      JOIN investors i ON i.id = CASE WHEN a.a_id = $1 THEN a.b_id ELSE a.a_id END AND i.deleted_at IS NULL
+      WHERE a.a_id = $1 OR a.b_id = $1
+      ORDER BY i.name
+    `, [req.params.id]);
+    const associations = assocRows.map(r => ({
+      investor_id: r.other_id, name: r.other_name, is_lead: !!r.other_is_lead, phase: r.other_phase,
+      relation: r.relation, note: r.note,
+    }));
+    res.json({ ...fmtInvestor(inv), contacts: contacts.map(fmtRow), log: log.map(fmtRow), related_persons: Object.values(personMap), associations });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -695,6 +709,40 @@ router.delete('/api/persons/:id/companies', async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Kobling ikke funnet' });
     await query('DELETE FROM persons p WHERE p.id=$1 AND NOT EXISTS (SELECT 1 FROM person_companies pc WHERE pc.person_id=p.id)', [personId]);
     await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'person', String(personId), { company: String(company_name).trim() }, null, `Fjernet kobling «${String(company_name).trim()}» fra person ${personId}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Assosierte selskaper (direkte selskap-til-selskap, symmetrisk) ─────────────
+const VALID_ASSOC = ['assosiert', 'kontaktpunkt', 'konsern', 'eiendom', 'annet'];
+
+router.post('/api/investors/:id/associations', async (req, res) => {
+  const { other_id, relation, note } = req.body;
+  if (!other_id) return validationError(res, ['other_id er påkrevd']);
+  if (String(other_id) === String(req.params.id)) return validationError(res, ['Kan ikke koble en post til seg selv']);
+  if (relation && !VALID_ASSOC.includes(relation)) return validationError(res, [`Ugyldig relasjon: ${relation}`]);
+  try {
+    const { rows } = await query('SELECT id FROM investors WHERE id = ANY($1) AND deleted_at IS NULL', [[req.params.id, other_id]]);
+    if (rows.length < 2) return res.status(404).json({ error: 'Fant ikke begge postene' });
+    const [a_id, b_id] = [req.params.id, other_id].sort();  // kanonisk rekkefølge
+    await query(
+      `INSERT INTO investor_associations (a_id, b_id, relation, note) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (a_id, b_id) DO UPDATE SET relation=EXCLUDED.relation, note=EXCLUDED.note`,
+      [a_id, b_id, relation || null, String(note || '').trim() || null]
+    );
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'investor', req.params.id, null, { assosiert: other_id, relation: relation || null }, `Koblet assosiert selskap ${other_id} til ${req.params.id}`);
+    res.json({ ok: true });
+  } catch (e) { console.error('[POST associations]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/investors/:id/associations', async (req, res) => {
+  const { other_id } = req.body;
+  if (!other_id) return validationError(res, ['other_id er påkrevd']);
+  try {
+    const [a_id, b_id] = [req.params.id, other_id].sort();
+    const { rowCount } = await query('DELETE FROM investor_associations WHERE a_id=$1 AND b_id=$2', [a_id, b_id]);
+    if (!rowCount) return res.status(404).json({ error: 'Kobling ikke funnet' });
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'investor', req.params.id, { assosiert: other_id }, null, `Fjernet assosiert selskap ${other_id} fra ${req.params.id}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

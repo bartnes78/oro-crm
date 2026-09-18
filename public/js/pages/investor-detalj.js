@@ -187,6 +187,34 @@ function buildRelatedPersonsCard(inv) {
     </div>`;
 }
 
+function buildAssociationsCard(inv) {
+  const assoc = inv.associations || [];
+  const relLabel = { assosiert: 'Assosiert', kontaktpunkt: 'Kontaktpunkt', konsern: 'Konsern', eiendom: 'Eiendom', annet: 'Annet' };
+  const rows = assoc.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)">
+      <button class="assoc-nav" data-id="${window.escHtml(String(a.investor_id))}"
+        style="flex:1;min-width:150px;background:none;border:none;padding:0;cursor:pointer;color:var(--blue);font-weight:600;font-size:13px;text-align:left">${window.escHtml(a.name)}</button>
+      ${a.relation ? `<span style="font-size:10px;padding:1px 8px;border-radius:10px;background:rgba(52,152,219,.1);color:var(--blue);font-weight:600;white-space:nowrap">${window.escHtml(relLabel[a.relation] || a.relation)}</span>` : ''}
+      ${a.note ? `<span style="font-size:11px;color:var(--muted)">${window.escHtml(a.note)}</span>` : ''}
+      <button class="assoc-unlink" data-id="${window.escHtml(String(a.investor_id))}" data-name="${window.escHtml(a.name)}" title="Fjern kobling"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px">&times;</button>
+    </div>`).join('');
+  const empty = assoc.length ? '' : `
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
+      Ingen assosierte selskaper ennå. Koble et annet selskap direkte (f.eks. et kontaktpunkt
+      eller søsterselskap) — koblingen vises på begge kortene.
+    </p>`;
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div class="card-title" style="flex:1;margin:0">🏢 Assosierte selskaper</div>
+        <button class="btn btn-ghost btn-sm" id="assoc-add" style="font-size:11px;min-height:32px;white-space:nowrap">+ Koble selskap</button>
+      </div>
+      ${empty}
+      ${rows}
+    </div>`;
+}
+
 // Debounced typeahead mot /investors/search — deles av merge- og selskaps-plukkeren.
 function bindInvestorSearch(inputEl, resultsEl, onPick, excludeId) {
   let timer;
@@ -356,6 +384,57 @@ function openMergeModal(inv) {
         if (String(keepId) === String(inv.id)) await window.navigate('detalj', inv.id);
         else window.navigate('detalj', keepId);
       } catch (e) { saveBtn.disabled = false; saveBtn.textContent = 'Slå sammen'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    });
+  });
+}
+
+function openAddAssociationModal(inv, reload) {
+  let picked = null;
+  const relOpts = ['', 'assosiert', 'kontaktpunkt', 'konsern', 'eiendom', 'annet']
+    .map(r => `<option value="${r}">${r ? r[0].toUpperCase() + r.slice(1) : '— relasjon —'}</option>`).join('');
+  const html = window.ui.modal(
+    'Koble assosiert selskap',
+    `<p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+       Koble <b>${window.escHtml(inv.name)}</b> direkte til et annet selskap i CRM. Koblingen vises på begge kortene.
+     </p>
+     <div class="form-group" style="margin:0">
+       <label>Selskap</label>
+       <input id="as-search" type="text" placeholder="Søk navn eller org.nr…" autocomplete="off" />
+       <div id="as-results" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:4px"></div>
+       <div id="as-picked" style="display:none;font-size:12px;margin-top:6px"></div>
+     </div>
+     <div class="form-grid" style="gap:10px;margin-top:10px">
+       <div class="form-group"><label>Relasjon <span style="color:var(--muted)">(valgfri)</span></label><select id="as-relation">${relOpts}</select></div>
+       <div class="form-group"><label>Notat <span style="color:var(--muted)">(valgfri)</span></label><input id="as-note" type="text" placeholder="f.eks. kontaktpunkt" /></div>
+     </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+     <button class="btn btn-primary" id="as-save" disabled>Koble</button>`,
+  );
+  window.openModal(html, () => {
+    const searchEl = document.getElementById('as-search');
+    const resultsEl = document.getElementById('as-results');
+    const pickedEl = document.getElementById('as-picked');
+    const saveBtn = document.getElementById('as-save');
+    bindInvestorSearch(searchEl, resultsEl, hit => {
+      picked = hit;
+      resultsEl.style.display = 'none';
+      searchEl.value = hit.name;
+      pickedEl.style.display = '';
+      pickedEl.innerHTML = `Valgt: <b>${window.escHtml(hit.name)}</b> (${window.escHtml(hit.id)})`;
+      saveBtn.disabled = false;
+    }, inv.id);
+    saveBtn.addEventListener('click', async () => {
+      if (!picked) return;
+      saveBtn.disabled = true; saveBtn.textContent = 'Kobler…';
+      try {
+        await api.addAssociation(inv.id, {
+          other_id: picked.id,
+          relation: document.getElementById('as-relation').value || null,
+          note: document.getElementById('as-note').value.trim() || null,
+        });
+        window.closeModal();
+        await reload();
+      } catch (e) { saveBtn.disabled = false; saveBtn.textContent = 'Koble'; window.ui.toast('Feil: ' + e.message, 'error'); }
     });
   });
 }
@@ -1793,6 +1872,7 @@ export async function render(el, state) {
               ${buildDocsCard(inv, products)}
               ${buildContactsCard(inv, visInaktive)}
             </div>
+            ${buildAssociationsCard(inv)}
             ${buildRelatedPersonsCard(inv)}
             ${!inv.org_nr ? buildBrregCard(inv) : ''}
             <div class="section-label">Historikk</div>
@@ -2408,6 +2488,22 @@ export async function render(el, state) {
       btn.disabled = true;
       try {
         await api.personUnlinkCompany(btn.dataset.person, btn.dataset.company);
+        await reload();
+      } catch (e) { btn.disabled = false; window.ui.toast('Feil: ' + e.message, 'error'); }
+    }));
+
+    // Assosierte selskaper (direkte selskap-til-selskap)
+    const assocAddBtn = el.querySelector('#assoc-add');
+    if (assocAddBtn) assocAddBtn.addEventListener('click', () => openAddAssociationModal(inv, reload));
+
+    el.querySelectorAll('.assoc-nav').forEach(btn =>
+      btn.addEventListener('click', () => window.navigate('detalj', btn.dataset.id)));
+
+    el.querySelectorAll('.assoc-unlink').forEach(btn => btn.addEventListener('click', async () => {
+      if (!window.confirm(`Fjerne assosiasjonen til «${btn.dataset.name}»?\n\nDette sletter ikke selve investorposten, bare koblingen.`)) return;
+      btn.disabled = true;
+      try {
+        await api.removeAssociation(inv.id, btn.dataset.id);
         await reload();
       } catch (e) { btn.disabled = false; window.ui.toast('Feil: ' + e.message, 'error'); }
     }));

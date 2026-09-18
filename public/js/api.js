@@ -39,6 +39,8 @@ export const api = {
   linkPerson:          (invId, data)      => req('POST', `/investors/${invId}/persons`, data),
   personAddCompany:    (personId, data)   => req('POST', `/persons/${personId}/companies`, data),
   personUnlinkCompany: (personId, company_name) => req('DELETE', `/persons/${personId}/companies`, { company_name }),
+  addAssociation:      (invId, data)      => req('POST', `/investors/${invId}/associations`, data),
+  removeAssociation:   (invId, other_id)  => req('DELETE', `/investors/${invId}/associations`, { other_id }),
   contacts:            (invId)    => req('GET', invId ? `/contacts?investorId=${invId}` : '/contacts'),
   addContact:          (data)     => req('POST', '/contacts', data),
   updateContact:       (id, data) => req('PUT', `/contacts/${id}`, data),

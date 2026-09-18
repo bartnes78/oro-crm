@@ -391,6 +391,20 @@ CREATE TABLE IF NOT EXISTS person_companies (
 );
 CREATE INDEX IF NOT EXISTS idx_person_companies_investor ON person_companies (investor_id);
 
+-- Assosierte selskaper: direkte selskap-til-selskap-kobling (uten person-hub). Symmetrisk —
+-- lagres kanonisk med a_id < b_id, og vises på begge kortene. relation = fri etikett
+-- (assosiert/kontaktpunkt/konsern/eiendom/annet).
+CREATE TABLE IF NOT EXISTS investor_associations (
+  a_id       TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  b_id       TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  relation   TEXT,
+  note       TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (a_id, b_id),
+  CHECK (a_id <> b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_investor_assoc_b ON investor_associations (b_id);
+
 -- Forkastede leads: avvist men beholdt (ikke papirkurv). Skjules fra aktiv leads-liste
 -- via discarded_at IS NULL; re-surfaces hvis de treffer i en ny import.
 DO $$ BEGIN
