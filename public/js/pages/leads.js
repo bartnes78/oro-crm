@@ -214,13 +214,22 @@ export async function render(el, state) {
       if (!targets.length) return;
       if (!window.confirm(`Slå sammen ${targets.length} lead${targets.length === 1 ? '' : 's'} med 100 %-treff inn i sine eksisterende investorer?\n\nKontakter, logg og kilde-tags flyttes over, og lead-radene fjernes. Treff på 60–99 % må vurderes manuelt.`)) return;
       mergeAllBtn.disabled = true;
+      const countEl = el.querySelector('#lead-count');
       let ok = 0, fail = 0;
       for (const l of targets) {
-        mergeAllBtn.textContent = `Slår sammen… (${ok + fail + 1}/${targets.length})`;
-        try { await api.merge(dupMap[l.id].id, l.id); ok++; } catch { fail++; }
+        mergeAllBtn.textContent = `Slår sammen… ${ok + fail + 1}/${targets.length}`;
+        try {
+          await api.merge(dupMap[l.id].id, l.id);
+          ok++;
+          // Fjern raden fortløpende så det ikke ser frossent ut
+          leads = leads.filter(x => String(x.id) !== String(l.id));
+          delete dupMap[l.id];
+          el.querySelector(`.lead-tbody tr[data-id="${CSS.escape(String(l.id))}"]`)?.remove();
+          if (countEl) countEl.textContent = visible().length;
+        } catch { fail++; }
       }
       window.ui.toast(`Slo sammen ${ok} duplikat${ok === 1 ? '' : 'er'}${fail ? `, ${fail} feilet` : ''}`, fail ? 'error' : 'success');
-      await render(el, state);
+      paint();
     });
   }
 
