@@ -1809,7 +1809,7 @@ export async function render(el, state) {
   }
 
   function bindTopbar() {
-    el.querySelector('#back-btn').addEventListener('click', () => window.navigate('investorer'));
+    el.querySelector('#back-btn').addEventListener('click', () => window.navigate(state.detailFrom || 'investorer'));
     el.querySelector('#edit-btn').addEventListener('click', () => openEditModal(inv, lookups, products, reload));
 
     el.querySelectorAll('.btn-prod-nav').forEach(btn => {

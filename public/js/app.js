@@ -36,6 +36,9 @@ window.lsKey = (key) => `${key}:${state.currentUser?.username || '_'}`;
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 window.navigate = function(page, id) {
+  // Husk hvilken liste man kom fra, så «Tilbake» på investorkortet går dit (leads, kanban, …)
+  // og ikke alltid til investorlista. Kort→kort (rel-nav/merge) bevarer opprinnelig liste.
+  if (page === 'detalj' && state.page !== 'detalj') state.detailFrom = state.page;
   state.page = page;
   state.id   = id ?? null;
   renderPage();
