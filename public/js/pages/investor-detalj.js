@@ -137,7 +137,6 @@ function buildListMetaCard(inv) {
 
 function buildRelatedPersonsCard(inv) {
   const persons = inv.related_persons || [];
-  if (!persons.length) return '';
 
   const sections = persons.map(p => {
     const rows = p.companies.map(c => {
@@ -156,20 +155,209 @@ function buildRelatedPersonsCard(inv) {
           <span style="flex:1;min-width:150px">${nameHtml}${isThis ? ' <span style="font-size:10px;color:var(--muted)">· denne</span>' : ''}</span>
           ${c.rolle ? `<span style="font-size:11px;color:var(--muted)">${window.escHtml(c.rolle)}</span>` : ''}
           ${action}
+          <button class="rel-unlink" data-person="${p.person_id}" data-company="${window.escHtml(c.company_name)}" title="Fjern kobling"
+            style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px">&times;</button>
         </div>`;
     }).join('');
     return `
-      <div style="margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:2px">👤 ${window.escHtml(p.name)}</div>
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+          <div style="flex:1;font-size:13px;font-weight:700">👤 ${window.escHtml(p.name)}</div>
+          <button class="rel-addcompany btn btn-ghost btn-sm" data-person="${p.person_id}" data-name="${window.escHtml(p.name)}"
+            style="font-size:10px;min-height:28px;padding:1px 8px;color:var(--blue);white-space:nowrap">+ Legg til selskap</button>
+        </div>
         ${rows}
       </div>`;
   }).join('');
 
+  const empty = persons.length ? '' : `
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
+      Ingen personer koblet ennå. Koble en person (f.eks. en eier eller nøkkelperson) og
+      knytt deretter personens øvrige selskaper — nyttig når én person står bak flere selskaper.
+    </p>`;
+
   return `
     <div class="card">
-      <div class="card-title">🔗 Personer og relaterte selskaper</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div class="card-title" style="flex:1;margin:0">🔗 Personer og relaterte selskaper</div>
+        <button class="btn btn-ghost btn-sm" id="rel-add-person" style="font-size:11px;min-height:32px;white-space:nowrap">+ Koble person</button>
+      </div>
+      ${empty}
       ${sections}
     </div>`;
+}
+
+// Debounced typeahead mot /investors/search — deles av merge- og selskaps-plukkeren.
+function bindInvestorSearch(inputEl, resultsEl, onPick, excludeId) {
+  let timer;
+  const run = async () => {
+    const q = inputEl.value.trim();
+    if (q.length < 2) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+    let hits = [];
+    try { hits = await api.investorSearch(q); } catch { hits = []; }
+    hits = hits.filter(h => String(h.id) !== String(excludeId));
+    if (!hits.length) { resultsEl.innerHTML = `<div style="padding:8px 10px;font-size:12px;color:var(--muted)">Ingen treff</div>`; resultsEl.style.display = ''; return; }
+    resultsEl.innerHTML = hits.map(h => `
+      <div class="inv-hit" data-id="${window.escHtml(String(h.id))}" data-name="${window.escHtml(h.name)}"
+        style="padding:8px 10px;cursor:pointer;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+        <span style="flex:1;font-size:13px;font-weight:600">${window.escHtml(h.name)}</span>
+        <span style="font-size:11px;color:var(--muted)">${h.is_lead ? '🌱 lead' : window.escHtml(h.phase || '')}${h.org_nr ? ' · ' + window.escHtml(h.org_nr) : ''}</span>
+      </div>`).join('');
+    resultsEl.style.display = '';
+    resultsEl.querySelectorAll('.inv-hit').forEach(hit => hit.addEventListener('click', () => onPick({ id: hit.dataset.id, name: hit.dataset.name })));
+  };
+  inputEl.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 250); });
+}
+
+function openLinkPersonModal(inv, reload) {
+  const relOpts = ['', 'hovedselskap', 'investeringsselskap', 'eiendom', 'konsern', 'familie', 'annet']
+    .map(r => `<option value="${r}">${r ? r[0].toUpperCase() + r.slice(1) : '— relasjon —'}</option>`).join('');
+  const html = window.ui.modal(
+    'Koble person til ' + window.escHtml(inv.name),
+    `<div class="form-group">
+       <label>Person</label>
+       <input id="lp-name" type="text" placeholder="Navn på person" autocomplete="off" />
+     </div>
+     <div class="form-grid" style="gap:10px">
+       <div class="form-group"><label>Personens rolle her <span style="color:var(--muted)">(valgfri)</span></label>
+         <input id="lp-rolle" type="text" placeholder="Styreleder, eier …" /></div>
+       <div class="form-group"><label>Relasjon <span style="color:var(--muted)">(valgfri)</span></label>
+         <select id="lp-relation">${relOpts}</select></div>
+     </div>
+     <p style="font-size:11px;color:var(--muted);margin:4px 0 0">Personen kobles til dette selskapet. Etterpå kan du legge til personens øvrige selskaper.</p>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+     <button class="btn btn-primary" id="lp-save">Koble</button>`,
+  );
+  window.openModal(html, () => {
+    document.getElementById('lp-save').addEventListener('click', async () => {
+      const person_name = document.getElementById('lp-name').value.trim();
+      if (!person_name) { window.ui.toast('Skriv inn et navn', 'error'); return; }
+      const btn = document.getElementById('lp-save');
+      btn.disabled = true; btn.textContent = 'Kobler…';
+      try {
+        await api.linkPerson(inv.id, {
+          person_name,
+          rolle: document.getElementById('lp-rolle').value.trim() || null,
+          relation: document.getElementById('lp-relation').value || null,
+        });
+        window.closeModal();
+        await reload();
+      } catch (e) { btn.disabled = false; btn.textContent = 'Koble'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    });
+  });
+}
+
+function openAddCompanyModal(personId, personName, reload) {
+  const relOpts = ['', 'hovedselskap', 'investeringsselskap', 'eiendom', 'konsern', 'familie', 'annet']
+    .map(r => `<option value="${r}">${r ? r[0].toUpperCase() + r.slice(1) : '— relasjon —'}</option>`).join('');
+  let picked = null;
+  const html = window.ui.modal(
+    'Legg til selskap for ' + window.escHtml(personName),
+    `<div class="form-group">
+       <label>Finn i CRM</label>
+       <input id="ac-search" type="text" placeholder="Søk selskap/person i CRM…" autocomplete="off" />
+       <div id="ac-results" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:4px"></div>
+       <div id="ac-picked" style="display:none;font-size:12px;margin-top:6px"></div>
+     </div>
+     <div style="text-align:center;font-size:11px;color:var(--muted);margin:6px 0">— eller nytt/eksternt selskap —</div>
+     <div class="form-grid" style="gap:10px">
+       <div class="form-group"><label>Selskapsnavn</label><input id="ac-name" type="text" placeholder="Selskap ikke i CRM" /></div>
+       <div class="form-group"><label>Org.nr <span style="color:var(--muted)">(valgfri)</span></label><input id="ac-org" type="text" placeholder="9 siffer" /></div>
+     </div>
+     <div class="form-grid" style="gap:10px">
+       <div class="form-group"><label>Relasjon <span style="color:var(--muted)">(valgfri)</span></label><select id="ac-relation">${relOpts}</select></div>
+       <div class="form-group"><label>Rolle <span style="color:var(--muted)">(valgfri)</span></label><input id="ac-rolle" type="text" placeholder="Styreleder, eier …" /></div>
+     </div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+     <button class="btn btn-primary" id="ac-save">Legg til</button>`,
+  );
+  window.openModal(html, () => {
+    const searchEl = document.getElementById('ac-search');
+    const resultsEl = document.getElementById('ac-results');
+    const pickedEl = document.getElementById('ac-picked');
+    const nameEl = document.getElementById('ac-name');
+    const orgEl = document.getElementById('ac-org');
+    bindInvestorSearch(searchEl, resultsEl, hit => {
+      picked = hit;
+      resultsEl.style.display = 'none';
+      searchEl.value = '';
+      nameEl.value = ''; nameEl.disabled = true; orgEl.disabled = true;
+      pickedEl.style.display = '';
+      pickedEl.innerHTML = `Valgt: <b>${window.escHtml(hit.name)}</b> <button id="ac-clear" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px">endre</button>`;
+      document.getElementById('ac-clear').addEventListener('click', () => {
+        picked = null; pickedEl.style.display = 'none'; nameEl.disabled = false; orgEl.disabled = false;
+      });
+    });
+    document.getElementById('ac-save').addEventListener('click', async () => {
+      const data = {
+        relation: document.getElementById('ac-relation').value || null,
+        rolle: document.getElementById('ac-rolle').value.trim() || null,
+      };
+      if (picked) data.investor_id = picked.id;
+      else {
+        const cn = nameEl.value.trim();
+        if (!cn) { window.ui.toast('Velg et selskap i CRM eller skriv inn navn', 'error'); return; }
+        data.company_name = cn;
+        data.org_nr = orgEl.value.trim() || null;
+      }
+      const btn = document.getElementById('ac-save');
+      btn.disabled = true; btn.textContent = 'Legger til…';
+      try {
+        await api.personAddCompany(personId, data);
+        window.closeModal();
+        await reload();
+      } catch (e) { btn.disabled = false; btn.textContent = 'Legg til'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    });
+  });
+}
+
+function openMergeModal(inv) {
+  let picked = null;
+  const html = window.ui.modal(
+    'Slå sammen med…',
+    `<p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+       Finn posten som er samme aktør som <b>${window.escHtml(inv.name)}</b>. Alt samles på én post —
+       tags, kontakter, logg, oppgaver og produktkoblinger flyttes over. Den mest etablerte posten beholdes.
+     </p>
+     <div class="form-group" style="margin:0">
+       <input id="mg-search" type="text" placeholder="Søk navn eller org.nr…" autocomplete="off" />
+       <div id="mg-results" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:4px"></div>
+     </div>
+     <div id="mg-picked" style="display:none;font-size:13px;margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:8px"></div>`,
+    `<button class="btn btn-ghost" onclick="window.closeModal()">Avbryt</button>
+     <button class="btn btn-primary" id="mg-save" disabled>Slå sammen</button>`,
+  );
+  window.openModal(html, () => {
+    const searchEl = document.getElementById('mg-search');
+    const resultsEl = document.getElementById('mg-results');
+    const pickedEl = document.getElementById('mg-picked');
+    const saveBtn = document.getElementById('mg-save');
+    bindInvestorSearch(searchEl, resultsEl, hit => {
+      picked = hit;
+      resultsEl.style.display = 'none';
+      searchEl.value = hit.name;
+      pickedEl.style.display = '';
+      pickedEl.innerHTML = `Slår sammen <b>${window.escHtml(inv.name)}</b> og <b>${window.escHtml(hit.name)}</b> (${window.escHtml(hit.id)}).`;
+      saveBtn.disabled = false;
+    }, inv.id);
+    saveBtn.addEventListener('click', async () => {
+      if (!picked) return;
+      // Behold den mest etablerte posten (ikke-lead vinner) så en investor ikke nedgraderes
+      const keepConflict = !picked.is_lead && inv.is_lead;
+      const keepId = keepConflict ? picked.id : inv.id;
+      const dropId = keepConflict ? inv.id : picked.id;
+      const survName = keepConflict ? picked.name : inv.name;
+      if (!window.confirm(`Slå sammen «${inv.name}» og «${picked.name}» til én post?\n\nAlt samles på «${survName}». Kan ikke angres.`)) return;
+      saveBtn.disabled = true; saveBtn.textContent = 'Slår sammen…';
+      try {
+        await api.merge(keepId, dropId);
+        window.closeModal();
+        window.ui.toast(`Slått sammen til «${survName}»`, 'success');
+        if (String(keepId) === String(inv.id)) await window.navigate('detalj', inv.id);
+        else window.navigate('detalj', keepId);
+      } catch (e) { saveBtn.disabled = false; saveBtn.textContent = 'Slå sammen'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    });
+  });
 }
 
 function buildLeadBanner(inv, isAdmin) {
@@ -1582,7 +1770,10 @@ export async function render(el, state) {
         <span class="topbar-title" style="margin-left:8px;">${window.escHtml(inv.name)}</span>
         <button class="btn btn-primary btn-sm" id="edit-btn" style="min-height:36px;">Rediger</button>
         <button class="btn btn-green btn-sm" id="logg-btn" style="min-height:36px;">+ Logg kontakt</button>
-        <button class="btn btn-ghost btn-sm" id="delete-btn" style="color:#e74c3c;margin-left:auto;min-height:36px;">Slett investor</button>
+        ${state.currentUser?.role === 'admin'
+          ? `<button class="btn btn-ghost btn-sm" id="merge-btn" style="margin-left:auto;min-height:36px;">&#8646; Sl&aring; sammen&hellip;</button>
+             <button class="btn btn-ghost btn-sm" id="delete-btn" style="color:#e74c3c;min-height:36px;">Slett investor</button>`
+          : `<button class="btn btn-ghost btn-sm" id="delete-btn" style="color:#e74c3c;margin-left:auto;min-height:36px;">Slett investor</button>`}
       </div>
       <div class="content">
         ${inv.is_lead ? buildLeadBanner(inv, state.currentUser?.role === 'admin') : ''}
@@ -1625,6 +1816,8 @@ export async function render(el, state) {
       btn.addEventListener('click', () => window.navigate('prosjektDetalj', btn.dataset.productId));
     });
     el.querySelector('#logg-btn').addEventListener('click', () => openLogModal(inv, lookups, products, reload, { responsible: state.currentUser?.displayName }));
+    const mergeBtn = el.querySelector('#merge-btn');
+    if (mergeBtn) mergeBtn.addEventListener('click', () => openMergeModal(inv));
     el.querySelector('#delete-btn').addEventListener('click', async () => {
       if (!window.confirm(`Slette ${inv.name}?\n\nDette sletter investoren permanent, inkludert alle kontakter og loggposter.`)) return;
       try {
@@ -2202,6 +2395,21 @@ export async function render(el, state) {
         window.ui.toast(`${inv2.name} opprettet som lead`, 'success');
         await reload();
       } catch (e) { btn.disabled = false; btn.textContent = '+ Opprett som lead'; window.ui.toast('Feil: ' + e.message, 'error'); }
+    }));
+
+    const addPersonBtn = el.querySelector('#rel-add-person');
+    if (addPersonBtn) addPersonBtn.addEventListener('click', () => openLinkPersonModal(inv, reload));
+
+    el.querySelectorAll('.rel-addcompany').forEach(btn => btn.addEventListener('click', () =>
+      openAddCompanyModal(btn.dataset.person, btn.dataset.name, reload)));
+
+    el.querySelectorAll('.rel-unlink').forEach(btn => btn.addEventListener('click', async () => {
+      if (!window.confirm(`Fjerne koblingen til «${btn.dataset.company}»?\n\nDette sletter ikke selve investorposten, bare relasjonen til personen.`)) return;
+      btn.disabled = true;
+      try {
+        await api.personUnlinkCompany(btn.dataset.person, btn.dataset.company);
+        await reload();
+      } catch (e) { btn.disabled = false; window.ui.toast('Feil: ' + e.message, 'error'); }
     }));
   }
 

@@ -209,6 +209,23 @@ router.get('/api/investors/trash', requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Lett søk på tvers av ALLE ikke-slettede poster (leads + investorer), navn eller org.nr.
+// Brukes av merge-plukker og relatert-selskap-plukker på investorkortet.
+router.get('/api/investors/search', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  try {
+    const { rows } = await query(`
+      SELECT id, name, org_nr, is_lead, phase, city
+      FROM investors
+      WHERE deleted_at IS NULL AND (name ILIKE $1 OR org_nr LIKE $2)
+      ORDER BY (name ILIKE $3) DESC, name
+      LIMIT 15
+    `, ['%' + q + '%', q.replace(/\s/g, '') + '%', q + '%']);
+    res.json(rows.map(r => ({ id: r.id, name: r.name, org_nr: r.org_nr, is_lead: !!r.is_lead, phase: r.phase, city: r.city })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/api/investors/:id', async (req, res) => {
   try {
     const { rows: invRows } = await query('SELECT * FROM investors WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
@@ -591,6 +608,95 @@ router.post('/api/persons/:id/create-lead', async (req, res) => {
   } catch (e) {
     await client.query('ROLLBACK'); console.error('[create-lead]', e.message); res.status(500).json({ error: e.message });
   } finally { client.release(); }
+});
+
+const VALID_RELATIONS = ['hovedselskap', 'investeringsselskap', 'eiendom', 'konsern', 'familie', 'annet'];
+
+async function upsertPerson(client, name) {
+  const { rows } = await client.query(
+    `INSERT INTO persons (name) VALUES ($1)
+     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+    [String(name).trim()]
+  );
+  return rows[0].id;
+}
+
+// Koble en person (opprettes ved behov) til DETTE selskapet — gjør at personen
+// dukker opp på kortet. Herfra kan flere selskaper legges til personen.
+router.post('/api/investors/:id/persons', async (req, res) => {
+  const { person_name, rolle, relation } = req.body;
+  if (!String(person_name || '').trim()) return validationError(res, ['Personnavn er påkrevd']);
+  if (relation && !VALID_RELATIONS.includes(relation)) return validationError(res, [`Ugyldig relasjon: ${relation}`]);
+  const client = await pool.connect();
+  try {
+    const { rows: invRows } = await client.query('SELECT id, name, org_nr FROM investors WHERE id=$1 AND deleted_at IS NULL', [req.params.id]);
+    if (!invRows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
+    const inv = invRows[0];
+    await client.query('BEGIN');
+    const pid = await upsertPerson(client, person_name);
+    await client.query(
+      `INSERT INTO person_companies (person_id, investor_id, company_name, org_nr, relation, rolle, source, verified)
+       VALUES ($1,$2,$3,$4,$5,$6,'manuell',TRUE)
+       ON CONFLICT (person_id, company_name)
+       DO UPDATE SET investor_id=EXCLUDED.investor_id, org_nr=COALESCE(EXCLUDED.org_nr, person_companies.org_nr),
+                     relation=COALESCE(EXCLUDED.relation, person_companies.relation),
+                     rolle=COALESCE(EXCLUDED.rolle, person_companies.rolle), verified=TRUE`,
+      [pid, inv.id, inv.name, inv.org_nr || null, relation || null, String(rolle || '').trim() || null]
+    );
+    await client.query('COMMIT');
+    await auditLog(req.currentUser._id, req.currentUser.username, 'create', 'person', String(pid), null, { investor_id: inv.id, person: String(person_name).trim() }, `Koblet person «${String(person_name).trim()}» til ${inv.name}`);
+    res.json({ ok: true, person_id: pid });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[POST /investors/:id/persons]', e.message); res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// Legg til enda et selskap på en eksisterende person (eksisterende investor eller fritekst/eksternt).
+router.post('/api/persons/:id/companies', async (req, res) => {
+  const personId = req.params.id;
+  let { company_name, investor_id, org_nr, relation, rolle } = req.body;
+  if (relation && !VALID_RELATIONS.includes(relation)) return validationError(res, [`Ugyldig relasjon: ${relation}`]);
+  const client = await pool.connect();
+  try {
+    const { rows: pRows } = await client.query('SELECT id FROM persons WHERE id=$1', [personId]);
+    if (!pRows[0]) return res.status(404).json({ error: 'Person ikke funnet' });
+    if (investor_id) {
+      const { rows: iRows } = await client.query('SELECT id, name, org_nr FROM investors WHERE id=$1 AND deleted_at IS NULL', [investor_id]);
+      if (!iRows[0]) return res.status(404).json({ error: 'Investor ikke funnet' });
+      company_name = iRows[0].name;
+      org_nr = org_nr || iRows[0].org_nr;
+    }
+    if (!String(company_name || '').trim()) return validationError(res, ['Selskapsnavn eller investor er påkrevd']);
+    await client.query(
+      `INSERT INTO person_companies (person_id, investor_id, company_name, org_nr, relation, rolle, source, verified)
+       VALUES ($1,$2,$3,$4,$5,$6,'manuell',TRUE)
+       ON CONFLICT (person_id, company_name)
+       DO UPDATE SET investor_id=COALESCE(EXCLUDED.investor_id, person_companies.investor_id),
+                     org_nr=COALESCE(EXCLUDED.org_nr, person_companies.org_nr),
+                     relation=COALESCE(EXCLUDED.relation, person_companies.relation),
+                     rolle=COALESCE(EXCLUDED.rolle, person_companies.rolle), verified=TRUE`,
+      [personId, investor_id || null, String(company_name).trim(), String(org_nr || '').replace(/\s/g, '') || null, relation || null, String(rolle || '').trim() || null]
+    );
+    await auditLog(req.currentUser._id, req.currentUser.username, 'update', 'person', String(personId), null, { company: String(company_name).trim() }, `La til selskap «${String(company_name).trim()}» på person ${personId}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[POST /persons/:id/companies]', e.message); res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// Fjern en person-selskap-kobling (feilkobling). Personen slettes automatisk (CASCADE) hvis siste kobling forsvinner? Nei — vi rydder eksplisitt.
+router.delete('/api/persons/:id/companies', async (req, res) => {
+  const personId = req.params.id;
+  const { company_name } = req.body;
+  if (!String(company_name || '').trim()) return validationError(res, ['company_name er påkrevd']);
+  try {
+    const { rowCount } = await query('DELETE FROM person_companies WHERE person_id=$1 AND company_name=$2', [personId, String(company_name).trim()]);
+    if (!rowCount) return res.status(404).json({ error: 'Kobling ikke funnet' });
+    await query('DELETE FROM persons p WHERE p.id=$1 AND NOT EXISTS (SELECT 1 FROM person_companies pc WHERE pc.person_id=p.id)', [personId]);
+    await auditLog(req.currentUser._id, req.currentUser.username, 'delete', 'person', String(personId), { company: String(company_name).trim() }, null, `Fjernet kobling «${String(company_name).trim()}» fra person ${personId}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
