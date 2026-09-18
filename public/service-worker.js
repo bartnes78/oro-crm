@@ -1,4 +1,4 @@
-const CACHE = 'oro-crm-v15';
+const CACHE = 'oro-crm-v16';
 const SHELL = [
   '/',
   '/js/app.js',
@@ -49,18 +49,14 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // JS/CSS: stale-while-revalidate — instant response, refresh cache in background
+  // JS/CSS: network-first — nye deployer lander umiddelbart. Cache er kun offline-fallback.
+  // (Tidligere stale-while-revalidate serverte gammel JS én versjon bak etter hver deploy.)
   if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.svg')) {
     e.respondWith(
-      caches.open(CACHE).then(cache =>
-        cache.match(e.request).then(cached => {
-          const fetchPromise = fetch(e.request).then(resp => {
-            if (resp.ok) cache.put(e.request, resp.clone());
-            return resp;
-          });
-          return cached || fetchPromise;
-        })
-      )
+      fetch(e.request).then(resp => {
+        if (resp.ok) { const clone = resp.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); }
+        return resp;
+      }).catch(() => caches.match(e.request))
     );
     return;
   }
